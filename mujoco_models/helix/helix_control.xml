@@ -1,0 +1,14 @@
+<mujoco model="helix_control">
+    <compiler angle="radian" meshdir="meshes/" autolimits="true" />
+    <option integrator="implicit" timestep="0.001" gravity="0 0 0" cone="elliptic">
+    </option>
+    <include file="helix_body.xml" />
+    <include file="helix_actuators.xml" />
+    <include file="helix_sensors.xml" />
+    <worldbody>
+        <body name="target" pos="0.0 0 -0.5" quat="0 1 0 0" mocap="true">
+        <geom type="box" size=".05 .05 .05" contype="0" conaffinity="0" rgba=".6 .3 .3 .5"/>
+        <site type="sphere" size="0.01" rgba="0 0 1 1" group="2"/>
+        </body>
+    </worldbody>
+</mujoco>

@@ -1,0 +1,17 @@
+<mujoco model="helix_sensors">
+    <sensor>
+        <framepos name="ee_pos" objtype="site" objname="ee_cog" />
+        <velocimeter name="ee_vel" site="ee_cog" />
+        <accelerometer name="ee_acc" site="ee_cog" />
+        <force name="ee_force" site="ee_cog" />
+        <torque name="ee_torque" site="ee_cog" />
+<!--         <framepos name="arm_right_base_pos" objtype="site" objname="arm_right_base" />
+        <framequat name="arm_right_base_quat" objtype="site" objname="arm_right_base" />
+        <framepos name="arm_left_base_pos" objtype="site" objname="arm_left_base" />
+        <framequat name="arm_left_base_quat" objtype="site" objname="arm_left_base" />
+        <framepos name="leg_right_base_pos" objtype="site" objname="leg_right_base" />
+        <framequat name="leg_right_base_quat" objtype="site" objname="leg_right_base" />
+        <framepos name="leg_left_base_pos" objtype="site" objname="leg_left_base" />
+        <framequat name="leg_left_base_quat" objtype="site" objname="leg_left_base" /> -->
+    </sensor>
+</mujoco>

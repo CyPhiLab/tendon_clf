@@ -1,0 +1,48 @@
+<mujoco model="turtle_motor_actuators">
+     <default>
+         <default class="general">
+            <motor/>
+         </default>
+    </default>
+    <actuator>
+        <motor name="1" class="general" joint="1" />
+        <motor name="lat1" class="general" joint="lat1" />
+        <motor name="comp1" class="general" joint="comp1" />
+        <motor name="2" class="general" joint="2" />
+        <motor name="lat2" class="general" joint="lat2" />
+        <motor name="comp2" class="general" joint="comp2" />
+        <motor name="3" class="general" joint="3" />
+        <motor name="lat3" class="general" joint="lat3" />
+        <motor name="comp3" class="general" joint="comp3" />
+        <motor name="4" class="general" joint="4" />
+        <motor name="lat4" class="general" joint="lat4" />
+        <motor name="comp4" class="general" joint="comp4" />
+        <motor name="5" class="general" joint="5" />
+        <motor name="lat5" class="general" joint="lat5" />
+        <motor name="comp5" class="general" joint="comp5" />
+        <motor name="6" class="general" joint="6" />
+        <motor name="lat6" class="general" joint="lat6" />
+        <motor name="comp6" class="general" joint="comp6" />
+        <motor name="7" class="general" joint="7" />
+        <motor name="lat7" class="general" joint="lat7" />
+        <motor name="comp7" class="general" joint="comp7" />
+        <motor name="8" class="general" joint="8" />
+        <motor name="lat8" class="general" joint="lat8" />
+        <motor name="comp8" class="general" joint="comp8" />
+        <motor name="9" class="general" joint="9" />
+        <motor name="lat9" class="general" joint="lat9" />
+        <motor name="comp9" class="general" joint="comp9" />
+        <motor name="10" class="general" joint="10" />
+        <motor name="lat10" class="general" joint="lat10" />
+        <motor name="comp10" class="general" joint="comp10" />
+        <motor name="11" class="general" joint="11" />
+        <motor name="lat11" class="general" joint="lat11" />
+        <motor name="comp11" class="general" joint="comp11" />
+        <motor name="12" class="general" joint="12" />
+        <motor name="lat12" class="general" joint="lat12" />
+        <motor name="comp12" class="general" joint="comp12" />
+
+
+
+    </actuator>
+</mujoco>
