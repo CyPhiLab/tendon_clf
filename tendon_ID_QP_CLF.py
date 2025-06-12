@@ -232,7 +232,7 @@ def controller(model, data):
 
     # Position error in 3D
     dx = np.array([0.1, 0.0, -0.15]) - data.site(site_id).xpos
-    twist = dx 
+    twist = -dx 
 
     # Get the current joint positions q (generalized coordinates)
     q = data.qpos
@@ -284,7 +284,7 @@ def controller(model, data):
     
 
     # [y,y_dot]
-    eta = np.concatenate((-twist,jac @ data.qvel))
+    eta = np.concatenate((twist,jac @ data.qvel))
 
     # Lyapunov function
     V = eta.T @ Pe @ eta
@@ -344,7 +344,7 @@ def controller(model, data):
     # dl_weight = 1000
 
     # Cost function
-    objective = cp.Minimize(cp.square(tracking * cp.norm(dJ_dt @ dq + jac @ qdd)) + qdd_weight * cp.square(cp.norm(qdd)) + u_weight * cp.square(cp.norm(u)) + dl_weight*cp.square(cp.norm(dl))) # objective
+    objective = cp.Minimize(cp.square(tracking * cp.norm(dJ_dt @ dq + jac @ qdd)) + qdd_weight * cp.square(cp.norm(qdd)) + u_weight * cp.square(cp.norm(u)) + dl_weight*cp.square(dl)) # objective
     
     # regularization term (reducing can help decrease error)!!!
 
@@ -459,6 +459,8 @@ except ImportError:
 # Create a DataFrame from the simulation logs
 u_log = np.array(u_log)        # shape (T, 4)
 tau_log = np.array(tau_log)    # shape (T, 4)
+q_vel = np.array(q_vel)
+
 
 # df = pd.DataFrame({
 #     'time': time_log,
@@ -483,30 +485,30 @@ tau_log = np.array(tau_log)    # shape (T, 4)
 print("Final V is: ", V_log[-1])
 print("Final error is: ", task_error_log[-1])
 
-V_euler = [float(V_log[0])]
+# V_euler = [float(V_log[0])]
 
-for j in range(len(V_dot_log)-1):
-    V_next = float(V_euler[-1] + dt * V_dot_log[j])
-    V_euler.append(V_next)
+# for j in range(len(V_dot_log)-1):
+#     V_next = float(V_euler[-1] + dt * V_dot_log[j])
+#     V_euler.append(V_next)
    
-V_euler = np.array(V_euler)
-dV_euler = [0]
+# V_euler = np.array(V_euler)
+# dV_euler = [0]
 
-for j in range(1,len(V_dot_log)):
-    dV_next = float(V_log[j] - V_log[j-1])/dt
-    dV_euler.append(dV_next)
+# for j in range(1,len(V_dot_log)):
+#     dV_next = float(V_log[j] - V_log[j-1])/dt
+#     dV_euler.append(dV_next)
    
-dV_euler = np.array(dV_euler)
+# dV_euler = np.array(dV_euler)
 
 
 
-# Save the DataFrame to a CSV file
-df.to_csv(r"D:\Control\Soft Arm Project\controller_logs.csv", index=False)
+# # Save the DataFrame to a CSV file
+# df.to_csv(r"D:\Control\Soft Arm Project\controller_logs.csv", index=False)
 
 #Lyapunov Function Over Time – shows how stability evolves.
 plt.figure()
 plt.plot(time_log, V_log, label="Lyapunov Function V")
-plt.plot(time_log, V_euler, label="V_euler ")
+# plt.plot(time_log, V_euler, label="V_euler ")
 plt.xlabel("Time (s)")
 plt.ylabel("Lyapunov Function V")
 plt.title("Lyapunov Function Over Time")
@@ -518,7 +520,7 @@ plt.legend()  # <--- Add legend
 plt.figure()
 plt.plot(time_log, V_dot_log, label="V_dot ")
 plt.plot(time_log, bound_log, label="−2/e·V + dl")
-plt.plot(time_log, dV_euler, label="dV_euler ")
+# plt.plot(time_log, dV_euler, label="dV_euler ")
 plt.xlabel("Time (s)")
 plt.ylabel("V_dot")
 plt.title("V_dot vs Stability Bound")
