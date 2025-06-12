@@ -276,8 +276,6 @@ def controller(model, data):
     # Decision variable for the two actuator inputs
     u = cp.Variable(shape=(2, 1))
 
-    # Decision variable for joint accelerations
-    qdd = cp.Variable(shape=(nq, 1))
 
     # A slack variable for relaxing the Lyapunov stability constraint
     dl = cp.Variable(shape=(1, 1))
@@ -324,11 +322,21 @@ def controller(model, data):
     # E
     E = 1/2 * dq.T @ M @ dq
     
+    # Task acceleration
+    # mu = dJ_dt @ dq + jac @ M_inv @ (Bp @ u - (data.qfrc_bias + data.qfrc_passive))
+
+    # Convert all parts to CVXPY expressions before combining
+    mu_expr = Bp @ u - (data.qfrc_bias + data.qfrc_passive).reshape(-1, 1)
+    mu = cp.matmul(jac @ M_inv, mu_expr) + dJ_dt @ dq
+    mu = cp.reshape(mu, (3, 1))  # Now this should succeed
+
+    
+
     # Compute V_dot
-    dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
+    # dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
     # dV = eta.T @ (Pe.T + Pe) @ (F @ eta + G @ (dJ_dt @ dq + jac @ qdd)) 
     # dV = (F @ eta + G @ (dJ_dt @ dq + jac @ qdd)).T @ Pe @ eta + eta.T @ Pe @ (F @ eta + G @ (dJ_dt @ dq + jac @ qdd))
-
+    dV = (F @ eta + G @ mu).T @ Pe @ eta + eta.T @ Pe @ (F @ eta + G @ mu)
     
     # Unclear??
     u_des = np.linalg.pinv(Bp)  @ (M @ np.linalg.pinv(jac) @ (100 * twist - 20 * (jac @ data.qvel) - dJ_dt @ data.qvel) + data.qfrc_bias + data.qfrc_passive) #+ 0.1 * pinv_B @ (np.eye(model.nv) - jac.T @ Jbar.T) @ ddq
@@ -336,8 +344,8 @@ def controller(model, data):
     # Cost Weights
     tracking = 0.001
     qdd_weight = 0.0002
-    u_weight = 0.00001
-    dl_weight = 1000
+    u_weight = 0.1
+    dl_weight = 10000
 
     # # Cost Weights
     # tracking = 1
@@ -346,17 +354,17 @@ def controller(model, data):
     # dl_weight = 1000
 
     # Cost function
-    objective = cp.Minimize(cp.square(tracking * cp.norm(dJ_dt @ dq + jac @ qdd)) + qdd_weight * cp.square(cp.norm(qdd)) + u_weight * cp.square(cp.norm(u)) + dl_weight*cp.square(dl)) # objective
+    objective = cp.Minimize(u_weight * cp.square(cp.norm(u)) + dl_weight*cp.square(cp.norm(dl))) # objective
     
     # regularization term (reducing can help decrease error)!!!
 
     # Constraints
     constraints = [ 
-                    dV <= -2/e * V + 0.1*dl,
+                    dV <= -2/e * V + 0.01*dl,
                    # Unclear??
                 #    Vw <= - 50*  E + 0.1*dl,
                    # Unclear??
-                    np.linalg.pinv(Bp) @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
+                    # np.linalg.pinv(Bp) @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
                     -1.0 <= u,
                     1.0 >= u
     ]
@@ -369,6 +377,8 @@ def controller(model, data):
    
     # Compute dV
     dV = dV.value
+    print("V dot is", dV)
+    print("mu is", mu.value)
 
     # Compute optimized dl
     dl = float(dl.value)
@@ -425,7 +435,7 @@ q_pos = []
 time_log = []
 t = 0.0
 dt = model.opt.timestep
-print(dt)
+
 # Simulate
 try:
     with viewer.launch_passive(model, data) as v:
