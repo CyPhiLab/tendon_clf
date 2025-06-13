@@ -5,7 +5,11 @@ from mujoco import viewer
 import time
 import cvxpy as cp
 from scipy import linalg
+import matplotlib
+matplotlib.use('Qt5Agg')  # or 'Qt5Agg' if you have PyQt5 installed
+
 import matplotlib.pyplot as plt
+
 import pandas as pd
 
 
@@ -356,7 +360,7 @@ def controller(model, data):
                    # Unclear??
                 #    Vw <= - 50*  E + 0.1*dl,
                    # Unclear??
-                    np.linalg.pinv(Bp) @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
+                    np.linalg.pinv(Bp) @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
                     -1.0 <= u,
                     1.0 >= u
     ]
