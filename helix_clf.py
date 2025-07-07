@@ -12,7 +12,6 @@ import cvxpy as cp
 # Configure MuJoCo to use the EGL rendering backend (requires GPU)
 os.environ["MUJOCO_GL"] = "egl"
 
-
 model_name = f"helix_control"
 
 # Cartesian impedance control gains.
