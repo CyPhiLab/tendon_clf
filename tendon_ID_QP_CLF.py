@@ -358,7 +358,7 @@ def controller(model, data):
     constraints = [ 
                     dV <= -2/e * V + 0.1*dl,
                    # Unclear??
-                #    Vw <= - 50*  E + 0.1*dl,
+                   Vw <= - 50*  E + 0.1*dl,
                    # Unclear??
                     np.linalg.pinv(Bp) @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
                     -1.0 <= u,
