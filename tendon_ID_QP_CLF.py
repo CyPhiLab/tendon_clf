@@ -323,7 +323,7 @@ def controller(model, data):
     qdd_cl = (Bp @ u - data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1))
     
     # E_dot  
-    Vw = (dq.T @ qdd_cl + (q*model.jnt_stiffness[:]).T @ dq)
+    Vw = (dq.T @ qdd_cl + 0*(q*model.jnt_stiffness[:]).T @ dq)
 
     # E
     E = 1/2 * dq.T @ M @ dq
