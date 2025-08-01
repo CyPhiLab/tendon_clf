@@ -11,9 +11,9 @@
   </asset>
 
   <worldbody>
-    <geom pos="0 0 -0.008" quat="0 -1 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_1"/>
-    <!-- <geom pos="0 0 -0.008" quat="0 -1 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate1"/> -->
-    <body name="helix_sim_1_2" pos="0 0 -0.028" quat="0.707107 0.707107 0 0">
+    <geom pos="0 0 0.7" quat="0 -1 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_1"/>
+    <geom pos="0 0 0.7" quat="0 -1 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate1"/>
+    <body name="helix_sim_1_2" pos="0 0 0.68" quat="0.707107 0.707107 0 0">
       <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
       <joint type="hinge" name="1" pos="0 0 0" axis="0 0 1" />
       <joint type="hinge" name="lat1" pos="0 0 0" axis="1 0 0" />
