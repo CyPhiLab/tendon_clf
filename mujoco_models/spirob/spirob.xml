@@ -1,0 +1,849 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/11f47046aadde998d93845f5/w/2219ecd5bc279fe0ecc107c4/e/786bc53f5acd65211f6c0c24 -->
+<mujoco model="my-SpiRob">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+  <default>
+    <default class="my-SpiRob">
+      <joint frictionloss="0.1" armature="0.005"/>
+      <position kp="50" dampratio="1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
+  <worldbody>
+    <!-- Link segment_1__configuration_default -->
+    <body name="segment_1__configuration_default" pos="0 0 0.5" euler="0 -1.5708 0" childclass="my-SpiRob">
+      <inertial pos="-0.023719 1.84225e-08 1.05571e-08" mass="0.052215" fullinertia="1.47577e-05 1.26546e-05 1.26546e-05 -1.09343e-11 1.25193e-11 -2.59551e-12"/>
+      <!-- Part segment_1__configuration_default -->
+      <geom type="mesh" class="visual" pos="0 0 0" quat="1 0 0 0" mesh="segment_1__configuration_default" material="segment_1__configuration_default_material"/>
+      <geom type="mesh" class="collision" pos="0 0 0" quat="1 0 0 0" mesh="segment_1__configuration_default" material="segment_1__configuration_default_material"/>
+      <!-- Frame 1 -->
+      <site group="3" name="1" pos="-0.0100544 -5.44356e-20 0.0250952" quat="0.5 0.5 0.5 0.5"/>
+      <!-- Frame 2 -->
+      <site group="3" name="2" pos="-0.0400151 -5.44356e-20 0.0250952" quat="0.5 0.5 0.5 0.5"/>
+      <!-- Frame 3 -->
+      <site group="3" name="3" pos="-0.0100552 0.0217331 -0.0125476" quat="0.5 0.5 0.5 0.5"/>
+      <!-- Frame 4 -->
+      <site group="3" name="4" pos="-0.0400151 0.0217331 -0.0125476" quat="0.5 0.5 0.5 0.5"/>
+      <!-- Frame 5 -->
+      <site group="3" name="5" pos="-0.040015 -0.0217331 -0.0125476" quat="0.5 0.5 0.5 0.5"/>
+      <!-- Frame 6 -->
+      <site group="3" name="6" pos="-0.0100551 -0.0217331 -0.0125476" quat="0.5 0.5 0.5 0.5"/>
+      <!-- Link segment_2__configuration_default -->
+      <body name="segment_2__configuration_default" pos="-0.042844 -1.48645e-19 -8.96728e-22" quat="6.93681e-16 -0 1 8.33698e-16">
+        <!-- Joint from segment_1__configuration_default to segment_2__configuration_default -->
+        <joint axis="0 0 1" name="x_1" type="hinge" damping="0.1"/>
+        <joint axis="0 1 0" name="y_1" type="hinge" damping="0.1"/>
+        <inertial pos="0.0218709 1.13482e-08 -5.9967e-09" mass="0.040989" fullinertia="9.84761e-06 8.45722e-06 8.45722e-06 1.22598e-13 1.0973e-11 2.50017e-12"/>
+        <!-- Part segment_2__configuration_default -->
+        <geom type="mesh" class="visual" pos="-0.042844 -1.28885e-35 2.62344e-18" quat="9.60979e-18 -0 -1 5.46996e-17" mesh="segment_2__configuration_default" material="segment_2__configuration_default_material"/>
+        <geom type="mesh" class="collision" pos="-0.042844 -1.28885e-35 2.62344e-18" quat="9.60979e-18 -0 -1 5.46996e-17" mesh="segment_2__configuration_default" material="segment_2__configuration_default_material"/>
+        <!-- Frame 7 -->
+        <site group="3" name="7" pos="0.00916355 -0.0198802 0.0114778" quat="0.5 -0.5 -0.5 0.5"/>
+        <!-- Frame 8 -->
+        <site group="3" name="8" pos="0.00916268 -5.44356e-20 -0.0229556" quat="0.5 -0.5 -0.5 0.5"/>
+        <!-- Frame 9 -->
+        <site group="3" name="9" pos="0.00916308 0.0198802 0.0114778" quat="0.5 -0.5 -0.5 0.5"/>
+        <!-- Frame 10 -->
+        <site group="3" name="10" pos="0.036951 0.0198802 0.0114778" quat="0.5 -0.5 -0.5 0.5"/>
+        <!-- Frame 11 -->
+        <site group="3" name="11" pos="0.036951 -5.44356e-20 -0.0229556" quat="0.5 -0.5 -0.5 0.5"/>
+        <!-- Frame 12 -->
+        <site group="3" name="12" pos="0.0369508 -0.0198802 0.0114778" quat="0.5 -0.5 -0.5 0.5"/>
+        <!-- Link segment_3__configuration_default -->
+        <body name="segment_3__configuration_default" pos="0.0395269 2.51311e-19 -2.42033e-18" quat="1 -0 0 7.01374e-19">
+          <!-- Joint from segment_2__configuration_default to segment_3__configuration_default -->
+          <joint axis="0 0 1" name="x_2" type="hinge" damping="0.1"/>
+          <joint axis="0 1 0" name="y_2" type="hinge" damping="0.1"/>
+          <inertial pos="0.0201766 1.11039e-08 -5.4109e-09" mass="0.0321555" fullinertia="6.5695e-06 5.64464e-06 5.64464e-06 7.62967e-14 7.34676e-12 1.60018e-12"/>
+          <!-- Part segment_3__configuration_default -->
+          <geom type="mesh" class="visual" pos="-0.0823709 0 5.04376e-18" quat="0 0 1 0" mesh="segment_3__configuration_default" material="segment_3__configuration_default_material"/>
+          <geom type="mesh" class="collision" pos="-0.0823709 0 5.04376e-18" quat="0 0 1 0" mesh="segment_3__configuration_default" material="segment_3__configuration_default_material"/>
+          <!-- Frame 13 -->
+          <site group="3" name="13" pos="0.0341241 0.0181707 0.0104908" quat="0.5 -0.5 -0.5 0.5"/>
+          <!-- Frame 14 -->
+          <site group="3" name="14" pos="0.00834014 0.0181707 0.0104908" quat="0.5 -0.5 -0.5 0.5"/>
+          <!-- Frame 15 -->
+          <site group="3" name="15" pos="0.00834105 -0.0181707 0.0104908" quat="0.5 -0.5 -0.5 0.5"/>
+          <!-- Frame 16 -->
+          <site group="3" name="16" pos="0.0341239 -0.0181707 0.0104908" quat="0.5 -0.5 -0.5 0.5"/>
+          <!-- Frame 17 -->
+          <site group="3" name="17" pos="0.0341241 -5.44356e-20 -0.0209817" quat="0.5 -0.5 -0.5 0.5"/>
+          <!-- Frame 18 -->
+          <site group="3" name="18" pos="0.00834012 -5.44356e-20 -0.0209817" quat="0.5 -0.5 -0.5 0.5"/>
+          <!-- Link segment_4__configuration_default -->
+          <body name="segment_4__configuration_default" pos="0.0364667 3.56718e-18 -2.23294e-18" quat="1 0 -1.11022e-16 8.67362e-19">
+            <!-- Joint from segment_3__configuration_default to segment_4__configuration_default -->
+            <joint axis="0 0 1" name="x_3" type="hinge" damping="0.1"/>
+            <joint axis="0 1 0" name="y_3" type="hinge" damping="0.1"/>
+            <inertial pos="0.0186135 1.05568e-08 -1.17938e-08" mass="0.0252212" fullinertia="4.3814e-06 3.76659e-06 3.76659e-06 3.94885e-14 4.94e-12 3.07795e-13"/>
+            <!-- Part segment_4__configuration_default -->
+            <geom type="mesh" class="visual" pos="-0.118838 -7.70372e-34 7.2767e-18" quat="0 0 1 0" mesh="segment_4__configuration_default" material="segment_4__configuration_default_material"/>
+            <geom type="mesh" class="collision" pos="-0.118838 -7.70372e-34 7.2767e-18" quat="0 0 1 0" mesh="segment_4__configuration_default" material="segment_4__configuration_default_material"/>
+            <!-- Frame 19 -->
+            <site group="3" name="19" pos="0.00758095 0.0165936 0.0095803" quat="0.5 -0.5 -0.5 0.5"/>
+            <!-- Frame 20 -->
+            <site group="3" name="20" pos="0.00758153 -5.44356e-20 -0.0191606" quat="0.5 -0.5 -0.5 0.5"/>
+            <!-- Frame 21 -->
+            <site group="3" name="21" pos="0.00758306 -0.0165936 0.0095803" quat="0.5 -0.5 -0.5 0.5"/>
+            <!-- Frame 22 -->
+            <site group="3" name="22" pos="0.0315159 -0.0165936 0.0095803" quat="0.5 -0.5 -0.5 0.5"/>
+            <!-- Frame 23 -->
+            <site group="3" name="23" pos="0.031516 0.0165936 0.0095803" quat="0.5 -0.5 -0.5 0.5"/>
+            <!-- Frame 24 -->
+            <site group="3" name="24" pos="0.031516 -5.44356e-20 -0.0191606" quat="0.5 -0.5 -0.5 0.5"/>
+            <!-- Link segment_5_1__configuration_default -->
+            <body name="segment_5_1__configuration_default" pos="0.0336433 -3.46945e-18 -2.06006e-18" quat="1 0 0 0">
+              <!-- Joint from segment_4__configuration_default to segment_5_1__configuration_default -->
+              <joint axis="0 0 1" name="x_4" type="hinge" damping="0.1"/>
+              <joint axis="0 1 0" name="y_4" type="hinge" damping="0.1"/>
+              <inertial pos="0.0171713 4.27188e-09 -1.04214e-08" mass="0.0197778" fullinertia="2.92117e-06 2.51273e-06 2.51273e-06 7.33127e-13 1.21513e-13 -9.49471e-14"/>
+              <!-- Part segment_5_2__configuration_default -->
+              <geom type="mesh" class="visual" pos="-0.152481 9.32588e-18 9.33676e-18" quat="3.06162e-17 0 -1 -4.03897e-28" mesh="segment_5_2__configuration_default" material="segment_5_2__configuration_default_material"/>
+              <geom type="mesh" class="collision" pos="-0.152481 9.32588e-18 9.33676e-18" quat="3.06162e-17 0 -1 -4.03897e-28" mesh="segment_5_2__configuration_default" material="segment_5_2__configuration_default_material"/>
+              <!-- Part segment_5_1__configuration_default -->
+              <geom type="mesh" class="visual" pos="-0.152481 -1.09476e-47 9.33676e-18" quat="0 0 1 0" mesh="segment_5_1__configuration_default" material="segment_5_1__configuration_default_material"/>
+              <geom type="mesh" class="collision" pos="-0.152481 -1.09476e-47 9.33676e-18" quat="0 0 1 0" mesh="segment_5_1__configuration_default" material="segment_5_1__configuration_default_material"/>
+              <!-- Frame 25 -->
+              <site group="3" name="25" pos="0.00696165 0.0151386 0.00874025" quat="0.5 -0.5 -0.5 0.5"/>
+              <!-- Frame 26 -->
+              <site group="3" name="26" pos="0.00696375 -0.0151386 0.00874025" quat="0.5 -0.5 -0.5 0.5"/>
+              <!-- Frame 27 -->
+              <site group="3" name="27" pos="0.00696158 -5.44356e-20 -0.0174805" quat="0.5 -0.5 -0.5 0.5"/>
+              <!-- Frame 28 -->
+              <site group="3" name="28" pos="0.0290589 0.0151386 0.00874025" quat="0.5 -0.5 -0.5 0.5"/>
+              <!-- Frame 29 -->
+              <site group="3" name="29" pos="0.0290589 -8.06032e-19 -0.0174805" quat="0.5 -0.5 -0.5 0.5"/>
+              <!-- Frame 30 -->
+              <site group="3" name="30" pos="0.0290587 -0.0151386 0.00874025" quat="0.5 -0.5 -0.5 0.5"/>
+              <!-- Link segment_6__configuration_default -->
+              <body name="segment_6__configuration_default" pos="0.0310386 6.93889e-18 -1.90057e-18" quat="1 0 0 0">
+                <!-- Joint from segment_5_1__configuration_default to segment_6__configuration_default -->
+                <joint axis="0 0 1" name="x_5" type="hinge" damping="0.1"/>
+                <joint axis="0 1 0" name="y_5" type="hinge" damping="0.1"/>
+                <inertial pos="0.0158407 9.68272e-09 -2.25308e-08" mass="0.0155055" fullinertia="1.94689e-06 1.67579e-06 1.67579e-06 1.39054e-13 5.12254e-13 -3.50338e-13"/>
+                <!-- Part segment_6__configuration_default -->
+                <geom type="mesh" class="visual" pos="-0.183519 0 1.12373e-17" quat="0 0 1 0" mesh="segment_6__configuration_default" material="segment_6__configuration_default_material"/>
+                <geom type="mesh" class="collision" pos="-0.183519 0 1.12373e-17" quat="0 0 1 0" mesh="segment_6__configuration_default" material="segment_6__configuration_default_material"/>
+                <!-- Frame 31 -->
+                <site group="3" name="31" pos="0.00623536 0.0137962 0.00796523" quat="0.5 -0.5 -0.5 0.5"/>
+                <!-- Frame 32 -->
+                <site group="3" name="32" pos="0.00623682 -0.0137962 0.00796523" quat="0.5 -0.5 -0.5 0.5"/>
+                <!-- Frame 33 -->
+                <site group="3" name="33" pos="0.0062347 -5.44356e-20 -0.0159305" quat="0.5 -0.5 -0.5 0.5"/>
+                <!-- Frame 34 -->
+                <site group="3" name="34" pos="0.0268901 0.0137962 0.00796523" quat="0.5 -0.5 -0.5 0.5"/>
+                <!-- Frame 35 -->
+                <site group="3" name="35" pos="0.0268901 -5.44356e-20 -0.0159305" quat="0.5 -0.5 -0.5 0.5"/>
+                <!-- Frame 36 -->
+                <site group="3" name="36" pos="0.0268899 -0.0137962 0.00796523" quat="0.5 -0.5 -0.5 0.5"/>
+                <!-- Link segment_7__configuration_default -->
+                <body name="segment_7__configuration_default" pos="0.0286355 3.46945e-17 -1.75342e-18" quat="1 -4.2727e-16 4.44089e-16 -2.83183e-19">
+                  <!-- Joint from segment_6__configuration_default to segment_7__configuration_default -->
+                  <joint axis="0 0 1" name="x_6" type="hinge" damping="0.1"/>
+                  <joint axis="0 1 0" name="y_6" type="hinge" damping="0.1"/>
+                  <inertial pos="0.0146131 9.45033e-09 -2.1313e-08" mass="0.0121525" fullinertia="1.29707e-06 1.11725e-06 1.11724e-06 9.35572e-14 3.44514e-13 -2.76958e-13"/>
+                  <!-- Part segment_7__configuration_default -->
+                  <geom type="mesh" class="visual" pos="-0.212155 0 1.29907e-17" quat="0 0 1 0" mesh="segment_7__configuration_default" material="segment_7__configuration_default_material"/>
+                  <geom type="mesh" class="collision" pos="-0.212155 0 1.29907e-17" quat="0 0 1 0" mesh="segment_7__configuration_default" material="segment_7__configuration_default_material"/>
+                  <!-- Frame 37 -->
+                  <site group="3" name="37" pos="0.00564008 0.0125577 0.00725022" quat="0.5 -0.5 -0.5 0.5"/>
+                  <!-- Frame 38 -->
+                  <site group="3" name="38" pos="0.00563888 -5.44356e-20 -0.0145004" quat="0.5 -0.5 -0.5 0.5"/>
+                  <!-- Frame 39 -->
+                  <site group="3" name="39" pos="0.00564067 -0.0125577 0.00725022" quat="0.5 -0.5 -0.5 0.5"/>
+                  <!-- Frame 40 -->
+                  <site group="3" name="40" pos="0.0248419 -0.0125577 0.00725022" quat="0.5 -0.5 -0.5 0.5"/>
+                  <!-- Frame 41 -->
+                  <site group="3" name="41" pos="0.0248421 0.0125577 0.00725022" quat="0.5 -0.5 -0.5 0.5"/>
+                  <!-- Frame 42 -->
+                  <site group="3" name="42" pos="0.0248421 -5.44356e-20 -0.0145004" quat="0.5 -0.5 -0.5 0.5"/>
+                  <!-- Link segment_8__configuration_default -->
+                  <body name="segment_8__configuration_default" pos="0.0264185 4.19961e-17 -1.61767e-18" quat="1 -0 1.249e-16 1.25123e-18">
+                    <!-- Joint from segment_7__configuration_default to segment_8__configuration_default -->
+                    <joint axis="0 0 1" name="x_7" type="hinge" damping="0.1"/>
+                    <joint axis="0 1 0" name="y_7" type="hinge" damping="0.1"/>
+                    <inertial pos="0.0134806 9.2626e-09 -2.02192e-08" mass="0.00952109" fullinertia="8.63766e-07 7.44581e-07 7.44579e-07 6.32964e-14 2.31894e-13 -2.16115e-13"/>
+                    <!-- Part segment_8__configuration_default -->
+                    <geom type="mesh" class="visual" pos="-0.238574 -3.62701e-19 1.46084e-17" quat="0 0 1 0" mesh="segment_8__configuration_default" material="segment_8__configuration_default_material"/>
+                    <geom type="mesh" class="collision" pos="-0.238574 -3.62701e-19 1.46084e-17" quat="0 0 1 0" mesh="segment_8__configuration_default" material="segment_8__configuration_default_material"/>
+                    <!-- Frame 43 -->
+                    <site group="3" name="43" pos="0.0229527 -4.17137e-19 -0.0131811" quat="0.5 -0.5 -0.5 0.5"/>
+                    <!-- Frame 44 -->
+                    <site group="3" name="44" pos="0.00508945 -4.17137e-19 -0.0131811" quat="0.5 -0.5 -0.5 0.5"/>
+                    <!-- Frame 45 -->
+                    <site group="3" name="45" pos="0.00509111 0.0114152 0.00659057" quat="0.5 -0.5 -0.5 0.5"/>
+                    <!-- Frame 46 -->
+                    <site group="3" name="46" pos="0.0229527 0.0114152 0.00659057" quat="0.5 -0.5 -0.5 0.5"/>
+                    <!-- Frame 47 -->
+                    <site group="3" name="47" pos="0.0229525 -0.0114152 0.00659057" quat="0.5 -0.5 -0.5 0.5"/>
+                    <!-- Frame 48 -->
+                    <site group="3" name="48" pos="0.00509068 -0.0114152 0.00659057" quat="0.5 -0.5 -0.5 0.5"/>
+                    <!-- Link segment_9__configuration_default -->
+                    <body name="segment_9__configuration_default" pos="0.0243731 2.92174e-17 -1.49242e-18" quat="1 -4.99676e-16 3.33067e-16 3.44807e-18">
+                      <!-- Joint from segment_8__configuration_default to segment_9__configuration_default -->
+                      <joint axis="0 0 1" name="x_8" type="hinge" damping="0.1"/>
+                      <joint axis="0 1 0" name="y_8" type="hinge" damping="0.1"/>
+                      <inertial pos="0.0124357 9.25317e-09 -1.95027e-08" mass="0.00745628" fullinertia="5.74939e-07 4.96005e-07 4.96003e-07 4.4176e-14 1.56471e-13 -1.80729e-13"/>
+                      <!-- Part segment_9__configuration_default -->
+                      <geom type="mesh" class="visual" pos="-0.262947 1.2326e-32 1.61008e-17" quat="3.06162e-17 -0 -1 6.37496e-17" mesh="segment_9__configuration_default" material="segment_9__configuration_default_material"/>
+                      <geom type="mesh" class="collision" pos="-0.262947 1.2326e-32 1.61008e-17" quat="3.06162e-17 -0 -1 6.37496e-17" mesh="segment_9__configuration_default" material="segment_9__configuration_default_material"/>
+                      <!-- Frame 49 -->
+                      <site group="3" name="49" pos="0.0212094 -0.0103611 0.00598198" quat="0.5 -0.5 -0.5 0.5"/>
+                      <!-- Frame 50 -->
+                      <site group="3" name="50" pos="0.0045823 -0.0103611 0.00598198" quat="0.5 -0.5 -0.5 0.5"/>
+                      <!-- Frame 52 -->
+                      <site group="3" name="52" pos="0.0212096 0.0103611 0.00598198" quat="0.5 -0.5 -0.5 0.5"/>
+                      <!-- Frame 53 -->
+                      <site group="3" name="53" pos="0.00458299 0.0103611 0.00598198" quat="0.5 -0.5 -0.5 0.5"/>
+                      <!-- Frame 54 -->
+                      <site group="3" name="54" pos="0.00458181 -5.44356e-20 -0.011964" quat="0.5 -0.5 -0.5 0.5"/>
+                      <!-- Frame 55 -->
+                      <site group="3" name="55" pos="0.0212095 -5.44356e-20 -0.011964" quat="0.5 -0.5 -0.5 0.5"/>
+                      <!-- Link segment_10__configuration_default -->
+                      <body name="segment_10__configuration_default" pos="0.0224861 -1.98059e-18 -1.37688e-18" quat="1 0 1.11022e-16 -1.0641e-17">
+                        <!-- Joint from segment_9__configuration_default to segment_10__configuration_default -->
+                        <joint axis="0 0 1" name="x_9" type="hinge" damping="0.1"/>
+                        <joint axis="0 1 0" name="y_9" type="hinge" damping="0.1"/>
+                        <inertial pos="0.0114718 1.09038e-08 -1.15964e-08" mass="0.00583625" fullinertia="3.82493e-07 3.30251e-07 3.30251e-07 2.66586e-14 1.13152e-13 -3.34482e-14"/>
+                        <!-- Part segment_10__configuration_default -->
+                        <geom type="mesh" class="visual" pos="-0.285433 -1.2326e-32 1.74777e-17" quat="0 0 1 0" mesh="segment_10__configuration_default" material="segment_10__configuration_default_material"/>
+                        <geom type="mesh" class="collision" pos="-0.285433 -1.2326e-32 1.74777e-17" quat="0 0 1 0" mesh="segment_10__configuration_default" material="segment_10__configuration_default_material"/>
+                        <!-- Frame 51 -->
+                        <site group="3" name="51" pos="0.0196014 -5.44356e-20 -0.010841" quat="0.5 -0.5 -0.5 0.5"/>
+                        <!-- Frame 56 -->
+                        <site group="3" name="56" pos="0.00411437 0.00938862 0.00542052" quat="0.5 -0.5 -0.5 0.5"/>
+                        <!-- Frame 57 -->
+                        <site group="3" name="57" pos="0.00411352 -5.44356e-20 -0.010841" quat="0.5 -0.5 -0.5 0.5"/>
+                        <!-- Frame 58 -->
+                        <site group="3" name="58" pos="0.00411448 -0.00938862 0.00542052" quat="0.5 -0.5 -0.5 0.5"/>
+                        <!-- Frame 59 -->
+                        <site group="3" name="59" pos="0.0196013 0.00938862 0.00542052" quat="0.5 -0.5 -0.5 0.5"/>
+                        <!-- Frame 60 -->
+                        <site group="3" name="60" pos="0.0196012 -0.00938862 0.00542052" quat="0.5 -0.5 -0.5 0.5"/>
+                        <!-- Link segment_11_2__configuration_default -->
+                        <body name="segment_11_2__configuration_default" pos="0.0207452 5.55112e-17 -1.27028e-18" quat="1 5.51286e-16 0 -2.11798e-17">
+                          <!-- Joint from segment_10__configuration_default to segment_11_2__configuration_default -->
+                          <joint axis="0 0 1" name="x_10" type="hinge" damping="0.1"/>
+                          <joint axis="0 1 0" name="y_10" type="hinge" damping="0.1"/>
+                          <inertial pos="0.0105825 4.66794e-09 -4.96433e-09" mass="0.00456538" fullinertia="2.54326e-07 2.19766e-07 2.19766e-07 8.8537e-14 5.7459e-14 -8.39475e-15"/>
+                          <!-- Part segmentt_11_1__configuration_default -->
+                          <geom type="mesh" class="visual" pos="-0.306178 0 1.8748e-17" quat="0 0 1 0" mesh="segmentt_11_1__configuration_default" material="segmentt_11_1__configuration_default_material"/>
+                          <geom type="mesh" class="collision" pos="-0.306178 0 1.8748e-17" quat="0 0 1 0" mesh="segmentt_11_1__configuration_default" material="segmentt_11_1__configuration_default_material"/>
+                          <!-- Part segment_11_2__configuration_default -->
+                          <geom type="mesh" class="visual" pos="-0.306178 0 1.8748e-17" quat="3.30788e-17 0 -1 4.19873e-17" mesh="segment_11_2__configuration_default" material="segment_11_2__configuration_default_material"/>
+                          <geom type="mesh" class="collision" pos="-0.306178 0 1.8748e-17" quat="3.30788e-17 0 -1 4.19873e-17" mesh="segment_11_2__configuration_default" material="segment_11_2__configuration_default_material"/>
+                          <!-- Frame 61 -->
+                          <site group="3" name="61" pos="0.0180827 -0.00849142 0.00490253" quat="0.5 -0.5 -0.5 0.5"/>
+                          <!-- Frame 62 -->
+                          <site group="3" name="62" pos="0.00373368 -0.00849142 0.00490253" quat="0.5 -0.5 -0.5 0.5"/>
+                          <!-- Frame 63 -->
+                          <site group="3" name="63" pos="0.00373261 -5.44356e-20 -0.00980505" quat="0.5 -0.5 -0.5 0.5"/>
+                          <!-- Frame 64 -->
+                          <site group="3" name="64" pos="0.0180829 -5.44356e-20 -0.00980505" quat="0.5 -0.5 -0.5 0.5"/>
+                          <!-- Frame 65 -->
+                          <site group="3" name="65" pos="0.0180829 0.00849142 0.00490253" quat="0.5 -0.5 -0.5 0.5"/>
+                          <!-- Frame 66 -->
+                          <site group="3" name="66" pos="0.00373294 0.00849142 0.00490253" quat="0.5 -0.5 -0.5 0.5"/>
+                          <!-- Link segment_12__configuration_default -->
+                          <body name="segment_12__configuration_default" pos="0.019139 5.55112e-17 -1.17193e-18" quat="1 4.52636e-16 -4.44089e-16 2.54034e-29">
+                            <!-- Joint from segment_11_2__configuration_default to segment_12__configuration_default -->
+                            <joint axis="0 0 1" name="x_11" type="hinge" damping="0.1"/>
+                            <joint axis="0 1 0" name="y_11" type="hinge" damping="0.1"/>
+                            <inertial pos="0.00976212 9.31267e-09 -1.61388e-08" mass="0.00356862" fullinertia="1.69004e-07 1.46151e-07 1.46151e-07 1.36414e-14 4.14922e-14 -8.79568e-14"/>
+                            <!-- Part segment_12__configuration_default -->
+                            <geom type="mesh" class="visual" pos="-0.325317 0 1.99199e-17" quat="0 0 1 0" mesh="segment_12__configuration_default" material="segment_12__configuration_default_material"/>
+                            <geom type="mesh" class="collision" pos="-0.325317 0 1.99199e-17" quat="0 0 1 0" mesh="segment_12__configuration_default" material="segment_12__configuration_default_material"/>
+                            <!-- Frame 67 -->
+                            <site group="3" name="67" pos="0.0167487 -0.00766369 0.00442464" quat="0.5 -0.5 -0.5 0.5"/>
+                            <!-- Frame 68 -->
+                            <site group="3" name="68" pos="0.00328566 -0.00766369 0.00442464" quat="0.5 -0.5 -0.5 0.5"/>
+                            <!-- Frame 69 -->
+                            <site group="3" name="69" pos="0.0167489 0.00766369 0.00442464" quat="0.5 -0.5 -0.5 0.5"/>
+                            <!-- Frame 70 -->
+                            <site group="3" name="70" pos="0.00328347 0.00766369 0.00442464" quat="0.5 -0.5 -0.5 0.5"/>
+                            <!-- Frame 71 -->
+                            <site group="3" name="71" pos="0.0167489 -5.44356e-20 -0.00884927" quat="0.5 -0.5 -0.5 0.5"/>
+                            <!-- Frame 72 -->
+                            <site group="3" name="72" pos="0.00328429 -5.44356e-20 -0.00884927" quat="0.5 -0.5 -0.5 0.5"/>
+                            <!-- Link segment_13__configuration_default -->
+                            <body name="segment_13__configuration_default" pos="0.0176573 2.46519e-32 -1.0812e-18" quat="1 -0 -1.11022e-15 -8.69362e-26">
+                              <!-- Joint from segment_12__configuration_default to segment_13__configuration_default -->
+                              <joint axis="0 0 1" name="x_12" type="hinge" damping="0.1"/>
+                              <joint axis="0 1 0" name="y_12" type="hinge" damping="0.1"/>
+                              <inertial pos="0.00900538 9.25531e-09 -1.56183e-08" mass="0.00278699" fullinertia="1.12241e-07 9.71256e-08 9.71253e-08 9.72953e-15 2.78331e-14 -6.52431e-14"/>
+                              <!-- Part segment_13__configuration_default -->
+                              <geom type="mesh" class="visual" pos="-0.342974 0 2.10011e-17" quat="3.44552e-17 -0 -1 -1.11022e-16" mesh="segment_13__configuration_default" material="segment_13__configuration_default_material"/>
+                              <geom type="mesh" class="collision" pos="-0.342974 0 2.10011e-17" quat="3.44552e-17 -0 -1 -1.11022e-16" mesh="segment_13__configuration_default" material="segment_13__configuration_default_material"/>
+                              <!-- Frame 73 -->
+                              <site group="3" name="73" pos="0.0154859 -0.00690005 0.00398375" quat="0.5 -0.5 -0.5 0.5"/>
+                              <!-- Frame 74 -->
+                              <site group="3" name="74" pos="0.0029181 -0.00690005 0.00398375" quat="0.5 -0.5 -0.5 0.5"/>
+                              <!-- Frame 75 -->
+                              <site group="3" name="75" pos="0.00291607 -5.44356e-20 -0.00796749" quat="0.5 -0.5 -0.5 0.5"/>
+                              <!-- Frame 76 -->
+                              <site group="3" name="76" pos="0.0154861 -5.44356e-20 -0.00796749" quat="0.5 -0.5 -0.5 0.5"/>
+                              <!-- Frame 77 -->
+                              <site group="3" name="77" pos="0.0154861 0.00690005 0.00398375" quat="0.5 -0.5 -0.5 0.5"/>
+                              <!-- Frame 78 -->
+                              <site group="3" name="78" pos="0.00291581 0.00690005 0.00398375" quat="0.5 -0.5 -0.5 0.5"/>
+                              <!-- Link segment_14__configuration_default -->
+                              <body name="segment_14__configuration_default" pos="0.0162902 2.4929e-18 -9.97487e-19" quat="1 -0 -1.11022e-16 6.53517e-19">
+                                <!-- Joint from segment_13__configuration_default to segment_14__configuration_default -->
+                                <joint axis="0 0 1" name="x_13" type="hinge" damping="0.1"/>
+                                <joint axis="0 1 0" name="y_13" type="hinge" damping="0.1"/>
+                                <inertial pos="0.00830739 9.27243e-09 -1.52171e-08" mass="0.0021742" fullinertia="7.44986e-08 6.44937e-08 6.44935e-08 7.04989e-15 1.86759e-14 -4.83793e-14"/>
+                                <!-- Part segment_14__configuration_default -->
+                                <geom type="mesh" class="visual" pos="-0.359264 0 2.19986e-17" quat="3.06162e-17 -0 -1 3.49785e-17" mesh="segment_14__configuration_default" material="segment_14__configuration_default_material"/>
+                                <geom type="mesh" class="collision" pos="-0.359264 0 2.19986e-17" quat="3.06162e-17 -0 -1 3.49785e-17" mesh="segment_14__configuration_default" material="segment_14__configuration_default_material"/>
+                                <!-- Frame 79 -->
+                                <site group="3" name="79" pos="0.00257692 0.00619553 0.00357699" quat="0.5 -0.5 -0.5 0.5"/>
+                                <!-- Frame 80 -->
+                                <site group="3" name="80" pos="0.0143211 0.00619553 0.00357699" quat="0.5 -0.5 -0.5 0.5"/>
+                                <!-- Frame 81 -->
+                                <site group="3" name="81" pos="0.0143209 -0.00619553 0.00357699" quat="0.5 -0.5 -0.5 0.5"/>
+                                <!-- Frame 82 -->
+                                <site group="3" name="82" pos="0.00257885 -0.00619553 0.00357699" quat="0.5 -0.5 -0.5 0.5"/>
+                                <!-- Frame 83 -->
+                                <site group="3" name="83" pos="0.00257673 -5.44356e-20 -0.00715398" quat="0.5 -0.5 -0.5 0.5"/>
+                                <!-- Frame 84 -->
+                                <site group="3" name="84" pos="0.0143211 -5.44356e-20 -0.00715398" quat="0.5 -0.5 -0.5 0.5"/>
+                                <!-- Link segment_15__configuration_default -->
+                                <body name="segment_15__configuration_default" pos="0.015029 -1.40093e-19 -9.20259e-19" quat="1 0 -1.11022e-16 -3.46945e-18">
+                                  <!-- Joint from segment_14__configuration_default to segment_15__configuration_default -->
+                                  <joint axis="0 0 1" name="x_14" type="hinge" damping="0.1"/>
+                                  <joint axis="0 1 0" name="y_14" type="hinge" damping="0.1"/>
+                                  <inertial pos="0.00766367 9.36767e-09 -1.49414e-08" mass="0.00169393" fullinertia="4.94204e-08 4.2787e-08 4.27868e-08 5.19142e-15 1.25334e-14 -3.58968e-14"/>
+                                  <!-- Part segment_15__configuration_default -->
+                                  <geom type="mesh" class="visual" pos="-0.374293 1.40093e-19 2.29189e-17" quat="3.24416e-17 -0 -1 -1.11022e-16" mesh="segment_15__configuration_default" material="segment_15__configuration_default_material"/>
+                                  <geom type="mesh" class="collision" pos="-0.374293 1.40093e-19 2.29189e-17" quat="3.24416e-17 -0 -1 -1.11022e-16" mesh="segment_15__configuration_default" material="segment_15__configuration_default_material"/>
+                                  <!-- Frame 85 -->
+                                  <site group="3" name="85" pos="0.0132462 8.56574e-20 -0.00640345" quat="0.5 -0.5 -0.5 0.5"/>
+                                  <!-- Frame 86 -->
+                                  <site group="3" name="86" pos="0.00226401 8.56574e-20 -0.00640345" quat="0.5 -0.5 -0.5 0.5"/>
+                                  <!-- Frame 87 -->
+                                  <site group="3" name="87" pos="0.00226454 0.00554555 0.00320173" quat="0.5 -0.5 -0.5 0.5"/>
+                                  <!-- Frame 88 -->
+                                  <site group="3" name="88" pos="0.0132462 0.00554555 0.00320173" quat="0.5 -0.5 -0.5 0.5"/>
+                                  <!-- Frame 89 -->
+                                  <site group="3" name="89" pos="0.0132461 -0.00554555 0.00320173" quat="0.5 -0.5 -0.5 0.5"/>
+                                  <!-- Frame 90 -->
+                                  <site group="3" name="90" pos="0.00226586 -0.00554555 0.00320173" quat="0.5 -0.5 -0.5 0.5"/>
+                                  <!-- Link segment_16__configuration_default -->
+                                  <body name="segment_16__configuration_default" pos="0.0138654 -5.79682e-17 -8.49011e-19" quat="1 0 2.22045e-16 -2.66107e-27">
+                                    <!-- Joint from segment_15__configuration_default to segment_16__configuration_default -->
+                                    <joint axis="0 0 1" name="x_15" type="hinge" damping="0.1"/>
+                                    <joint axis="0 1 0" name="y_15" type="hinge" damping="0.1"/>
+                                    <inertial pos="0.0070701 9.54699e-09 -1.48007e-08" mass="0.00131765" fullinertia="3.27686e-08 2.83576e-08 2.83575e-08 3.88379e-15 8.41076e-15 -2.66862e-14"/>
+                                    <!-- Part segment_16__configuration_default -->
+                                    <geom type="mesh" class="visual" pos="-0.388159 -2.46519e-32 2.37679e-17" quat="0 0 1 0" mesh="segment_16__configuration_default" material="segment_16__configuration_default_material"/>
+                                    <geom type="mesh" class="collision" pos="-0.388159 -2.46519e-32 2.37679e-17" quat="0 0 1 0" mesh="segment_16__configuration_default" material="segment_16__configuration_default_material"/>
+                                    <!-- Frame 91 -->
+                                    <site group="3" name="91" pos="0.00197662 0.0049459 0.00285551" quat="0.5 -0.5 -0.5 0.5"/>
+                                    <!-- Frame 92 -->
+                                    <site group="3" name="92" pos="0.0019771 -0.0049459 0.00285551" quat="0.5 -0.5 -0.5 0.5"/>
+                                    <!-- Frame 93 -->
+                                    <site group="3" name="93" pos="0.0122546 0.0049459 0.00285551" quat="0.5 -0.5 -0.5 0.5"/>
+                                    <!-- Frame 94 -->
+                                    <site group="3" name="94" pos="0.0122544 -0.0049459 0.00285551" quat="0.5 -0.5 -0.5 0.5"/>
+                                    <!-- Frame 95 -->
+                                    <site group="3" name="95" pos="0.0122546 -5.44356e-20 -0.00571103" quat="0.5 -0.5 -0.5 0.5"/>
+                                    <!-- Frame 96 -->
+                                    <site group="3" name="96" pos="0.00197584 -5.44356e-20 -0.00571103" quat="0.5 -0.5 -0.5 0.5"/>
+                                    <!-- Link segment_17__configuration_default -->
+                                    <body name="segment_17__configuration_default" pos="0.0127919 7.39557e-32 -7.83279e-19" quat="1 1.00791e-16 1.11022e-16 2.76101e-30">
+                                      <!-- Joint from segment_16__configuration_default to segment_17__configuration_default -->
+                                      <joint axis="0 0 1" name="x_16" type="hinge" damping="0.1"/>
+                                      <joint axis="0 1 0" name="y_16" type="hinge" damping="0.1"/>
+                                      <inertial pos="0.00652292 9.81916e-09 -1.48077e-08" mass="0.00102295" fullinertia="2.17199e-08 1.87732e-08 1.87731e-08 2.94922e-15 5.64236e-15 -1.99111e-14"/>
+                                      <!-- Part segment_17__configuration_default -->
+                                      <geom type="mesh" class="visual" pos="-0.400951 0 2.45512e-17" quat="3.44552e-17 -0 -1 -1.11022e-16" mesh="segment_17__configuration_default" material="segment_17__configuration_default_material"/>
+                                      <geom type="mesh" class="collision" pos="-0.400951 0 2.45512e-17" quat="3.44552e-17 -0 -1 -1.11022e-16" mesh="segment_17__configuration_default" material="segment_17__configuration_default_material"/>
+                                      <!-- Frame 97 -->
+                                      <site group="3" name="97" pos="0.00170936 -5.44356e-20 -0.00507222" quat="0.5 -0.5 -0.5 0.5"/>
+                                      <!-- Frame 98 -->
+                                      <site group="3" name="98" pos="0.00171125 0.00439267 0.00253611" quat="0.5 -0.5 -0.5 0.5"/>
+                                      <!-- Frame 99 -->
+                                      <site group="3" name="99" pos="0.00171068 -0.00439267 0.00253611" quat="0.5 -0.5 -0.5 0.5"/>
+                                      <!-- Frame 100 -->
+                                      <site group="3" name="100" pos="0.0113398 0.00439267 0.00253611" quat="0.5 -0.5 -0.5 0.5"/>
+                                      <!-- Frame 101 -->
+                                      <site group="3" name="101" pos="0.0113397 -5.44356e-20 -0.00507222" quat="0.5 -0.5 -0.5 0.5"/>
+                                      <!-- Frame 102 -->
+                                      <site group="3" name="102" pos="0.0113396 -0.00439267 0.00253611" quat="0.5 -0.5 -0.5 0.5"/>
+                                      <!-- Link segment_18__configuration_default -->
+                                      <body name="segment_18__configuration_default" pos="0.0118015 0 -7.22636e-19" quat="1 3.52658e-16 0 -6.97554e-17">
+                                        <!-- Joint from segment_17__configuration_default to segment_18__configuration_default -->
+                                        <joint axis="0 0 1" name="x_17" type="hinge" damping="0.1"/>
+                                        <joint axis="0 1 0" name="y_17" type="hinge" damping="0.1"/>
+                                        <inertial pos="0.00601868 1.12794e-08 -1.49464e-08" mass="0.000792269" fullinertia="1.43944e-08 1.24124e-08 1.24124e-08 3.24018e-15 5.31283e-15 -1.36141e-14"/>
+                                        <!-- Part segment_18__configuration_default -->
+                                        <geom type="mesh" class="visual" pos="-0.412752 0 2.52738e-17" quat="2.93883e-17 -0 -1 1.97215e-31" mesh="segment_18__configuration_default" material="segment_18__configuration_default_material"/>
+                                        <geom type="mesh" class="collision" pos="-0.412752 0 2.52738e-17" quat="2.93883e-17 -0 -1 1.97215e-31" mesh="segment_18__configuration_default" material="segment_18__configuration_default_material"/>
+                                        <!-- Frame 103 -->
+                                        <site group="3" name="103" pos="0.00146467 -0.00388227 0.00224143" quat="0.5 -0.5 -0.5 0.5"/>
+                                        <!-- Frame 104 -->
+                                        <site group="3" name="104" pos="0.00146533 0.00388227 0.00224143" quat="0.5 -0.5 -0.5 0.5"/>
+                                        <!-- Frame 105 -->
+                                        <site group="3" name="105" pos="0.00146395 -5.44356e-20 -0.00448286" quat="0.5 -0.5 -0.5 0.5"/>
+                                        <!-- Frame 106 -->
+                                        <site group="3" name="106" pos="0.0104957 -5.44356e-20 -0.00448286" quat="0.5 -0.5 -0.5 0.5"/>
+                                        <!-- Frame 107 -->
+                                        <site group="3" name="107" pos="0.0104958 0.00388227 0.00224143" quat="0.5 -0.5 -0.5 0.5"/>
+                                        <!-- Frame 108 -->
+                                        <site group="3" name="108" pos="0.0104956 -0.00388227 0.00224143" quat="0.5 -0.5 -0.5 0.5"/>
+                                        <!-- Link segment_19__configuration_default -->
+                                        <body name="segment_19__configuration_default" pos="0.0108878 2.93959e-18 -6.66688e-19" quat="1 3.70179e-16 -2.22045e-16 3.46945e-18">
+                                          <!-- Joint from segment_18__configuration_default to segment_19__configuration_default -->
+                                          <joint axis="0 0 1" name="x_18" type="hinge" damping="0.1"/>
+                                          <joint axis="0 1 0" name="y_18" type="hinge" damping="0.1"/>
+                                          <inertial pos="0.00555715 7.27659e-09 -6.67771e-09" mass="0.00064337" fullinertia="1.00445e-08 8.61084e-09 8.61082e-09 1.27925e-15 3.36671e-15 2.04602e-16"/>
+                                          <!-- Part segment_19__configuration_default -->
+                                          <geom type="mesh" class="visual" pos="-0.42364 0 2.59405e-17" quat="0 0 1 0" mesh="segment_19__configuration_default" material="segment_19__configuration_default_material"/>
+                                          <geom type="mesh" class="collision" pos="-0.42364 0 2.59405e-17" quat="0 0 1 0" mesh="segment_19__configuration_default" material="segment_19__configuration_default_material"/>
+                                          <!-- Frame 109 -->
+                                          <site group="3" name="109" pos="0.00134585 0.00341139 0.00196957" quat="0.5 -0.5 -0.5 0.5"/>
+                                          <!-- Frame 110 -->
+                                          <site group="3" name="110" pos="0.00134619 2.72178e-19 -0.00393914" quat="0.5 -0.5 -0.5 0.5"/>
+                                          <!-- Frame 111 -->
+                                          <site group="3" name="111" pos="0.0013471 -0.00341139 0.00196957" quat="0.5 -0.5 -0.5 0.5"/>
+                                          <!-- Frame 112 -->
+                                          <site group="3" name="112" pos="0.0096843 -0.00341139 0.00196957" quat="0.5 -0.5 -0.5 0.5"/>
+                                          <!-- Frame 113 -->
+                                          <site group="3" name="113" pos="0.00968426 0.00341139 0.00196957" quat="0.5 -0.5 -0.5 0.5"/>
+                                          <!-- Frame 114 -->
+                                          <site group="3" name="114" pos="0.00968438 2.72178e-19 -0.00393914" quat="0.5 -0.5 -0.5 0.5"/>
+                                          <!-- Link segment_20__configuration_default -->
+                                          <body name="segment_20__configuration_default" pos="0.0100449 -5.85204e-17 -6.15071e-19" quat="1 -0 -6.66134e-16 -3.46945e-18">
+                                            <!-- Joint from segment_19__configuration_default to segment_20__configuration_default -->
+                                            <joint axis="0 0 1" name="x_19" type="hinge" damping="0.1"/>
+                                            <joint axis="0 1 0" name="y_19" type="hinge" damping="0.1"/>
+                                            <inertial pos="0.0051282 3.50084e-09 -8.91244e-09" mass="0.000500239" fullinertia="6.68925e-09 5.71721e-09 5.7172e-09 6.90923e-16 3.08248e-15 5.09188e-15"/>
+                                            <!-- Part segment_20__configuration_default -->
+                                            <geom type="mesh" class="visual" pos="-0.433685 1.2326e-32 2.65555e-17" quat="0 0 1 0" mesh="segment_20__configuration_default" material="segment_20__configuration_default_material"/>
+                                            <geom type="mesh" class="collision" pos="-0.433685 1.2326e-32 2.65555e-17" quat="0 0 1 0" mesh="segment_20__configuration_default" material="segment_20__configuration_default_material"/>
+                                            <!-- Frame 115 -->
+                                            <site group="3" name="115" pos="0.00113692 2.72178e-19 -0.00343751" quat="0.5 -0.5 -0.5 0.5"/>
+                                            <!-- Frame 116 -->
+                                            <site group="3" name="116" pos="0.00113693 0.00297697 0.00171875" quat="0.5 -0.5 -0.5 0.5"/>
+                                            <!-- Frame 117 -->
+                                            <site group="3" name="117" pos="0.00113833 -0.00297697 0.00171875" quat="0.5 -0.5 -0.5 0.5"/>
+                                            <!-- Frame 118 -->
+                                            <site group="3" name="118" pos="0.00896592 -0.00297697 0.00171875" quat="0.5 -0.5 -0.5 0.5"/>
+                                            <!-- Frame 119 -->
+                                            <site group="3" name="119" pos="0.00896592 0.00297697 0.00171875" quat="0.5 -0.5 -0.5 0.5"/>
+                                            <!-- Frame 120 -->
+                                            <site group="3" name="120" pos="0.00896601 2.72178e-19 -0.00343751" quat="0.5 -0.5 -0.5 0.5"/>
+                                            <!-- Link segment_21__configuration_default -->
+                                            <body name="segment_21__configuration_default" pos="0.00926718 5.55112e-17 -5.67451e-19" quat="1 -5.65017e-16 -7.77156e-16 -1.75852e-27">
+                                              <!-- Joint from segment_20__configuration_default to segment_21__configuration_default -->
+                                              <joint axis="0 0 1" name="x_20" type="hinge" damping="0.1"/>
+                                              <joint axis="0 1 0" name="y_20" type="hinge" damping="0.1"/>
+                                              <inertial pos="0.0047331 3.56445e-09 -8.81065e-09" mass="0.000388137" fullinertia="4.4574e-09 3.79283e-09 3.79282e-09 3.9189e-16 2.24124e-15 3.61103e-15"/>
+                                              <!-- Part segment_21__configuration_default -->
+                                              <geom type="mesh" class="visual" pos="-0.442952 -2.46519e-32 2.7123e-17" quat="0 0 1 0" mesh="segment_21__configuration_default" material="segment_21__configuration_default_material"/>
+                                              <geom type="mesh" class="collision" pos="-0.442952 -2.46519e-32 2.7123e-17" quat="0 0 1 0" mesh="segment_21__configuration_default" material="segment_21__configuration_default_material"/>
+                                              <!-- Frame 121 -->
+                                              <site group="3" name="121" pos="0.000945399 -0.00257618 0.00148736" quat="0.5 -0.5 -0.5 0.5"/>
+                                              <!-- Frame 122 -->
+                                              <site group="3" name="122" pos="0.000944099 0.00257618 0.00148736" quat="0.5 -0.5 -0.5 0.5"/>
+                                              <!-- Frame 123 -->
+                                              <site group="3" name="123" pos="0.000943825 2.72178e-19 -0.00297472" quat="0.5 -0.5 -0.5 0.5"/>
+                                              <!-- Frame 124 -->
+                                              <site group="3" name="124" pos="0.00830316 -0.00257618 0.00148736" quat="0.5 -0.5 -0.5 0.5"/>
+                                              <!-- Frame 125 -->
+                                              <site group="3" name="125" pos="0.00830327 2.72178e-19 -0.00297472" quat="0.5 -0.5 -0.5 0.5"/>
+                                              <!-- Frame 126 -->
+                                              <site group="3" name="126" pos="0.00830319 0.00257618 0.00148736" quat="0.5 -0.5 -0.5 0.5"/>
+                                              <!-- Link segment_22__configuration_default -->
+                                              <body name="segment_22__configuration_default" pos="0.00854969 -3.13292e-18 -5.23518e-19" quat="1 -0 1.11022e-16 -1.84596e-16">
+                                                <!-- Joint from segment_21__configuration_default to segment_22__configuration_default -->
+                                                <joint axis="0 0 1" name="x_21" type="hinge" damping="0.1"/>
+                                                <joint axis="0 1 0" name="y_21" type="hinge" damping="0.1"/>
+                                                <inertial pos="0.00436944 2.66192e-09 -1.25865e-08" mass="0.000300377" fullinertia="2.97287e-09 2.51373e-09 2.51372e-09 3.82255e-16 1.11675e-15 1.15501e-15"/>
+                                                <!-- Part segment_22__configuration_default -->
+                                                <geom type="mesh" class="visual" pos="-0.451502 0 2.76465e-17" quat="0 0 1 0" mesh="segment_22__configuration_default" material="segment_22__configuration_default_material"/>
+                                                <geom type="mesh" class="collision" pos="-0.451502 0 2.76465e-17" quat="0 0 1 0" mesh="segment_22__configuration_default" material="segment_22__configuration_default_material"/>
+                                                <!-- Frame 127 -->
+                                                <site group="3" name="127" pos="0.000767093 -0.00220642 0.00127388" quat="0.5 -0.5 -0.5 0.5"/>
+                                                <!-- Frame 128 -->
+                                                <site group="3" name="128" pos="0.000766201 0.00220642 0.00127388" quat="0.5 -0.5 -0.5 0.5"/>
+                                                <!-- Frame 129 -->
+                                                <site group="3" name="129" pos="0.000765773 2.72178e-19 -0.00254776" quat="0.5 -0.5 -0.5 0.5"/>
+                                                <!-- Frame 130 -->
+                                                <site group="3" name="130" pos="0.00769184 2.72178e-19 -0.00254776" quat="0.5 -0.5 -0.5 0.5"/>
+                                                <!-- Frame 131 -->
+                                                <site group="3" name="131" pos="0.00769178 0.00220642 0.00127388" quat="0.5 -0.5 -0.5 0.5"/>
+                                                <!-- Frame 132 -->
+                                                <site group="3" name="132" pos="0.00769172 -0.00220642 0.00127388" quat="0.5 -0.5 -0.5 0.5"/>
+                                                <!-- Link segment_23__configuration_default -->
+                                                <body name="segment_23__configuration_default" pos="0.00788776 1.11022e-16 -4.82986e-19" quat="1 -0 -0 -0">
+                                                  <!-- Joint from segment_22__configuration_default to segment_23__configuration_default -->
+                                                  <joint axis="0 0 1" name="x_22" type="hinge" damping="0.1"/>
+                                                  <joint axis="0 1 0" name="y_22" type="hinge" damping="0.1"/>
+                                                  <inertial pos="0.00403502 2.9391e-09 -1.25947e-08" mass="0.000231713" fullinertia="1.98525e-09 1.664e-09 1.66399e-09 2.49462e-16 8.08726e-16 7.74659e-16"/>
+                                                  <!-- Part segment_23__configuration_default -->
+                                                  <geom type="mesh" class="visual" pos="-0.45939 4.93038e-32 2.81295e-17" quat="0 0 1 0" mesh="segment_23__configuration_default" material="segment_23__configuration_default_material"/>
+                                                  <geom type="mesh" class="collision" pos="-0.45939 4.93038e-32 2.81295e-17" quat="0 0 1 0" mesh="segment_23__configuration_default" material="segment_23__configuration_default_material"/>
+                                                  <!-- Frame 133 -->
+                                                  <site group="3" name="133" pos="0.00712764 -0.00186529 0.00107693" quat="0.5 -0.5 -0.5 0.5"/>
+                                                  <!-- Frame 134 -->
+                                                  <site group="3" name="134" pos="0.00712772 0.00186529 0.00107693" quat="0.5 -0.5 -0.5 0.5"/>
+                                                  <!-- Frame 135 -->
+                                                  <site group="3" name="135" pos="0.00712776 2.72178e-19 -0.00215385" quat="0.5 -0.5 -0.5 0.5"/>
+                                                  <!-- Frame 136 -->
+                                                  <site group="3" name="136" pos="0.000601736 2.72178e-19 -0.00215385" quat="0.5 -0.5 -0.5 0.5"/>
+                                                  <!-- Frame 137 -->
+                                                  <site group="3" name="137" pos="0.000602573 -0.00186529 0.00107693" quat="0.5 -0.5 -0.5 0.5"/>
+                                                  <!-- Frame 138 -->
+                                                  <site group="3" name="138" pos="0.000601957 0.00186529 0.00107693" quat="0.5 -0.5 -0.5 0.5"/>
+                                                  <!-- Link segment_24__configuration_default -->
+                                                  <body name="segment_24__configuration_default" pos="0.00727707 0 -4.45592e-19" quat="1 -0 -1.11022e-16 -5.3449e-28">
+                                                    <!-- Joint from segment_23__configuration_default to segment_24__configuration_default -->
+                                                    <joint axis="0 0 1" name="x_23" type="hinge" damping="0.1"/>
+                                                    <joint axis="0 1 0" name="y_23" type="hinge" damping="0.1"/>
+                                                    <inertial pos="0.00372792 1.31738e-09 -7.05259e-09" mass="0.000178028" fullinertia="1.3279e-09 1.09982e-09 1.09982e-09 -2.80934e-16 9.44067e-16 5.3083e-16"/>
+                                                    <!-- Part segment_24__configuration_default -->
+                                                    <geom type="mesh" class="visual" pos="-0.466667 0 2.85751e-17" quat="0 0 1 0" mesh="segment_24__configuration_default" material="segment_24__configuration_default_material"/>
+                                                    <geom type="mesh" class="collision" pos="-0.466667 0 2.85751e-17" quat="0 0 1 0" mesh="segment_24__configuration_default" material="segment_24__configuration_default_material"/>
+                                                    <!-- Frame 139 -->
+                                                    <site group="3" name="139" pos="0.000519786 2.72178e-19 -0.00179044" quat="0.5 -0.5 -0.5 0.5"/>
+                                                    <!-- Frame 140 -->
+                                                    <site group="3" name="140" pos="0.000519786 0.00155057 0.000895222" quat="0.5 -0.5 -0.5 0.5"/>
+                                                    <!-- Frame 141 -->
+                                                    <site group="3" name="141" pos="0.000519786 -0.00155057 0.000895222" quat="0.5 -0.5 -0.5 0.5"/>
+                                                    <!-- Frame 142 -->
+                                                    <site group="3" name="142" pos="0.00660702 -0.00155057 0.000895222" quat="0.5 -0.5 -0.5 0.5"/>
+                                                    <!-- Frame 143 -->
+                                                    <site group="3" name="143" pos="0.00660718 0.00155057 0.000895222" quat="0.5 -0.5 -0.5 0.5"/>
+                                                    <!-- Frame 144 -->
+                                                    <site group="3" name="144" pos="0.00660714 2.72178e-19 -0.00179044" quat="0.5 -0.5 -0.5 0.5"/>
+                                                    <!-- Link segment_25__configuration_default -->
+                                                    <body name="segment_25__configuration_default" pos="0.00671367 3.28474e-18 -4.11094e-19" quat="1 -1.36525e-16 0 3.46945e-18">
+                                                      <!-- Joint from segment_24__configuration_default to segment_25__configuration_default -->
+                                                      <joint axis="0 0 1" name="x_24" type="hinge" damping="0.1"/>
+                                                      <joint axis="0 1 0" name="y_24" type="hinge" damping="0.1"/>
+                                                      <inertial pos="0.00344702 1.56464e-09 -7.15512e-09" mass="0.000136181" fullinertia="1e-09 1e-09 1e-09 -2.67785e-16 7.62836e-16 2.9113e-16"/>
+                                                      <!-- Part segment_25__configuration_default -->
+                                                      <geom type="mesh" class="visual" pos="-0.47338 0 2.89862e-17" quat="0 0 1 0" mesh="segment_25__configuration_default" material="segment_25__configuration_default_material"/>
+                                                      <geom type="mesh" class="collision" pos="-0.47338 0 2.89862e-17" quat="0 0 1 0" mesh="segment_25__configuration_default" material="segment_25__configuration_default_material"/>
+                                                      <!-- Frame 145 -->
+                                                      <site group="3" name="145" pos="0.00612652 0.00126022 0.000727586" quat="0.5 -0.5 -0.5 0.5"/>
+                                                      <!-- Frame 146 -->
+                                                      <site group="3" name="146" pos="0.00612651 2.72178e-19 -0.00145517" quat="0.5 -0.5 -0.5 0.5"/>
+                                                      <!-- Frame 147 -->
+                                                      <site group="3" name="147" pos="0.00612633 -0.00126022 0.000727586" quat="0.5 -0.5 -0.5 0.5"/>
+                                                      <!-- Frame 148 -->
+                                                      <site group="3" name="148" pos="0.000479543 -0.00126022 0.000727586" quat="0.5 -0.5 -0.5 0.5"/>
+                                                      <!-- Frame 149 -->
+                                                      <site group="3" name="149" pos="0.000479543 2.72178e-19 -0.00145517" quat="0.5 -0.5 -0.5 0.5"/>
+                                                      <!-- Frame 150 -->
+                                                      <site group="3" name="150" pos="0.000479543 0.00126022 0.000727586" quat="0.5 -0.5 -0.5 0.5"/>
+                                                      <body name="attachment" pos="0.007 0.0 0.0" quat="0 0 0 1">
+                                                        <site name="ee" rgba="1 0 0 1" size="0.001" group="1"/>
+                                                      </body>
+                                                    </body>
+                                                  </body>
+                                                </body>
+                                              </body>
+                                            </body>
+                                          </body>
+                                        </body>
+                                      </body>
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <asset>
+    <mesh file="segment_17__configuration_default.stl"/>
+    <mesh file="segment_8__configuration_default.stl"/>
+    <mesh file="segment_3__configuration_default.stl"/>
+    <mesh file="segment_15__configuration_default.stl"/>
+    <mesh file="segment_10__configuration_default.stl"/>
+    <mesh file="segment_25__configuration_default.stl"/>
+    <mesh file="segment_9__configuration_default.stl"/>
+    <mesh file="segment_20__configuration_default.stl"/>
+    <mesh file="segment_13__configuration_default.stl"/>
+    <mesh file="segment_16__configuration_default.stl"/>
+    <mesh file="segment_12__configuration_default.stl"/>
+    <mesh file="segment_22__configuration_default.stl"/>
+    <mesh file="segment_2__configuration_default.stl"/>
+    <mesh file="segment_21__configuration_default.stl"/>
+    <mesh file="segment_5_2__configuration_default.stl"/>
+    <mesh file="segment_19__configuration_default.stl"/>
+    <mesh file="segment_24__configuration_default.stl"/>
+    <mesh file="segment_18__configuration_default.stl"/>
+    <mesh file="segment_1__configuration_default.stl"/>
+    <mesh file="segment_4__configuration_default.stl"/>
+    <mesh file="segment_14__configuration_default.stl"/>
+    <mesh file="segmentt_11_1__configuration_default.stl"/>
+    <mesh file="segment_11_2__configuration_default.stl"/>
+    <mesh file="segment_6__configuration_default.stl"/>
+    <mesh file="segment_23__configuration_default.stl"/>
+    <mesh file="segment_5_1__configuration_default.stl"/>
+    <mesh file="segment_7__configuration_default.stl"/>
+    <material name="segment_1__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_2__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_3__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_4__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_5_2__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_5_1__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_6__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_7__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_8__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_9__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_10__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segmentt_11_1__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_11_2__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_12__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_13__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_14__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_15__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_16__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_17__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_18__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_19__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_20__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_21__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_22__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_23__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_24__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_25__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+  </asset>
+  <!-- <actuator>
+    <position class="my-SpiRob" name="x_1" joint="x_1" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_2" joint="x_2" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_3" joint="x_3" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_4" joint="x_4" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_5" joint="x_5" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_6" joint="x_6" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_7" joint="x_7" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_8" joint="x_8" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_9" joint="x_9" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_10" joint="x_10" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_11" joint="x_11" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_12" joint="x_12" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_13" joint="x_13" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_14" joint="x_14" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_15" joint="x_15" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_16" joint="x_16" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_17" joint="x_17" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_18" joint="x_18" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_19" joint="x_19" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_20" joint="x_20" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_21" joint="x_21" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_22" joint="x_22" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_23" joint="x_23" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="x_24" joint="x_24" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_1" joint="y_1" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_2" joint="y_2" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_3" joint="y_3" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_4" joint="y_4" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_5" joint="y_5" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_6" joint="y_6" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_7" joint="y_7" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_8" joint="y_8" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_9" joint="y_9" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_10" joint="y_10" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_11" joint="y_11" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_12" joint="y_12" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_13" joint="y_13" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_14" joint="y_14" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_15" joint="y_15" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_16" joint="y_16" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_17" joint="y_17" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_18" joint="y_18" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_19" joint="y_19" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_20" joint="y_20" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_21" joint="y_21" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_22" joint="y_22" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_23" joint="y_23" ctrlrange="-0.59 0.59"/>
+    <position class="my-SpiRob" name="y_24" joint="y_24" ctrlrange="-0.59 0.59"/>
+  </actuator> -->
+  <equality/>
+  <tendon>
+ 	 <spatial name="tendon1" range="0.0 0.63" limited="auto" width=".0005" rgba="0.95 0.3 1 1">
+  		<site site="1"/>
+  		<site site="2"/>
+		<site site="8"/>
+		<site site="11"/>
+		<site site="18"/>
+		<site site="17"/>
+		<site site="20"/>
+		<site site="24"/>
+		<site site="27"/>
+		<site site="29"/>
+		<site site="33"/>
+		<site site="35"/>
+		<site site="38"/>
+		<site site="42"/>
+		<site site="44"/>
+		<site site="43"/>
+		<site site="54"/>
+		<site site="55"/>
+		<site site="57"/>
+		<site site="51"/>
+		<site site="63"/>
+		<site site="64"/>
+		<site site="72"/>
+		<site site="71"/>
+		<site site="75"/>
+		<site site="76"/>
+		<site site="83"/>
+		<site site="84"/>
+		<site site="86"/>
+		<site site="85"/>
+		<site site="96"/>
+		<site site="95"/>
+		<site site="97"/>
+		<site site="101"/>
+		<site site="105"/>
+		<site site="106"/>
+		<site site="110"/>
+		<site site="114"/>
+		<site site="115"/>
+		<site site="120"/>
+		<site site="123"/>
+		<site site="125"/>
+		<site site="129"/>
+		<site site="130"/>
+		<site site="136"/>
+		<site site="135"/>
+		<site site="139"/>
+		<site site="144"/>
+		<site site="149"/>
+		<site site="146"/>
+  	</spatial>
+  </tendon>
+  <tendon>
+ 	 <spatial name="tendon2" range="0.0 0.63" limited="auto" width=".0005" rgba="0.95 0.3 1 1">
+  		<site site="6"/>
+  		<site site="5"/>
+		<site site="7"/>  
+		<site site="12"/>
+		<site site="15"/>
+		<site site="16"/>
+		<site site="21"/>
+		<site site="22"/>
+		<site site="26"/>
+		<site site="30"/>
+		<site site="32"/>
+		<site site="36"/>
+		<site site="39"/>
+		<site site="40"/>
+		<site site="48"/>
+		<site site="47"/>
+		<site site="50"/>
+		<site site="49"/>
+		<site site="58"/>
+		<site site="60"/>
+		<site site="62"/>
+		<site site="61"/>
+		<site site="68"/>
+		<site site="67"/>
+		<site site="74"/>
+		<site site="73"/>
+		<site site="82"/>
+		<site site="81"/>
+		<site site="90"/>
+		<site site="89"/>
+		<site site="92"/>
+		<site site="94"/>
+		<site site="99"/>
+		<site site="102"/>
+		<site site="103"/>
+		<site site="108"/>
+		<site site="111"/>
+		<site site="117"/>
+		<site site="118"/>
+		<site site="121"/>
+		<site site="124"/>
+		<site site="127"/>
+		<site site="132"/>
+		<site site="137"/>
+		<site site="133"/>
+		<site site="141"/>
+		<site site="142"/>
+		<site site="148"/>
+		<site site="147"/>
+  	</spatial>
+  </tendon>
+  <tendon>
+ 	 <spatial name="tendon3" range="0.0 0.63" limited="auto" width=".0005" rgba="0.95 0.3 1 1">
+  		<site site="3"/>
+  		<site site="4"/>
+		<site site="9"/>  
+		<site site="10"/>
+		<site site="14"/>
+		<site site="13"/>
+		<site site="19"/>
+		<site site="23"/>
+		<site site="25"/>
+		<site site="28"/>
+		<site site="31"/>
+		<site site="34"/>
+		<site site="37"/>
+		<site site="41"/>
+		<site site="45"/>
+		<site site="46"/>
+		<site site="53"/>
+		<site site="52"/>
+		<site site="56"/>
+		<site site="59"/>
+		<site site="66"/>
+		<site site="65"/>
+		<site site="70"/>
+		<site site="69"/>
+		<site site="78"/>
+		<site site="77"/>
+		<site site="79"/>
+		<site site="80"/>
+		<site site="87"/>
+		<site site="88"/>
+		<site site="91"/>
+		<site site="93"/>
+		<site site="98"/>
+		<site site="100"/>
+		<site site="104"/>
+		<site site="107"/>
+		<site site="109"/>
+		<site site="113"/>
+		<site site="116"/>
+		<site site="119"/>
+		<site site="122"/>
+		<site site="126"/>
+		<site site="128"/>
+		<site site="131"/>
+		<site site="138"/>
+		<site site="134"/>
+		<site site="140"/>
+		<site site="143"/>
+		<site site="150"/>
+		<site site="145"/>
+  	</spatial>
+  </tendon>
+  <actuator>
+    <motor name="tendon1_act" tendon="tendon1" gear="10"/>
+    <motor name="tendon2_act" tendon="tendon2" gear="10"/>
+    <motor name="tendon3_act" tendon="tendon3" gear="10"/>
+  </actuator>
+</mujoco>
