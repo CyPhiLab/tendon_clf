@@ -1,8 +1,5 @@
 import argparse
-import math
 import matplotlib.pyplot as plt
-import os
-os.environ["MUJOCO_GL"] = "egl"   # or comment this line out entirely
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -11,11 +8,9 @@ from pathlib import Path
 import time
 from scipy import linalg
 import cvxpy as cp
-from scipy.linalg import eigh
 
 
-
-# # Configure MuJoCo to use the EGL rendering backend (requires GPU)
+# Configure MuJoCo to use the EGL rendering backend (requires GPU)
 os.environ["MUJOCO_GL"] = "egl"
 
 
@@ -54,6 +49,7 @@ for i in range(3):  # Iterate over u1, u2, u3 blocks
         B[row_start:row_start+3, col_start:col_start+3] = np.eye(3)  # Assign identity
 
 print(B)
+
 
 def get_coriolis_and_gravity(model, data):
     """
@@ -145,7 +141,6 @@ def compute_jacobian_derivative(model, data, site_id, h=1e-6):
     
     return Jdot
 
-
 def finite_difference_Mdot(model, data, delta_t=1e-6):
     # Backup current state
     qpos_orig = data.qpos.copy()
@@ -204,19 +199,6 @@ def controller(model, data):
     pinv_B = np.linalg.pinv(B)
     site_name = "ee"
     site_id = model.site(site_name).id
-
-    # data.mocap_pos[mocap_id] = np.array([0.23312815, -0.31631513, 0.44791383])
-    # data.mocap_pos[mocap_id] = np.array([0.27083678, 0.00194196, 0.38488434])
-    # data.mocap_pos[mocap_id] = np.array([-0.14089394,  0.03146349,  0.46546878])
-    # data.mocap_pos[mocap_id] = ([-0.12925662,  0.14476031,  0.35263972])
-    data.mocap_pos[mocap_id] = ([-0.0553837,   0.05965076,  0.45050877])
-    # data.mocap_pos[mocap_id] = ([2.57706752e-01, 5.04049069e-04, 5.56287806e-01])
-    # data.mocap_pos[mocap_id] = ([ 0.17030022, -0.14941442,  0.52354782])
-    
-
-    # print(data.mocap_pos[mocap_id])
-
-
     dx = data.mocap_pos[mocap_id] - data.site(site_id).xpos
     twist[:3] = dx 
     mujoco.mju_mat2Quat(site_quat, data.site(site_id).xmat)
@@ -233,95 +215,100 @@ def controller(model, data):
     # Compute the task-space inertia matrix.
     mujoco.mj_solveM(model, data, M_inv, np.eye(model.nv))
     mujoco.mj_fullM(model, M, data.qM)
-    M = M * np.random.normal(1.0, 0.01, size=M.shape)  # Add some noise to the inertia matrix
+
     dJ_dt = compute_jacobian_derivative(model, data, site_id)
 
+    Mx_inv = jac @ M_inv @ jac.T
+    e = e
+    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+        Mx = np.linalg.inv(Mx_inv)
+    else:
+        Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+
+    Jbar = M_inv @ jac.T @ Mx
+
+    # define decision variables
     nu = 9
     nq = model.nq
     u = cp.Variable(shape=(nu, 1))
     qdd = cp.Variable(shape=(nq, 1))
     dl = cp.Variable(shape=(1, 1))
+    mu = cp.Variable(shape=(6, 1))
     twist[3:] = 0.0
 
     # error and Lyapunov function for CLF
     eta = np.concatenate((-twist,jac @ data.qvel))
     V = eta.T @ Pe @ eta
+
+    _, g = get_coriolis_and_gravity(model, data)
+
     # static forces
-    # statics = (g + data.qfrc_spring)
+    statics = (g + data.qfrc_spring)
     dq = data.qvel.reshape(-1,1)
-    # stat = cp.square(cp.norm(B @ u - statics.reshape(-1,1)))
+    stat = cp.square(cp.norm(B @ u - statics.reshape(-1,1)))
 
     # selection matrix for compression/extension actuators
     sel = np.ones((nu,1))
     sel[[2,5,8]] = 0.0
 
-    dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
+    # nullspace projection
+    ddq = Kp_null * (- data.qpos) - 4*Kd_null * data.qvel
+    null = 0.1*B @ pinv_B @ ddq.reshape(-1,1)
+    damp = cp.square(cp.norm(B @ u - null))
 
-    # ----------------------------------------------------
-    # Task critical damping https://www.sciencedirect.com/topics/engineering/critical-damping
-    Mx_inv = jac @ M_inv @ jac.T
-    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-        M_task = np.linalg.inv(Mx_inv)
-    else:
-        M_task = np.linalg.pinv(Mx_inv, rcond=1e-2)
-    
-    # Choose desired modal frequencies (eigenvalues of M^{-1} K)
 
-    omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 20 # omega^2
 
-    # Compute eigenvectors of M (to use as modal basis)
-    eigvals, P = eigh(M_task)  # P: eigenvectors of M
-    P_inv = np.linalg.inv(P)
+    # Vdot for our main CLF
+    dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ mu
+        
+    # Lie derivatives 
+    L2fy = dJ_dt @ dq - jac @ M_inv @ (data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1))
+    LgLfy = jac @ M_inv @ B
 
-    # Construct K in modal coordinates, then transform to original coordinates
-    K_modal = omega_sq
-    K_task = P_inv.T @ K_modal @ P_inv  # K = P^{-T} * Omega^2 * P^{-1}
+    # print(np.shape(mu))
+    # print(np.shape(u))
+    # print(np.shape(L2fy))
+    # print(np.shape(LgLfy))
 
-    # Choose damping ratios (zeta = 1 for critical damping)
-    zeta = 1.0
-    D_modal = 2 * zeta * np.sqrt(omega_sq)  # 2ζω
-
-    # Step 5: Construct C in modal coordinates and transform back
-    D_task = P_inv.T @ D_modal @ P_inv
-    # ----------------------------------------------------
 
     # objective = minimize the task space actuation mu + dV of CLF + damp the nullspace + try to be at static equilibrium + regularization for qdd and u + keep solution close to impedance controller + slack variable
-    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist  - D_task @ (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
-    # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (1000 * twist  - 20 * (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
-
-   
-    constraints = [ dV <= - 2/e * V + dl, 
-                      pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
-                    -25*sel <= u,
-                    25*np.ones((nu,1)) >= u]
-   
+    objective = cp.Minimize(0.02*cp.square(cp.norm(mu - (500 * twist  - 20 * (jac @ data.qvel)))) + 1000*cp.square(cp.norm(dl))) 
+    constraints = [ dV <= - 2/e * V + 0.01*dl, 
+                    L2fy + LgLfy @ u == mu 
+                    # np.linalg.inv(LgLfy) @ (mu - L2fy) == u  
+                    # -25*sel <= u, # actuation constraints?
+                    # 25*np.ones((nu,1)) >= u]
+    ]
+    
+    
 
     prob = cp.Problem(objective=objective, constraints=constraints)
     
+    # # Compute optimized dl
+    # dl = float(dl.value)
+   
+    # # Compute optimized control inputs
+    # u = np.array([np.max([u.value[0][0],0.0]), - np.min([u.value[0][0],0.0]), np.max([u.value[1][0],0.0]), - np.min([u.value[1][0],0.0])])
+
+    # task_error = np.linalg.norm(dx)
+
 
     twist[3:] = 0
+
 
     task_error = np.linalg.norm(dx)
         
     
     try:
         prob.solve(verbose=False)
-        # prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
         data.ctrl = np.squeeze(B @ u.value)
         V = V.value
         
-        # Mx_inv = jac @ M_inv @ jac.T
-        # if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-        #     Mx = np.linalg.inv(Mx_inv)
-        # else:
-        #     Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
-        # Jbar = M_inv @ jac.T @ Mx
-        # C, g = get_coriolis_and_gravity(model, data)
-        # Cy = Jbar.T @ C @ data.qvel - Mx @ dJ_dt @ data.qvel
-        # ydd = K_task @ twist -  D_task @ (jac @ data.qvel)
-        # # ydd = 2000 * twist -  20 * (jac @ data.qvel)
-        # tau = jac.T @ (Mx @ ydd + Cy) + g + data.qfrc_passive
-        # data.ctrl = B @ pinv_B @ tau
+    #     C, g = get_coriolis_and_gravity(model, data)
+    #     Cy = Jbar.T @ C @ data.qvel - Mx @ dJ_dt @ data.qvel
+    #     ydd = 1000 * twist - 20 * (jac @ data.qvel)
+    #     tau = jac.T @ (Mx @ ydd + Cy) + g + data.qfrc_passive
+    #     data.ctrl = B @ pinv_B @ tau
     except:
         # print(f"failed convergence\n")
         pass
@@ -375,7 +362,7 @@ def simulate_model():
     with mujoco.viewer.launch_passive(model, data) as viewer:
         sim_start = time.time()
         while viewer.is_running():
-            # if time.time() - sim_start > 30.0:  # Auto-close after 10 seconds
+            # if time.time() - sim_start > 50.0:  # Auto-close after 10 seconds
             #     break
             step_start = time.time()
             first_time = time.time()
@@ -424,6 +411,8 @@ if __name__ == "__main__":
     q_vel = np.array(q_vel)
     q_pos = np.array(q_pos)
 
+
+
     #Lyapunov Function Over Time – shows how stability evolves.
     plt.figure()
     plt.plot(time_log, V_log, label="Lyapunov Function V")
@@ -468,28 +457,12 @@ if __name__ == "__main__":
     fig.suptitle("Actuated Joint Velocities Over Time (Rad/s)")
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-    
-    # # Control inputs plot
-    # actuated_indices = np.where(np.any(B != 0, axis=0))[0]  # shape: (n_actuated,)
-    # ctrl = np.array(sim_ts["ctrl"])  # shape: (timesteps, nu)
-    # num_actuators = ctrl.shape[1]
-    # control_limit = 25
-
-    # fig, axs = plt.subplots(actuated_indices, 1, figsize=(10, 8), sharex=True)
-
-    # for i in range(actuated_indices):
-    #     axs[i].plot(time_log, ctrl[:, i], label=f"Actuator {i}")
-    #     axs[i].axhline(control_limit, color='r', linestyle='--', linewidth=1)
-    #     axs[i].axhline(-control_limit, color='r', linestyle='--', linewidth=1)
-    #     axs[i].set_ylabel("Torque (Nm)")
-    #     axs[i].legend()
-    #     axs[i].grid(True)
-
-    # axs[-1].set_xlabel("Time (s)")
-    # fig.suptitle("Control Inputs at Actuated Joints")
-    # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-
     plt.show()
 
+    
+        
 
+
+    # return V, dV, dl, e, u, task_error, dq
+
+    
