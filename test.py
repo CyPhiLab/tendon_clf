@@ -257,33 +257,33 @@ def controller(model, data):
 
     dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
 
-    # ----------------------------------------------------
-    # Task critical damping https://www.sciencedirect.com/topics/engineering/critical-damping
-    Mx_inv = jac @ M_inv @ jac.T
-    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-        M_task = np.linalg.inv(Mx_inv)
-    else:
-        M_task = np.linalg.pinv(Mx_inv, rcond=1e-2)
+    # # ----------------------------------------------------
+    # # Task critical damping https://www.sciencedirect.com/topics/engineering/critical-damping
+    # Mx_inv = jac @ M_inv @ jac.T
+    # if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+    #     M_task = np.linalg.inv(Mx_inv)
+    # else:
+    #     M_task = np.linalg.pinv(Mx_inv, rcond=1e-2)
     
-    # Choose desired modal frequencies (eigenvalues of M^{-1} K)
+    # # Choose desired modal frequencies (eigenvalues of M^{-1} K)
 
-    omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 20 # omega^2
+    # omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 20 # omega^2
 
-    # Compute eigenvectors of M (to use as modal basis)
-    eigvals, P = eigh(M_task)  # P: eigenvectors of M
-    P_inv = np.linalg.inv(P)
+    # # Compute eigenvectors of M (to use as modal basis)
+    # eigvals, P = eigh(M_task)  # P: eigenvectors of M
+    # P_inv = np.linalg.inv(P)
 
-    # Construct K in modal coordinates, then transform to original coordinates
-    K_modal = omega_sq
-    K_task = P_inv.T @ K_modal @ P_inv  # K = P^{-T} * Omega^2 * P^{-1}
+    # # Construct K in modal coordinates, then transform to original coordinates
+    # K_modal = omega_sq
+    # K_task = P_inv.T @ K_modal @ P_inv  # K = P^{-T} * Omega^2 * P^{-1}
 
-    # Choose damping ratios (zeta = 1 for critical damping)
-    zeta = 1.0
-    D_modal = 2 * zeta * np.sqrt(omega_sq)  # 2ζω
+    # # Choose damping ratios (zeta = 1 for critical damping)
+    # zeta = 1.0
+    # D_modal = 2 * zeta * np.sqrt(omega_sq)  # 2ζω
 
-    # Step 5: Construct C in modal coordinates and transform back
-    D_task = P_inv.T @ D_modal @ P_inv
-    # ----------------------------------------------------
+    # # Step 5: Construct C in modal coordinates and transform back
+    # D_task = P_inv.T @ D_modal @ P_inv
+    # # ----------------------------------------------------
 
     # objective = minimize the task space actuation mu + dV of CLF + damp the nullspace + try to be at static equilibrium + regularization for qdd and u + keep solution close to impedance controller + slack variable
     objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist  - D_task @ (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 

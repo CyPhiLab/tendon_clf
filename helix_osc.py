@@ -145,16 +145,7 @@ def precompute_invariants(model):
     """Pre-compute matrices that don't change during simulation"""
     Kp_null = np.asarray([1] * model.nv)
     Kd_null = damping_ratio * 2 * np.sqrt(Kp_null)
-    
-    # CLF matrices
-    m = 6
-    F = np.zeros((2*m, 2*m))
-    F[:m, m:] = np.eye(m, m)
-    G = np.zeros((2*m, m))
-    G[m:, :] = np.eye(m)
-    e = 0.05
-    Pe = linalg.block_diag(np.eye(m) / e, np.eye(m)).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m))
-    
+        
     # Input matrix pseudoinverse
     pinv_B = np.linalg.pinv(B)
     
@@ -166,13 +157,33 @@ def precompute_invariants(model):
     return {
         'Kp_null': Kp_null,
         'Kd_null': Kd_null,
-        'F': F,
-        'G': G,
-        'Pe': Pe,
         'pinv_B': pinv_B,
         'sel': sel,
-        'e': e
     }
+
+def dyn_consistent_synergy_projector(J_task, M_inv, S, rcond=1e-3):
+    """
+    Dynamically-consistent projector into synergy space.
+
+    Paper notation:
+      B(q) -> M (mass matrix)
+      J    -> task Jacobian (m x n)
+      S    -> synergy matrix (n x k)
+
+    For k=m and rank(J M^{-1} S)=m:
+      P_{S,B} = (J M^{-1} S)^{-1} J M^{-1}
+
+    For k>=m, we use a pseudoinverse:
+      P = (J M^{-1} S)^{+} (J M^{-1})
+    Returns:
+      P: (k x n) mapping joint torques -> synergy weights
+      A: (m x k) = J M^{-1} S
+    """
+    A = J_task @ M_inv @ S             # (m x k)
+    A_pinv = np.linalg.pinv(A, rcond=rcond)  # (k x m)
+    P = A_pinv @ (J_task @ M_inv)      # (k x n)
+    return P, A
+
 
 def controller(model, data, invariants, previous_solution=None):
     jac = np.zeros((6, model.nv))
@@ -187,14 +198,7 @@ def controller(model, data, invariants, previous_solution=None):
     mocap_id = model.body(mocap_name).mocapid[0]
 
     # Extract pre-computed values
-    Kp_null = invariants['Kp_null']
-    Kd_null = invariants['Kd_null']
-    F = invariants['F']
-    G = invariants['G']
-    Pe = invariants['Pe']
     pinv_B = invariants['pinv_B']
-    sel = invariants['sel']
-    e = invariants['e']
 
     site_name = "ee"
     site_id = model.site(site_name).id
@@ -220,83 +224,12 @@ def controller(model, data, invariants, previous_solution=None):
     M = M * np.random.normal(1.0, 0.01, size=M.shape)  # Add some noise to the inertia matrix
     dJ_dt = compute_jacobian_derivative(model, data, site_id)
 
-    e = e
-
-    # ----------------------------------------------------
-    # # Task critical damping https://www.sciencedirect.com/topics/engineering/critical-damping
-    # Mx_inv = jac @ M_inv @ jac.T
-    # if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-    #     M_task = np.linalg.inv(Mx_inv)
-    # else:
-    #     M_task = np.linalg.pinv(Mx_inv, rcond=1e-2)
-    
-    # # Choose desired modal frequencies (eigenvalues of M^{-1} K)
-
-    # omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 20 # omega^2
-
-    # # Compute eigenvectors of M (to use as modal basis)
-    # eigvals, P = eigh(M_task)  # P: eigenvectors of M
-    # P_inv = np.linalg.inv(P)
-
-    # # Construct K in modal coordinates, then transform to original coordinates
-    # K_modal = omega_sq
-    # K_task = P_inv.T @ K_modal @ P_inv  # K = P^{-T} * Omega^2 * P^{-1}
-
-    # # Choose damping ratios (zeta = 1 for critical damping)
-    # zeta = 1.0
-    # D_modal = 2 * zeta * np.sqrt(omega_sq)  # 2ζω
-
-    # # Step 5: Construct C in modal coordinates and transform back
-    # D_task = P_inv.T @ D_modal @ P_inv
-    # ----------------------------------------------------
-
     # define decision variables (create fresh variables each time)
-    nu = 9
-    nq = model.nq
-    u = cp.Variable(shape=(nu, 1))
-    mu = cp.Variable(shape=(6, 1))
-    # qdd = cp.Variable(shape=(nq, 1))
-    dl = cp.Variable(shape=(1, 1))
     twist[3:] = 0.0
-
-    # error and Lyapunov function for CLF
-    eta = np.concatenate((-twist,jac @ data.qvel))
-    V = eta.T @ Pe @ eta
-
+    
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
-
-    # Vdot for our main CLF
-    dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ mu
-
-    # Lie derivatives 
-    # L2fy = dJ_dt @ dq - jac @ M_inv @ (data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1))
-    # LgLfy = jac @ M_inv @ B
-    mu_des = (500 * twist.reshape(-1,1)  - 20 * (jac @ dq))
-    print(np.shape(mu_des))
-    # mu_des = (K_task @ twist.reshape(-1,1)  - D_task @ (jac @ dq))
-
-    # qdd = M_inv @ (B @ u + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1))
-    qdd = np.linalg.pinv(jac) @ (mu - dJ_dt @ dq)
-
-    objective = cp.Minimize(0.2*cp.square(cp.norm(mu - mu_des))  + 1000 * cp.square(dl)  + 0.02 * cp.square(cp.norm(u)))# + 0.2 * cp.square(cp.norm(qdd)))
-
-    constraints = [ dV <= - 1/e * V + dl, 
-                    # L2fy + LgLfy @ u == mu,
-                    pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
-                    -25*sel <= u,
-                    25*np.ones((nu,1)) >= u]
-
-    prob = cp.Problem(objective=objective, constraints=constraints)
     
-    # Warm start with previous solution if available
-    if previous_solution is not None:
-        try:
-            u.value = previous_solution['u']
-            # qdd.value = previous_solution['qdd'] 
-            dl.value = previous_solution['dl']
-        except:
-            pass  # If warm start fails, proceed without it
 
     twist[3:] = 0
 
@@ -304,24 +237,59 @@ def controller(model, data, invariants, previous_solution=None):
     q = data.qpos
     dq = data.qvel
     
-    try:
-        prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
-        if u.value is not None:
-            data.ctrl = np.squeeze(B @ u.value)            
-            # Cache solution for next iteration
-            current_solution = {
-                'u': u.value.copy(),
-            # 'qdd': qdd.value.copy(),
-                'dl': dl.value.copy()
-            }
-            # print(f"converged\n")
-            return V, task_error, q, dq, current_solution
-        else:
-            print(f"failed convergence - no solution\n")
-            return V, task_error, q, dq, previous_solution
-    except Exception as e:
-        print(f"failed convergence - exception: {e}\n")
-        return V, task_error, q, dq, previous_solution
+    
+    Mx_inv = jac @ M_inv @ jac.T
+    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+        Mx = np.linalg.inv(Mx_inv)
+    else:
+        Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+    Jbar = M_inv @ jac.T @ Mx
+    C, g = get_coriolis_and_gravity(model, data)
+    # ---------- 6D TASK (pos + ori) ----------
+    J_task  = jac                          # (6 x nv)
+    dJ_task = dJ_dt                        # (6 x nv)
+
+    x_err   = dx                           # (6,) already computed as desired - current (or vice versa)
+    xdot    = J_task @ data.qvel           # (6,)
+
+    # Desired task acceleration (impedance in task space)
+    xdd_des = 500.0 * x_err - 20.0 * xdot  # (6,)
+
+    # ---------- Operational-space inertia ----------
+    Mx_inv = J_task @ M_inv @ J_task.T     # (6 x 6)
+    Mx = np.linalg.pinv(Mx_inv, rcond=1e-4)
+
+    # Dynamically consistent inverse Jacobian
+    Jbar = M_inv @ J_task.T @ Mx           # (nv x 6)
+
+    # Bias terms
+    C, g = get_coriolis_and_gravity(model, data)
+
+    # μ = Λ * Jdot*qdot − Jbar^T * C*qdot
+    mu = Mx @ (dJ_task @ data.qvel) - Jbar.T @ (C @ data.qvel)   # (6,)
+
+    # Task-space wrench (Khatib OSC form)
+    f_task = (Mx @ xdd_des) + mu           # (6,)
+
+    # ---------- Della Santina synergy mapping ----------
+    # Need k >= 6 to realize 6D task exactly
+    # Choose S as (nv x k). For now, take first 6 columns of B as a 6-synergy basis:
+    S = B[:, :6]                            # (nv x 6)  <-- you must ensure rank(J M^{-1} S)=6
+
+    A = J_task @ M_inv @ S                  # (6 x 6)
+    A_inv = np.linalg.pinv(A, rcond=1e-4)
+
+    P_SB = A_inv @ (J_task @ M_inv)         # (6 x nv)
+
+    tau_ds = S @ (P_SB @ (J_task.T @ f_task))  # (nv,)
+
+    # Apply torques (IMPORTANT: do NOT project again)
+    data.ctrl = tau_ds
+
+    # except:
+    #     print(f"failed convergence\n")
+        # pass
+    return task_error, q, dq, previous_solution
 
 def simulate_model(headless=False):
     model_path = Path("mujoco_models/helix") / (str(model_name) + str(".xml"))
@@ -363,7 +331,6 @@ def simulate_model(headless=False):
     q_des = np.ones(data.qpos.shape[0])*0.2
     # print(np.shape(q_des))
 
-    V_log = []
     task_error_log = []
     q_vel = []
     q_pos = []
@@ -382,7 +349,7 @@ def simulate_model(headless=False):
         print("Running headless simulation...")
         while data.time < max_sim_time:
             step_start = time.time()
-            V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+            task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
             mujoco.mj_step(model, data)
             
             # Only log every N steps to reduce overhead
@@ -403,7 +370,6 @@ def simulate_model(headless=False):
                 sim_ts["qfrc_fluid"].append(data.qfrc_fluid.copy())
                 sim_ts["q_des"].append(q_des.copy())
 
-                V_log.append(V)
                 task_error_log.append(task_error)
                 q_vel.append(dq.squeeze().copy())
                 q_pos.append(q.squeeze().copy())
@@ -418,7 +384,7 @@ def simulate_model(headless=False):
             while viewer.is_running() and data.time < max_sim_time:
                 step_start = time.time()
                 first_time = time.time()
-                V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+                task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
                 mujoco.mj_step(model, data)
                 
                 # Only log every N steps to reduce overhead
@@ -439,7 +405,6 @@ def simulate_model(headless=False):
                     sim_ts["qfrc_fluid"].append(data.qfrc_fluid.copy())
                     sim_ts["q_des"].append(q_des.copy())
 
-                    V_log.append(V)
                     task_error_log.append(task_error)
                     q_vel.append(dq.squeeze().copy())
                     q_pos.append(q.squeeze().copy())
@@ -458,7 +423,7 @@ def simulate_model(headless=False):
                 # if time_until_next_step > 0:
                 #     time.sleep(time_until_next_step)
     print(f"Simulation finished after {sim_ts['ts'][-1]} seconds")
-    return V_log, task_error_log, q_vel, q_pos, time_log, sim_ts
+    return task_error_log, q_vel, q_pos, time_log, sim_ts
 
 
 
@@ -472,7 +437,7 @@ if __name__ == "__main__":
     start_time = time.time()
     
     # Simulate the model
-    V_log, task_error_log, q_vel, q_pos, time_log, sim_ts = simulate_model(headless=args.headless)
+    task_error_log, q_vel, q_pos, time_log, sim_ts = simulate_model(headless=args.headless)
     
     # Record end time
     end_time = time.time()
@@ -487,14 +452,6 @@ if __name__ == "__main__":
     q_vel = np.array(q_vel)
     q_pos = np.array(q_pos)
 
-    #Lyapunov Function Over Time – shows how stability evolves.
-    plt.figure()
-    plt.plot(time_log, V_log, label="Lyapunov Function V")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Lyapunov Function V")
-    plt.title("Lyapunov Function Over Time")
-    plt.grid(True)
-    plt.legend()  # <--- Add legend
 
     #End-Effector Position Error – checks task-space convergence.
     plt.figure()

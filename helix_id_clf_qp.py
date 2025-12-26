@@ -222,7 +222,7 @@ def controller(model, data, invariants, previous_solution=None):
 
     e = e
 
-    # ----------------------------------------------------
+# ----------------------------------------------------
     # # Task critical damping https://www.sciencedirect.com/topics/engineering/critical-damping
     # Mx_inv = jac @ M_inv @ jac.T
     # if abs(np.linalg.det(Mx_inv)) >= 1e-2:
@@ -232,7 +232,7 @@ def controller(model, data, invariants, previous_solution=None):
     
     # # Choose desired modal frequencies (eigenvalues of M^{-1} K)
 
-    # omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 20 # omega^2
+    # omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 10 # omega^2
 
     # # Compute eigenvectors of M (to use as modal basis)
     # eigvals, P = eigh(M_task)  # P: eigenvectors of M
@@ -254,8 +254,7 @@ def controller(model, data, invariants, previous_solution=None):
     nu = 9
     nq = model.nq
     u = cp.Variable(shape=(nu, 1))
-    mu = cp.Variable(shape=(6, 1))
-    # qdd = cp.Variable(shape=(nq, 1))
+    qdd = cp.Variable(shape=(nq, 1))
     dl = cp.Variable(shape=(1, 1))
     twist[3:] = 0.0
 
@@ -265,25 +264,16 @@ def controller(model, data, invariants, previous_solution=None):
 
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
-
+    
     # Vdot for our main CLF
-    dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ mu
+    dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
+    
+    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (500 * twist.reshape(-1,1)  - 20 * (jac @ dq)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
+    # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist.reshape(-1,1)  - D_task @ (jac @ dq)))) + 0.02 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
 
-    # Lie derivatives 
-    # L2fy = dJ_dt @ dq - jac @ M_inv @ (data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1))
-    # LgLfy = jac @ M_inv @ B
-    mu_des = (500 * twist.reshape(-1,1)  - 20 * (jac @ dq))
-    print(np.shape(mu_des))
-    # mu_des = (K_task @ twist.reshape(-1,1)  - D_task @ (jac @ dq))
 
-    # qdd = M_inv @ (B @ u + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1))
-    qdd = np.linalg.pinv(jac) @ (mu - dJ_dt @ dq)
-
-    objective = cp.Minimize(0.2*cp.square(cp.norm(mu - mu_des))  + 1000 * cp.square(dl)  + 0.02 * cp.square(cp.norm(u)))# + 0.2 * cp.square(cp.norm(qdd)))
-
-    constraints = [ dV <= - 1/e * V + dl, 
-                    # L2fy + LgLfy @ u == mu,
-                    pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
+    constraints = [ dV <= - 1/e * V + 0.1*dl, 
+                      pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
                     -25*sel <= u,
                     25*np.ones((nu,1)) >= u]
 
@@ -293,7 +283,7 @@ def controller(model, data, invariants, previous_solution=None):
     if previous_solution is not None:
         try:
             u.value = previous_solution['u']
-            # qdd.value = previous_solution['qdd'] 
+            qdd.value = previous_solution['qdd'] 
             dl.value = previous_solution['dl']
         except:
             pass  # If warm start fails, proceed without it
@@ -307,11 +297,12 @@ def controller(model, data, invariants, previous_solution=None):
     try:
         prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
         if u.value is not None:
-            data.ctrl = np.squeeze(B @ u.value)            
+            data.ctrl = np.squeeze(B @ u.value)
+            
             # Cache solution for next iteration
             current_solution = {
                 'u': u.value.copy(),
-            # 'qdd': qdd.value.copy(),
+                'qdd': qdd.value.copy(),
                 'dl': dl.value.copy()
             }
             # print(f"converged\n")
@@ -387,7 +378,7 @@ def simulate_model(headless=False):
             
             # Only log every N steps to reduce overhead
             if step_count % log_frequency == 0:
-                # print(f"Sim time: {data.time:.3f}s")
+                print(f"Sim time: {data.time:.3f}s")
                 
                 sim_ts["ts"].append(data.time)
                 # extract the sensor data
