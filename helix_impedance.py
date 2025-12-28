@@ -282,7 +282,7 @@ def simulate_model(headless=False):
 
 
     last_ctrl = time.time()
-    max_sim_time = 5.0  # Run for 1 second of simulation time
+    max_sim_time = 25.0  # Run for 1 second of simulation time
     log_frequency = 5  # Log every 5 steps instead of every step
     step_count = 0
     

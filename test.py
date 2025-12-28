@@ -286,8 +286,8 @@ def controller(model, data):
     # # ----------------------------------------------------
 
     # objective = minimize the task space actuation mu + dV of CLF + damp the nullspace + try to be at static equilibrium + regularization for qdd and u + keep solution close to impedance controller + slack variable
-    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist  - D_task @ (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
-    # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (1000 * twist  - 20 * (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
+    # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist  - D_task @ (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
+    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (1000 * twist  - 20 * (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
 
    
     constraints = [ dV <= - 2/e * V + dl, 
@@ -305,23 +305,23 @@ def controller(model, data):
         
     
     try:
-        prob.solve(verbose=False)
-        # prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
-        data.ctrl = np.squeeze(B @ u.value)
-        V = V.value
+        # prob.solve(verbose=False)
+        # # prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
+        # data.ctrl = np.squeeze(B @ u.value)
+        # V = V.value
         
-        # Mx_inv = jac @ M_inv @ jac.T
-        # if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-        #     Mx = np.linalg.inv(Mx_inv)
-        # else:
-        #     Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
-        # Jbar = M_inv @ jac.T @ Mx
-        # C, g = get_coriolis_and_gravity(model, data)
-        # Cy = Jbar.T @ C @ data.qvel - Mx @ dJ_dt @ data.qvel
+        Mx_inv = jac @ M_inv @ jac.T
+        if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+            Mx = np.linalg.inv(Mx_inv)
+        else:
+            Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+        Jbar = M_inv @ jac.T @ Mx
+        C, g = get_coriolis_and_gravity(model, data)
+        Cy = Jbar.T @ C @ data.qvel - Mx @ dJ_dt @ data.qvel
         # ydd = K_task @ twist -  D_task @ (jac @ data.qvel)
-        # # ydd = 2000 * twist -  20 * (jac @ data.qvel)
-        # tau = jac.T @ (Mx @ ydd + Cy) + g + data.qfrc_passive
-        # data.ctrl = B @ pinv_B @ tau
+        ydd = 2000 * twist -  20 * (jac @ data.qvel)
+        tau = jac.T @ (Mx @ ydd + Cy) + g + data.qfrc_passive
+        data.ctrl = B @ pinv_B @ tau
     except:
         # print(f"failed convergence\n")
         pass
