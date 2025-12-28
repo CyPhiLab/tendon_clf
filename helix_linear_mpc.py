@@ -269,11 +269,10 @@ def controller(model, data, invariants, previous_solution=None):
 
     # Terminal penalty (use eta_k at terminal, not eta_next)
     eta_N = eta_k[:, N-1:N]
-    objective = cp.Minimize(objective + 0.02 * cp.sum_squares(u_k) + (gamma**N) * cp.sum_squares(eta_N - eta_target) + 1000 * cp.sum_squares(dl))
+    objective = cp.Minimize(objective + 0.02 * cp.sum_squares(u_k) + (gamma**N) * cp.sum_squares(eta_N - eta_target))
 
     # Inverse dynamics constraint
     constraints += [
-        dl >= 0,
         pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u_k,
         -25 * sel <= u_k,
         u_k <= 25 * np.ones((nu, 1)),
@@ -300,7 +299,7 @@ def controller(model, data, invariants, previous_solution=None):
         prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
         if u_k.value is not None:
             data.ctrl = np.squeeze(B @ u_k.value) 
-            print(u_k.value.T)           
+            # print(u_k.value.T)           
             # Cache solution for next iteration
             current_solution = {
                 'u': u_k.value.copy(),
