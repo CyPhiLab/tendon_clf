@@ -96,6 +96,25 @@ def calculate_input_matrix(model):
     print(f"Calculated B matrix shape: {B.shape}")
     return B
 
+def calculate_input_matrix_at_state(model, data):
+    nv, nu = model.nv, model.nu
+    B = np.zeros((nv, nu))
+
+    data_temp = mujoco.MjData(model)
+    data_temp.qpos[:] = data.qpos
+    data_temp.qvel[:] = data.qvel  # optional; usually 0 is fine too
+
+    mujoco.mj_forward(model, data_temp)
+
+    for i in range(nu):
+        data_temp.ctrl[:] = 0.0
+        data_temp.ctrl[i] = 1.0
+        mujoco.mj_forward(model, data_temp)
+        B[:, i] = data_temp.qfrc_actuator.copy()
+
+    return B
+
+
 def get_coriolis_and_gravity(model, data):
     """
     Calculate the Coriolis matrix and gravity vector for a MuJoCo model
@@ -197,12 +216,12 @@ def precompute_invariants(model):
     F[:m, m:] = np.eye(m, m)
     G = np.zeros((2*m, m))
     G[m:, :] = np.eye(m)
-    e = 0.5
+    e = 0.05
     Pe = linalg.block_diag(np.eye(m) / e, np.eye(m)).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m))
     
     # Input matrix pseudoinverse
     pinv_B = np.linalg.pinv(B)
-    
+
     # Selection matrix for control inputs
     nu = model.nu  # Use actual number of actuators from model
     sel = np.ones((nu, 1))  # All control inputs are active
@@ -231,8 +250,6 @@ def controller(model, data, invariants, previous_solution=None):
     mocap_id = model.body(mocap_name).mocapid[0]
 
     # Extract pre-computed values
-    Kp_null = invariants['Kp_null']
-    Kd_null = invariants['Kd_null']
     F = invariants['F']
     G = invariants['G']
     Pe = invariants['Pe']
@@ -240,13 +257,33 @@ def controller(model, data, invariants, previous_solution=None):
     sel = invariants['sel']
     e = invariants['e']
 
+    Bp = calculate_input_matrix_at_state(model, data)  # or cached update every N steps
+    pinv_Bp = np.linalg.pinv(Bp)
+
+
     site_name = "ee"
     site_id = model.site(site_name).id
     # Set target position for SpiRob end-effector
     # Adjusted for SpiRob's coordinate system and expected reach
-    data.mocap_pos[mocap_id] = np.array([0.2, 0.2, 0.3])
+    # data.mocap_pos[mocap_id] = np.array([0.1, 0.1, 0.3])
+    # data.mocap_pos[mocap_id] = np.array([0.2, 0.0, 0.3])
+    # data.mocap_pos[mocap_id] = np.array([0.1, 0.0, 0.1])
+    # data.mocap_pos[mocap_id] = np.array([0.2, 0.0, 0.2])
+    # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.15])
+    # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.2])
+    # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.25])
+    # data.mocap_pos[mocap_id] = np.array([0.16, 0.0, 0.35])
+    data.mocap_pos[mocap_id] = np.array([0.2, 0, 0.3])
+
     dx = data.mocap_pos[mocap_id] - data.site(site_id).xpos
-    twist[:3] = dx 
+    if np.linalg.norm(dx) < 0.01:
+        noise=0
+    elif np.linalg.norm(dx) < 0.05 and np.linalg.norm(dx) >= 0.01:
+        noise=np.random.normal(0.0, 0.01, size=dx.shape)
+    else:  
+        noise=np.random.normal(0.0, 0.5, size=dx.shape)  # Add some noise to the position error
+
+    twist[:3] = dx + noise
     mujoco.mju_mat2Quat(site_quat, data.site(site_id).xmat)
     mujoco.mju_negQuat(site_quat_conj, site_quat)
     mujoco.mju_mulQuat(error_quat, data.mocap_quat[mocap_id], site_quat_conj)
@@ -264,10 +301,6 @@ def controller(model, data, invariants, previous_solution=None):
     M = M * np.random.normal(1.0, 0.01, size=M.shape)  # Add some noise to the inertia matrix
     dJ_dt = compute_jacobian_derivative(model, data, site_id)
 
-    e = e
-
-
-
     # define decision variables (create fresh variables each time)
     nu = model.nu  # Use actual number of actuators from model
     nq = model.nq  
@@ -282,19 +315,17 @@ def controller(model, data, invariants, previous_solution=None):
 
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
-
     N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
     qdd_null = N @ qdd
+
     # Vdot for our main CLF
     dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
     
-    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (300 * twist.reshape(-1,1)  - 10 * (jac @ dq)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.5 * cp.square(cp.norm(u,1)) + 1000 * cp.square(dl) + 0.1 * cp.sum_squares(qdd_null)) 
-
-    # Get actual nu from model
-    nu = model.nu
+    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (500 * twist.reshape(-1,1)  - 20 * (jac @ dq)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.5 * cp.square(cp.norm(u,1)) + 1000 * cp.square(dl) + 0.1 * cp.sum_squares(qdd_null)) 
+    # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (500 * twist.reshape(-1,1)  - 20 * (jac @ dq)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.5 * cp.square(cp.norm(u,1)) + 1000 * cp.square(dl))
     
     constraints = [ dV <= - 1/e * V + dl, 
-                      pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
+                    pinv_Bp @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
                     np.zeros((nu,1)) >= u]
 
     prob = cp.Problem(objective=objective, constraints=constraints)
@@ -307,8 +338,6 @@ def controller(model, data, invariants, previous_solution=None):
             dl.value = previous_solution['dl']
         except:
             pass  # If warm start fails, proceed without it
-
-    twist[3:] = 0
 
     task_error = np.linalg.norm(dx)
     q = data.qpos
@@ -344,9 +373,10 @@ def simulate_model(headless=False, record_video=False, video_fps=30):
     
     # Calculate the input matrix B from the model
     B = calculate_input_matrix(model)
+
     
     # Set joint properties for soft robot
-    # model.jnt_stiffness[:] = stiffness
+    model.jnt_stiffness[:] = stiffness
     model.dof_damping[:] = 0.01
     model.opt.gravity = (0, 0, -9.81)
     data = mujoco.MjData(model)
@@ -418,16 +448,18 @@ def simulate_model(headless=False, record_video=False, video_fps=30):
 
 
     last_ctrl = time.time()
-    max_sim_time = 2.0  # Run for 1 second of simulation time
+    max_sim_time = 125.0  # Run for 1 second of simulation time
     log_frequency = 5  # Log every 5 steps instead of every step
     step_count = 0
-    
+    threshold  = 0.005
+
     if headless:
         # Run simulation without viewer for maximum performance
         print("Running headless simulation...")
         video_frame_interval = max(1, int(1.0 / (video_fps * dt))) if record_video else float('inf')
         
-        while data.time < max_sim_time:
+        while (len(task_error_log) < 2 or
+            abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold ):
             step_start = time.time()
             V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
             mujoco.mj_step(model, data)
@@ -474,7 +506,10 @@ def simulate_model(headless=False, record_video=False, video_fps=30):
                 # Create renderer for video capture from viewer
                 renderer = mujoco.Renderer(model, height=1080, width=1920)
             
-            while viewer.is_running() and data.time < max_sim_time:
+            while viewer.is_running() and (
+                len(task_error_log) < 2 or
+                abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold 
+            ):
                 step_start = time.time()
                 first_time = time.time()
                 V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
@@ -579,14 +614,15 @@ if __name__ == "__main__":
     # plt.grid(True)
     # plt.legend()  # <--- Add legend
 
-    # #End-Effector Position Error – checks task-space convergence.
-    # plt.figure()
-    # plt.plot(time_log, task_error_log, label="‖x_desired - x_actual‖")
-    # plt.xlabel("Time (s)")
-    # plt.ylabel("Task-Space Position Error (m)")
-    # plt.title("End-Effector Position Error Over Time")
-    # plt.grid(True)
-    # plt.legend()
+    #End-Effector Position Error – checks task-space convergence.
+    plt.figure()
+    plt.plot(time_log, task_error_log, label="‖x_desired - x_actual‖")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Task-Space Position Error (m)")
+    plt.title("End-Effector Position Error Over Time")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
 
     # # Joint Angles (qq) 
     # actuated_indices = np.where(np.any(B != 0, axis=0))[0]  # shape: (n_actuated,)
@@ -634,4 +670,4 @@ if __name__ == "__main__":
     # fig.suptitle("Control Inputs at Actuated Joints")
     # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-
+    # plt.show()

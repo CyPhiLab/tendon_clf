@@ -15,7 +15,86 @@ import gurobipy
 os.environ["MUJOCO_GL"] = "egl"
 
 
-model_name = f"helix_control"
+# MJCF XML as string
+mjcf = """
+<mujoco model="4link_tendon_planar">
+    <compiler angle="radian"/>
+    <option gravity="0 0 -9.81" integrator="implicitfast"/>
+
+    <default>
+        <joint type="hinge" axis="0 1 0" limited="true" range="-1.57 1.57" damping="0.01"/>
+        <geom type="capsule" size="0.005 0.03" rgba="0.5 0.5 0.5 1" mass="0.01"/>
+    </default>
+
+
+    <worldbody>
+        <camera name="side_view" pos="0 0.1 0.05" xyaxes="1 0 0  0 0 1"/>
+        <body name="link1" pos="0 0 0">
+            <joint name="joint1" />
+            <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+            <body name="link2" pos="0.06 0 0">
+                <joint name="joint2"/>
+                <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                <body name="link3" pos="0.06 0 0">
+                    <joint name="joint3"/>
+                    <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                    <body name="link4" pos="0.06 0 0">
+                        <joint name="joint4"/>
+                        <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                        <body name="attachment" pos="0.03 0.0 0.0">
+                              <site name="ee" rgba="1 0 0 1" size="0.001" group="1"/>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+
+    <worldbody>
+        <body name="target" pos="0.1 0.0 -0.15" quat="0 1 0 0" mocap="true">
+        <geom type="box" size=".05 .05 .05" contype="0" conaffinity="0" rgba=".6 .3 .3 .5"/>
+        <site type="sphere" size="0.01" rgba="0 0 1 1" group="2"/>
+        </body>
+    </worldbody>
+
+    <!-- Tendon-based antagonistic actuation -->
+    <tendon>
+        <!-- Tendon pair A -->
+        <fixed name="tendon_a_flex">
+            <joint joint="joint1" coef="1"/>
+            <joint joint="joint2" coef="1"/>
+        </fixed>
+        <fixed name="tendon_a_ext">
+            <joint joint="joint1" coef="-1"/>
+            <joint joint="joint2" coef="-1"/>
+        </fixed>
+
+        <!-- Tendon pair B -->
+        <fixed name="tendon_b_flex">
+            <joint joint="joint3" coef="1"/>
+            <joint joint="joint4" coef="1"/>
+        </fixed>
+        <fixed name="tendon_b_ext">
+            <joint joint="joint3" coef="-1"/>
+            <joint joint="joint4" coef="-1"/>
+        </fixed>
+    </tendon>
+
+
+    <!-- Actuators for tendons -->
+    <actuator>
+        <motor tendon="tendon_a_flex" ctrlrange="0 1" gear="0.1"/>
+        <motor tendon="tendon_a_ext" ctrlrange="0 1" gear="0.1"/>
+        <motor tendon="tendon_b_flex" ctrlrange="0 1" gear="0.1"/>
+        <motor tendon="tendon_b_ext" ctrlrange="0 1" gear="0.1"/>
+    </actuator>
+</mujoco>
+"""  # Replace with the MJCF content provided above
+
+
+# Load model from string
+model = mujoco.MjModel.from_xml_string(mjcf)
+data = mujoco.MjData(model)
 
 # Cartesian impedance control gains.
 impedance_pos = np.asarray([50.0, 50.0, 50.0])  # [N/m]
@@ -42,14 +121,28 @@ f_ctrl = 2000.0
 T = 1
 w = 2 * np.pi / T
 
-B = np.zeros((36, 9))
-for i in range(3):  # Iterate over u1, u2, u3 blocks
-    for j in range(4):  # Repeat each block 4 times
-        row_start = i * 12 + j * 3  # Compute row index
-        col_start = i * 3  # Compute column index
-        B[row_start:row_start+3, col_start:col_start+3] = np.eye(3)  # Assign identity
+# def compute_B_matrix(model, data):
+#     nv, nu = model.nv, model.nu
+#     B = np.zeros((nv, nu))
 
-print(B)
+#     ctrl_backup = data.ctrl.copy()
+
+#     for i in range(nu):
+#         data.ctrl[:] = 0.0
+#         data.ctrl[i] = 1.0
+#         mujoco.mj_forward(model, data)
+#         B[:, i] = data.qfrc_actuator
+
+#     data.ctrl[:] = ctrl_backup  # Restore control inputs
+#     return B
+
+
+# # Print actuator matrix
+# B = compute_B_matrix(model, data)
+B = np.array([[0.1, 0.0], [0.1, 0.0], [0.0, 0.1], [0.0, 0.1]])
+
+
+# print(B)
 
 def get_coriolis_and_gravity(model, data):
     """
@@ -147,7 +240,7 @@ def precompute_invariants(model):
     Kd_null = damping_ratio * 2 * np.sqrt(Kp_null)
     
     # CLF matrices
-    m = 6
+    m = 3
     F = np.zeros((2*m, 2*m))
     F[:m, m:] = np.eye(m, m)
     G = np.zeros((2*m, m))
@@ -159,9 +252,9 @@ def precompute_invariants(model):
     pinv_B = np.linalg.pinv(B)
     
     # Selection matrix for compression/extension actuators
-    nu = 9
-    sel = np.ones((nu, 1))
-    sel[[2, 5, 8]] = 0.0
+    nu = 2
+    # sel = np.ones((nu, 1))
+    # sel[[2, 5, 8]] = 0.0
     
     return {
         'Kp_null': Kp_null,
@@ -170,16 +263,15 @@ def precompute_invariants(model):
         'G': G,
         'Pe': Pe,
         'pinv_B': pinv_B,
-        'sel': sel,
         'e': e
     }
 
 def controller(model, data, invariants, previous_solution=None):
     jac = np.zeros((6, model.nv))
-    twist = np.zeros(6)
-    site_quat = np.zeros(4)
-    site_quat_conj = np.zeros(4)
-    error_quat = np.zeros(4)
+    twist = np.zeros(3)
+    # site_quat = np.zeros(4)
+    # site_quat_conj = np.zeros(4)
+    # error_quat = np.zeros(4)
     M_inv = np.zeros((model.nv, model.nv))
     M = np.zeros((model.nv, model.nv))
 
@@ -193,24 +285,19 @@ def controller(model, data, invariants, previous_solution=None):
     G = invariants['G']
     Pe = invariants['Pe']
     pinv_B = invariants['pinv_B']
-    sel = invariants['sel']
     e = invariants['e']
 
     site_name = "ee"
     site_id = model.site(site_name).id
-    # data.mocap_pos[mocap_id] = np.array([0.2, 0.2, 0.3])
+    # data.mocap_pos[mocap_id] = ([-0.0553837,   0.05965076,  0.45050877])
     # data.mocap_pos[mocap_id] = np.array([0.23312815, -0.31631513, 0.44791383])
     # data.mocap_pos[mocap_id] = np.array([0.27083678, 0.00194196, 0.58488434])
-    # data.mocap_pos[mocap_id] = ([-0.055,   0.06,  0.45])
-    data.mocap_pos[mocap_id] = ([-0.1,   0.0,  0.5])
-
     dx = data.mocap_pos[mocap_id] - data.site(site_id).xpos
     twist[:3] = dx 
-    mujoco.mju_mat2Quat(site_quat, data.site(site_id).xmat)
-    mujoco.mju_negQuat(site_quat_conj, site_quat)
-    mujoco.mju_mulQuat(error_quat, data.mocap_quat[mocap_id], site_quat_conj)
-    mujoco.mju_quat2Vel(twist[3:], error_quat, 1.0)
-    twist[3:] *= Kori 
+    # mujoco.mju_mat2Quat(site_quat, data.site(site_id).xmat)
+    # mujoco.mju_negQuat(site_quat_conj, site_quat)
+    # mujoco.mju_mulQuat(error_quat, data.mocap_quat[mocap_id], site_quat_conj)
+    # mujoco.mju_quat2Vel(twist[3:], error_quat, 1.0)
 
     q = data.qpos
     mujoco.mj_kinematics(model,data)
@@ -221,18 +308,19 @@ def controller(model, data, invariants, previous_solution=None):
     mujoco.mj_solveM(model, data, M_inv, np.eye(model.nv))
     mujoco.mj_fullM(model, M, data.qM)
     M = M * np.random.normal(1.0, 0.01, size=M.shape)  # Add some noise to the inertia matrix
-    dJ_dt = compute_jacobian_derivative(model, data, site_id)
+    dJ_dt_full = compute_jacobian_derivative(model, data, site_id)
+    dJ_dt = dJ_dt_full[:3,:]
 
     # define decision variables (create fresh variables each time)
-    nu = 9
+    nu = 2
     nq = model.nq
     u = cp.Variable(shape=(nu, 1))
-    mu = cp.Variable(shape=(6, 1))
-    # qdd = cp.Variable(shape=(nq, 1))
+    mu = cp.Variable(shape=(3, 1))
     dl = cp.Variable(shape=(1, 1))
     twist[3:] = 0.0
 
     # error and Lyapunov function for CLF
+    jac = jac[:3,:]
     eta = np.concatenate((-twist,jac @ data.qvel))
     V = eta.T @ Pe @ eta
 
@@ -242,16 +330,22 @@ def controller(model, data, invariants, previous_solution=None):
     # Vdot for our main CLF
     dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ mu
 
+    # Lie derivatives 
+    # L2fy = dJ_dt @ dq - jac @ M_inv @ (data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1))
+    # LgLfy = jac @ M_inv @ B
     mu_des = (500 * twist.reshape(-1,1)  - 20 * (jac @ dq))
+    # mu_des = (K_task @ twist.reshape(-1,1)  - D_task @ (jac @ dq))
 
+    # qdd = M_inv @ (B @ u + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1))
     qdd = np.linalg.pinv(jac) @ (mu - dJ_dt @ dq)
 
     objective = cp.Minimize(0.2*cp.square(cp.norm(mu - mu_des))  + 1000 * cp.square(dl)  + 0.02 * cp.square(cp.norm(u)))# + 0.2 * cp.square(cp.norm(qdd)))
 
     constraints = [ dV <= - 1/e * V + dl, 
+                    # L2fy + LgLfy @ u == mu,
                     pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
-                    -25*sel <= u,
-                    25*np.ones((nu,1)) >= u]
+                    -1.0 <= u,
+                    1.0 >= u]
 
     prob = cp.Problem(objective=objective, constraints=constraints)
     
@@ -263,6 +357,8 @@ def controller(model, data, invariants, previous_solution=None):
         except:
             pass  # If warm start fails, proceed without it
 
+    twist[3:] = 0
+
     task_error = np.linalg.norm(dx)
     q = data.qpos
     dq = data.qvel
@@ -270,15 +366,24 @@ def controller(model, data, invariants, previous_solution=None):
     try:
         prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
         if u.value is not None:
-            data.ctrl = np.squeeze(B @ u.value)            
-            # Cache solution for next iteration
+            u_opt = u.value.copy()
+
+            u_tendon = np.array([
+                max(u_opt[0, 0], 0.0),
+                -min(u_opt[0, 0], 0.0),
+                max(u_opt[1, 0], 0.0),
+                -min(u_opt[1, 0], 0.0)
+            ])
+
+            data.ctrl[:] = u_tendon
+
             current_solution = {
-                'u': u.value.copy(),
-            # 'qdd': qdd.value.copy(),
+                'u': u_opt,
                 'dl': dl.value.copy()
             }
-            # print(f"converged\n")
+
             return V, task_error, q, dq, current_solution
+
         else:
             print(f"failed convergence - no solution\n")
             return V, task_error, q, dq, previous_solution
@@ -287,19 +392,10 @@ def controller(model, data, invariants, previous_solution=None):
         return V, task_error, q, dq, previous_solution
 
 def simulate_model(headless=False):
-    model_path = Path("mujoco_models/helix") / (str(model_name) + str(".xml"))
-    # Load the model and data
-    model = mujoco.MjModel.from_xml_path(str(model_path.absolute()))
     model.jnt_stiffness[:] = stiffness
-    
-    model.dof_damping[:] = 0.2
+    model.dof_damping[:] = 0.02
     model.opt.gravity = (0, 0, -9.81)
     data = mujoco.MjData(model)
-
-    data.qpos[2] = 0.0
-    model.jnt_range[range(2,len(data.qpos),3)] = [[-0.001, 0.03/2] for i in range(2,len(data.qpos),3)]
-    model.jnt_stiffness[range(2,len(data.qpos),3)] = 50
-    # model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_CONTACT
 
     # Pre-compute invariant matrices
     print("Pre-computing invariant matrices...")
@@ -324,7 +420,6 @@ def simulate_model(headless=False):
     )
     time_last_ctrl = 0.0
     q_des = np.ones(data.qpos.shape[0])*0.2
-    # print(np.shape(q_des))
 
     V_log = []
     task_error_log = []
@@ -336,26 +431,109 @@ def simulate_model(headless=False):
 
 
     last_ctrl = time.time()
-    max_sim_time = 5.0  # Run for 1 second of simulation time
+    max_sim_time = 25.0  # Run for 1 second of simulation time
     log_frequency = 5  # Log every 5 steps instead of every step
     step_count = 0
-    threshold  = 0.001
+    
+    # if headless:
+    #     # Run simulation without viewer for maximum performance
+    #     print("Running headless simulation...")
+    #     # while data.time < max_sim_time:
+    #     while abs(task_error_log[-1] - task_error_log[-2]) / dt > 1e-1 if len(task_error_log) > 1 else True and data.time < max_sim_time:
+    #         step_start = time.time()
+    #         V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+    #         mujoco.mj_step(model, data)
+            
+    #         # Only log every N steps to reduce overhead
+    #         if step_count % log_frequency == 0:
+    #             # print(f"Sim time: {data.time:.3f}s")
+                
+    #             sim_ts["ts"].append(data.time)
+    #             # extract the sensor data
+    #             sim_ts["base_pos"].append(data.sensordata[:3].copy())
+    #             sim_ts["base_vel"].append(data.sensordata[3:6].copy())
+    #             sim_ts["base_acc"].append(data.sensordata[6:9].copy())
+    #             sim_ts["base_force"].append(data.sensordata[9:12].copy())
+    #             sim_ts["base_torque"].append(data.sensordata[12:15].copy())
+    #             sim_ts["q"].append(data.qpos.copy())
+    #             sim_ts["qvel"].append(data.qvel.copy())
+    #             sim_ts["ctrl"].append(data.ctrl.copy())
+    #             sim_ts["actuator_force"].append(data.actuator_force.copy())
+    #             sim_ts["qfrc_fluid"].append(data.qfrc_fluid.copy())
+    #             sim_ts["q_des"].append(q_des.copy())
+
+    #             V_log.append(V)
+    #             task_error_log.append(task_error)
+    #             q_vel.append(dq.squeeze().copy())
+    #             q_pos.append(q.squeeze().copy())
+    #             time_log.append(t)
+            
+    #         step_count += 1
+    #         t += dt
+    # else:
+    #     # Run simulation with viewer
+    #     with mujoco.viewer.launch_passive(model, data) as viewer:
+    #         sim_start = time.time()
+    #         while viewer.is_running() and data.time < max_sim_time:
+    #             step_start = time.time()
+    #             first_time = time.time()
+    #             V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+    #             mujoco.mj_step(model, data)
+                
+    #             # Only log every N steps to reduce overhead
+    #             if step_count % log_frequency == 0:
+    #                 print(data.time)
+                    
+    #                 sim_ts["ts"].append(data.time)
+    #                 # extract the sensor data
+    #                 sim_ts["base_pos"].append(data.sensordata[:3].copy())
+    #                 sim_ts["base_vel"].append(data.sensordata[3:6].copy())
+    #                 sim_ts["base_acc"].append(data.sensordata[6:9].copy())
+    #                 sim_ts["base_force"].append(data.sensordata[9:12].copy())
+    #                 sim_ts["base_torque"].append(data.sensordata[12:15].copy())
+    #                 sim_ts["q"].append(data.qpos.copy())
+    #                 sim_ts["qvel"].append(data.qvel.copy())
+    #                 sim_ts["ctrl"].append(data.ctrl.copy())
+    #                 sim_ts["actuator_force"].append(data.actuator_force.copy())
+    #                 sim_ts["qfrc_fluid"].append(data.qfrc_fluid.copy())
+    #                 sim_ts["q_des"].append(q_des.copy())
+
+    #                 V_log.append(V)
+    #                 task_error_log.append(task_error)
+    #                 q_vel.append(dq.squeeze().copy())
+    #                 q_pos.append(q.squeeze().copy())
+    #                 time_log.append(t)
+                
+    #             step_count += 1
+                
+    #             # Pick up changes to the physics state, apply perturbations, update options from GUI.
+    #             viewer.sync()
+
+    #             t += dt
+
+    #             # Rudimentary time keeping, will drift relative to wall clock.
+    #             # Removed sleep to run as fast as possible for 1 second of sim time
+    #             # time_until_next_step = model.opt.timestep - (time.time() - step_start)
+    #             # if time_until_next_step > 0:
+    #             #     time.sleep(time_until_next_step)
+    # print(f"Simulation finished after {sim_ts['ts'][-1]} seconds")
+    # return V_log, task_error_log, q_vel, q_pos, time_log, sim_ts
+
+    threshold  = 1e-3
 
     if headless:
-        # Run simulation without viewer for maximum performance
         print("Running headless simulation...")
         while (len(task_error_log) < 2 or
             abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold ):
+
             step_start = time.time()
-            V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+            V, task_error, q, dq, previous_solution = controller(
+                model, data, invariants, previous_solution
+            )
             mujoco.mj_step(model, data)
-            
-            # Only log every N steps to reduce overhead
+
             if step_count % log_frequency == 0:
-                # print(f"Sim time: {data.time:.3f}s")
-                
                 sim_ts["ts"].append(data.time)
-                # extract the sensor data
                 sim_ts["base_pos"].append(data.sensordata[:3].copy())
                 sim_ts["base_vel"].append(data.sensordata[3:6].copy())
                 sim_ts["base_acc"].append(data.sensordata[6:9].copy())
@@ -373,28 +551,27 @@ def simulate_model(headless=False):
                 q_vel.append(dq.squeeze().copy())
                 q_pos.append(q.squeeze().copy())
                 time_log.append(t)
-            
+
             step_count += 1
             t += dt
+
     else:
-        # Run simulation with viewer
         with mujoco.viewer.launch_passive(model, data) as viewer:
-            sim_start = time.time()
             while viewer.is_running() and (
                 len(task_error_log) < 2 or
                 abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold 
             ):
+
                 step_start = time.time()
-                first_time = time.time()
-                V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+                V, task_error, q, dq, previous_solution = controller(
+                    model, data, invariants, previous_solution
+                )
                 mujoco.mj_step(model, data)
-                
-                # Only log every N steps to reduce overhead
+
                 if step_count % log_frequency == 0:
                     print(data.time)
-                    
+
                     sim_ts["ts"].append(data.time)
-                    # extract the sensor data
                     sim_ts["base_pos"].append(data.sensordata[:3].copy())
                     sim_ts["base_vel"].append(data.sensordata[3:6].copy())
                     sim_ts["base_acc"].append(data.sensordata[6:9].copy())
@@ -412,21 +589,14 @@ def simulate_model(headless=False):
                     q_vel.append(dq.squeeze().copy())
                     q_pos.append(q.squeeze().copy())
                     time_log.append(t)
-                
-                step_count += 1
-                
-                # Pick up changes to the physics state, apply perturbations, update options from GUI.
-                viewer.sync()
 
+                step_count += 1
+                viewer.sync()
                 t += dt
 
-                # Rudimentary time keeping, will drift relative to wall clock.
-                # Removed sleep to run as fast as possible for 1 second of sim time
-                # time_until_next_step = model.opt.timestep - (time.time() - step_start)
-                # if time_until_next_step > 0:
-                #     time.sleep(time_until_next_step)
     print(f"Simulation finished after {sim_ts['ts'][-1]} seconds")
     return V_log, task_error_log, q_vel, q_pos, time_log, sim_ts
+
 
 
 

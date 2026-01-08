@@ -145,15 +145,33 @@ def precompute_invariants(model):
     """Pre-compute matrices that don't change during simulation"""
     Kp_null = np.asarray([1] * model.nv)
     Kd_null = damping_ratio * 2 * np.sqrt(Kp_null)
-        
+    
+    # CLF matrices
+    m = 6
+    F = np.zeros((2*m, 2*m))
+    F[:m, m:] = np.eye(m, m)
+    G = np.zeros((2*m, m))
+    G[m:, :] = np.eye(m)
+    e = 0.05
+    Pe = linalg.block_diag(np.eye(m) / e, np.eye(m)).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m))
+    
     # Input matrix pseudoinverse
     pinv_B = np.linalg.pinv(B)
-
+    
+    # Selection matrix for compression/extension actuators
+    nu = 9
+    sel = np.ones((nu, 1))
+    sel[[2, 5, 8]] = 0.0
     
     return {
         'Kp_null': Kp_null,
         'Kd_null': Kd_null,
+        'F': F,
+        'G': G,
+        'Pe': Pe,
         'pinv_B': pinv_B,
+        'sel': sel,
+        'e': e
     }
 
 def controller(model, data, invariants, previous_solution=None):
@@ -170,6 +188,8 @@ def controller(model, data, invariants, previous_solution=None):
 
     # Extract pre-computed values
     pinv_B = invariants['pinv_B']
+    sel = invariants['sel']
+    e = invariants['e']
 
     site_name = "ee"
     site_id = model.site(site_name).id
@@ -196,32 +216,62 @@ def controller(model, data, invariants, previous_solution=None):
     mujoco.mj_fullM(model, M, data.qM)
     M = M * np.random.normal(1.0, 0.01, size=M.shape)  # Add some noise to the inertia matrix
     dJ_dt = compute_jacobian_derivative(model, data, site_id)
+
+    # define decision variables (create fresh variables each time)
+    nu = 9
+    nq = model.nq
+    u = cp.Variable(shape=(nu, 1))
+    mu = cp.Variable(shape=(6, 1))
     twist[3:] = 0.0
     
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
+
+    # Impedance-style task acceleration command
+    mu_des = (500 * twist.reshape(-1,1)  - 20 * (jac @ dq))
+
+    qdd = np.linalg.pinv(jac) @ (mu - dJ_dt @ dq)
+    N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
+    qdd_null = N @ qdd
+
+
+    objective = cp.Minimize(cp.square(cp.norm(mu - mu_des))  + 0.5 * cp.square(cp.norm(u)) + 0.0 * cp.square(cp.norm(qdd)) + 0.5 * cp.sum_squares(qdd_null))
+
+    constraints = [ pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
+                    -25*sel <= u,
+                    25*np.ones((nu,1)) >= u]
+
+    prob = cp.Problem(objective=objective, constraints=constraints)
+    
+    # Warm start with previous solution if available
+    if previous_solution is not None:
+        try:
+            u.value = previous_solution['u']
+        except:
+            pass  # If warm start fails, proceed without it
+
+
     task_error = np.linalg.norm(dx)
     q = data.qpos
-
+    dq = data.qvel
+    
     try:
-        Mx_inv = jac @ M_inv @ jac.T
-        if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-            Mx = np.linalg.inv(Mx_inv)
+        prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
+        if u.value is not None:
+            data.ctrl = np.squeeze(B @ u.value)            
+            # Cache solution for next iteration
+            current_solution = {
+                'u': u.value.copy(),
+            # 'qdd': qdd.value.copy(),
+            }
+            # print(f"converged\n")
+            return task_error, q, dq, current_solution
         else:
-            Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
-        Jbar = M_inv @ jac.T @ Mx
-        C, g = get_coriolis_and_gravity(model, data)
-        ydd = 500 * twist -  20 * (jac @ data.qvel)
-        Cy = Jbar.T @ C @ data.qvel - Mx @ dJ_dt @ data.qvel
-        tau = jac.T @ (Mx @ ydd + Cy) + g - data.qfrc_passive
-        N = np.eye(model.nv) - Jbar @ jac
-        # tau_null = -N @ (500 * q + 0.1 * dq)
-        data.ctrl = B @ pinv_B @ (tau) 
-
-    except:
-        print(f"failed convergence\n")
-        pass
-    return task_error, q, dq, previous_solution
+            print(f"failed convergence - no solution\n")
+            return task_error, q, dq, previous_solution
+    except Exception as e:
+        print(f"failed convergence - exception: {e}\n")
+        return task_error, q, dq, previous_solution
 
 def simulate_model(headless=False):
     model_path = Path("mujoco_models/helix") / (str(model_name) + str(".xml"))
@@ -237,8 +287,6 @@ def simulate_model(headless=False):
     model.jnt_range[range(2,len(data.qpos),3)] = [[-0.001, 0.03/2] for i in range(2,len(data.qpos),3)]
     model.jnt_stiffness[range(2,len(data.qpos),3)] = 50
     # model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_CONTACT
-
-    q0 = data.qpos.copy()   # at startup
 
     # Pre-compute invariant matrices
     print("Pre-computing invariant matrices...")
@@ -273,7 +321,7 @@ def simulate_model(headless=False):
 
 
     last_ctrl = time.time()
-    max_sim_time = 50.0  # Run for 1 second of simulation time
+    max_sim_time = 5.0  # Run for 1 second of simulation time
     log_frequency = 5  # Log every 5 steps instead of every step
     step_count = 0
     threshold  = 0.001
@@ -389,7 +437,6 @@ if __name__ == "__main__":
         
     q_vel = np.array(q_vel)
     q_pos = np.array(q_pos)
-
 
     #End-Effector Position Error – checks task-space convergence.
     plt.figure()

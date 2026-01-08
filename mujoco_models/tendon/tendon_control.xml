@@ -1,0 +1,65 @@
+<mujoco model="tendon_control">
+    <compiler angle="radian"/>
+    <option gravity="0 0 -9.81" integrator="implicitfast"/>
+
+    <default>
+        <joint type="hinge" axis="0 1 0" limited="true" range="-1.57 1.57" damping="0.01"/>
+        <geom type="capsule" size="0.005 0.03" rgba="0.5 0.5 0.5 1" mass="0.01"/>
+    </default>
+
+
+    <worldbody>
+        <camera name="side_view" pos="0 0.1 0.05" xyaxes="1 0 0  0 0 1"/>
+        <body name="link1" pos="0 0 0">
+            <joint name="joint1" />
+            <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+            <body name="link2" pos="0.06 0 0">
+                <joint name="joint2"/>
+                <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                <body name="link3" pos="0.06 0 0">
+                    <joint name="joint3"/>
+                    <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                    <body name="link4" pos="0.06 0 0">
+                        <joint name="joint4"/>
+                        <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                        <body name="attachment" pos="0.03 0.0 0.0">
+                              <site name="ee" rgba="1 0 0 1" size="0.001" group="1"/>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+
+    <!-- Tendon-based antagonistic actuation -->
+    <tendon>
+        <!-- Tendon pair A -->
+        <fixed name="tendon_a_flex">
+            <joint joint="joint1" coef="1"/>
+            <joint joint="joint2" coef="1"/>
+        </fixed>
+        <fixed name="tendon_a_ext">
+            <joint joint="joint1" coef="-1"/>
+            <joint joint="joint2" coef="-1"/>
+        </fixed>
+
+        <!-- Tendon pair B -->
+        <fixed name="tendon_b_flex">
+            <joint joint="joint3" coef="1"/>
+            <joint joint="joint4" coef="1"/>
+        </fixed>
+        <fixed name="tendon_b_ext">
+            <joint joint="joint3" coef="-1"/>
+            <joint joint="joint4" coef="-1"/>
+        </fixed>
+    </tendon>
+
+
+    <!-- Actuators for tendons -->
+    <actuator>
+        <motor tendon="tendon_a_flex" ctrlrange="0 1" gear="0.1"/>
+        <motor tendon="tendon_a_ext" ctrlrange="0 1" gear="0.1"/>
+        <motor tendon="tendon_b_flex" ctrlrange="0 1" gear="0.1"/>
+        <motor tendon="tendon_b_ext" ctrlrange="0 1" gear="0.1"/>
+    </actuator>
+</mujoco>

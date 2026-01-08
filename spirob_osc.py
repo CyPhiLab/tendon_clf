@@ -10,12 +10,13 @@ from scipy import linalg
 import cvxpy as cp
 from scipy.linalg import eigh
 import gurobipy
+import imageio
 
 # Configure MuJoCo to use the EGL rendering backend (requires GPU)
 os.environ["MUJOCO_GL"] = "egl"
 
 
-model_name = f"helix_control"
+model_name = f"scene"
 
 # Cartesian impedance control gains.
 impedance_pos = np.asarray([50.0, 50.0, 50.0])  # [N/m]
@@ -42,14 +43,76 @@ f_ctrl = 2000.0
 T = 1
 w = 2 * np.pi / T
 
-B = np.zeros((36, 9))
-for i in range(3):  # Iterate over u1, u2, u3 blocks
-    for j in range(4):  # Repeat each block 4 times
-        row_start = i * 12 + j * 3  # Compute row index
-        col_start = i * 3  # Compute column index
-        B[row_start:row_start+3, col_start:col_start+3] = np.eye(3)  # Assign identity
+# B matrix will be calculated from the MuJoCo model after loading
+B = None
 
-print(B)
+def calculate_input_matrix(model):
+    """
+    Calculate the input matrix B from the MuJoCo model.
+    
+    For MuJoCo, the actuator transmission matrix can be extracted from the model.
+    This maps actuator forces/torques to joint torques.
+    
+    Parameters:
+        model: MuJoCo model object
+    
+    Returns:
+        B: Input matrix (nv x nu) mapping control inputs to joint torques
+    """
+    nv = model.nv  # number of velocity coordinates (DOFs)
+    nu = model.nu  # number of actuators
+    
+    print(f"Model dimensions: nv={nv}, nu={nu}")
+    
+    if nu == 0:
+        print("Warning: No actuators found in model. Creating default B matrix.")
+        # If no actuators, create a simple identity-like mapping
+        B = np.eye(nv, min(nv, 3))  # Assume 3 control inputs max
+        return B
+    
+    # Get actuator transmission matrix from MuJoCo
+    # This is stored in model.actuator_moment which gives the moment arm matrix
+    B = np.zeros((nv, nu))
+    
+    # Extract the transmission matrix from MuJoCo's internal representation
+    data_temp = mujoco.MjData(model)
+    mujoco.mj_step1(model, data_temp)  # Initialize to get proper matrices
+    
+    # The transmission matrix is implicitly defined by how actuators affect joints
+    # We can extract it by looking at the actuator moment arms
+    for i in range(nu):
+        # Create unit actuator force
+        ctrl_test = np.zeros(nu)
+        ctrl_test[i] = 1.0
+        data_temp.ctrl[:] = ctrl_test
+        
+        # Compute actuator forces and map to joint torques
+        mujoco.mj_forward(model, data_temp)
+        B[:, i] = data_temp.qfrc_actuator.copy()
+        
+        # Reset
+        data_temp.ctrl[:] = 0.0
+    
+    print(f"Calculated B matrix shape: {B.shape}")
+    return B
+
+def calculate_input_matrix_at_state(model, data):
+    nv, nu = model.nv, model.nu
+    B = np.zeros((nv, nu))
+
+    data_temp = mujoco.MjData(model)
+    data_temp.qpos[:] = data.qpos
+    data_temp.qvel[:] = data.qvel  # optional; usually 0 is fine too
+
+    mujoco.mj_forward(model, data_temp)
+
+    for i in range(nu):
+        data_temp.ctrl[:] = 0.0
+        data_temp.ctrl[i] = 1.0
+        mujoco.mj_forward(model, data_temp)
+        B[:, i] = data_temp.qfrc_actuator.copy()
+
+    return B
 
 def get_coriolis_and_gravity(model, data):
     """
@@ -140,23 +203,65 @@ def compute_jacobian_derivative(model, data, site_id, h=1e-6):
     
     return Jdot
 
+def compute_fixed_S_from_qbar(model, data, site_id, qbar=None):
+    """
+    Compute a *fixed* synergy matrix S (nv x m) at reference posture qbar.
+    Paper-consistent: S is constant.
+    Practical choice: S = Jm(qbar)^T.
+    """
+    # Backup state
+    state_sz = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    backup = np.zeros(state_sz)
+    mujoco.mj_getState(model, data, backup, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+
+    # Set qbar
+    if qbar is None:
+        qbar = data.qpos.copy()
+    data.qpos[:] = qbar
+    data.qvel[:] = 0.0
+    mujoco.mj_forward(model, data)
+
+    jac = np.zeros((6, model.nv))
+    mujoco.mj_jacSite(model, data, jac[:3], jac[3:], site_id)
+
+    S = jac.T.copy()  # (nv x m)
+
+    # Restore
+    mujoco.mj_setState(model, data, backup, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    mujoco.mj_forward(model, data)
+    return S
+
 # Pre-compute invariant matrices (computed once, used throughout simulation)
-def precompute_invariants(model):
+def precompute_invariants(model, data):
     """Pre-compute matrices that don't change during simulation"""
     Kp_null = np.asarray([1] * model.nv)
     Kd_null = damping_ratio * 2 * np.sqrt(Kp_null)
-        
+
+    # IDs
+    mocap_name = "target"
+    mocap_id = model.body(mocap_name).mocapid[0]
+
+    site_name = "ee"
+    site_id = model.site(site_name).id
+    
     # Input matrix pseudoinverse
     pinv_B = np.linalg.pinv(B)
 
+    # Fixed S (computed ONCE)
+    S = compute_fixed_S_from_qbar(model, data, site_id, qbar=None)
+    
+    # Selection matrix for control inputs
+    nu = model.nu  # Use actual number of actuators from model
+    sel = np.ones((nu, 1))  # All control inputs are active
     
     return {
         'Kp_null': Kp_null,
         'Kd_null': Kd_null,
         'pinv_B': pinv_B,
+        'S': S,
     }
 
-def controller(model, data, invariants, previous_solution=None):
+def controller(model, data, invariants, previous_solution=None, S = None):
     jac = np.zeros((6, model.nv))
     twist = np.zeros(6)
     site_quat = np.zeros(4)
@@ -168,16 +273,22 @@ def controller(model, data, invariants, previous_solution=None):
     mocap_name = "target"
     mocap_id = model.body(mocap_name).mocapid[0]
 
-    # Extract pre-computed values
-    pinv_B = invariants['pinv_B']
-
     site_name = "ee"
     site_id = model.site(site_name).id
-    # data.mocap_pos[mocap_id] = np.array([0.2, 0.2, 0.3])
-    # data.mocap_pos[mocap_id] = np.array([0.23312815, -0.31631513, 0.44791383])
-    # data.mocap_pos[mocap_id] = np.array([0.27083678, 0.00194196, 0.58488434])
-    data.mocap_pos[mocap_id] = ([-0.055,   0.06,  0.45])
 
+    if S is None:
+        S = invariants["S"]
+    # Set target position for SpiRob end-effector
+    # Adjusted for SpiRob's coordinate system and expected reach
+    # data.mocap_pos[mocap_id] = np.array([0.2, 0.2, 0.3])
+    # data.mocap_pos[mocap_id] = np.array([0.1, 0.1, 0.3])
+    data.mocap_pos[mocap_id] = np.array([0.2, 0.0, 0.3])
+    # data.mocap_pos[mocap_id] = np.array([0.1, 0.0, 0.1])
+    # data.mocap_pos[mocap_id] = np.array([0.2, 0.0, 0.2])
+    # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.15])
+    # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.2])
+    # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.25])
+    # data.mocap_pos[mocap_id] = np.array([0.16, 0.0, 0.35])
     dx = data.mocap_pos[mocap_id] - data.site(site_id).xpos
     twist[:3] = dx 
     mujoco.mju_mat2Quat(site_quat, data.site(site_id).xmat)
@@ -197,55 +308,107 @@ def controller(model, data, invariants, previous_solution=None):
     M = M * np.random.normal(1.0, 0.01, size=M.shape)  # Add some noise to the inertia matrix
     dJ_dt = compute_jacobian_derivative(model, data, site_id)
     twist[3:] = 0.0
-    
+
+    # define decision variables (create fresh variables each time)
+    nu = model.nu  # Use actual number of actuators from model
+
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
     task_error = np.linalg.norm(dx)
     q = data.qpos
+    Bp = calculate_input_matrix_at_state(model, data)  # or cached update every N steps
+
+    rank =   np.linalg.matrix_rank(jac @ M_inv @ Bp)
+
+    # Task-space inertia 
+    Mx_inv = jac @ M_inv @ jac.T
+    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+        Mx = np.linalg.inv(Mx_inv)
+    else:
+        Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+
+    Jbar = M_inv @ jac.T @ Mx
+    C, g = get_coriolis_and_gravity(model, data)
+    ydd = 500 * twist - 20 * (jac @ data.qvel)
+    Cy = (Jbar.T @ C @ data.qvel) - (Mx @ (dJ_dt @ data.qvel))
+    f = Mx @ ydd + Cy
+
+    # Santina synergy-projected torque
+    sigma = np.linalg.pinv(jac @ M_inv @ S, rcond=1e-6) @ (jac @ M_inv @ jac.T @ f)  # (m,)
+    tau_synergy = S @ sigma  # (nv,)
+
+    # Add gravity + passive 
+    tau = tau_synergy + g - data.qfrc_passive
 
     try:
-        Mx_inv = jac @ M_inv @ jac.T
-        if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-            Mx = np.linalg.inv(Mx_inv)
-        else:
-            Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
-        Jbar = M_inv @ jac.T @ Mx
-        C, g = get_coriolis_and_gravity(model, data)
-        ydd = 500 * twist -  20 * (jac @ data.qvel)
-        Cy = Jbar.T @ C @ data.qvel - Mx @ dJ_dt @ data.qvel
-        tau = jac.T @ (Mx @ ydd + Cy) + g - data.qfrc_passive
-        N = np.eye(model.nv) - Jbar @ jac
-        # tau_null = -N @ (500 * q + 0.1 * dq)
-        data.ctrl = B @ pinv_B @ (tau) 
+        data.ctrl = np.linalg.pinv(Bp, rcond=1e-6) @ tau
 
     except:
         print(f"failed convergence\n")
         pass
     return task_error, q, dq, previous_solution
 
-def simulate_model(headless=False):
-    model_path = Path("mujoco_models/helix") / (str(model_name) + str(".xml"))
+def simulate_model(headless=False, record_video=False, video_fps=30):
+    global B  # Make B accessible globally
+    
+    model_path = Path("mujoco_models/spirob") / (str(model_name) + str(".xml"))
     # Load the model and data
     model = mujoco.MjModel.from_xml_path(str(model_path.absolute()))
-    model.jnt_stiffness[:] = stiffness
+    data = mujoco.MjData(model)
     
-    model.dof_damping[:] = 0.2
+    print(f"Model loaded: {model.nq} positions, {model.nv} velocities, {model.nu} actuators")
+    
+    # Calculate the input matrix B from the model
+    B = calculate_input_matrix(model)
+    
+    invariants = precompute_invariants(model, data)
+    
+    # Keep your S call visible in this style
+    S = compute_fixed_S_from_qbar(model, data, model.site("ee").id, qbar=None)
+    # Set joint properties for soft robot
+    model.jnt_stiffness[:] = stiffness
+    model.dof_damping[:] = 0.01
     model.opt.gravity = (0, 0, -9.81)
     data = mujoco.MjData(model)
 
-    data.qpos[2] = 0.0
-    model.jnt_range[range(2,len(data.qpos),3)] = [[-0.001, 0.03/2] for i in range(2,len(data.qpos),3)]
-    model.jnt_stiffness[range(2,len(data.qpos),3)] = 50
+    # Initialize joint positions to neutral configuration
+    # For the SpiRob, this should be a straight configuration
+    data.qpos[:] = 0.0
     # model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_CONTACT
-
-    q0 = data.qpos.copy()   # at startup
 
     # Pre-compute invariant matrices
     print("Pre-computing invariant matrices...")
-    invariants = precompute_invariants(model)
+    invariants = precompute_invariants(model,data)
     
     # Initialize solution cache
     previous_solution = None
+
+    # Video recording setup
+    frames = []
+    video_writer = None
+    video_filename = None
+    renderer = None
+    camera = None
+    
+    if record_video:
+        video_filename = f"spirob_simulation_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        print(f"Video recording enabled. Output file: {video_filename}")
+        
+        # Set up camera for a zoomed-in view of the robot using proper MuJoCo camera API
+        camera = mujoco.MjvCamera()
+        mujoco.mjv_defaultCamera(camera)
+        camera.distance = 0.8  # Closer distance for zoom
+        camera.lookat[:] = [0.2, 0.0, 0.4]  # Look at robot center
+        camera.azimuth = 160  # Side angle view
+        camera.elevation = -10  # Slightly above
+        
+        # Set up rendering for video capture
+        if headless:
+            # For headless rendering, we need to create a renderer with high quality dimensions
+            renderer = mujoco.Renderer(model, height=1080, width=1920)
+            renderer.update_scene(data, camera=camera)
+        else:
+            renderer = None  # Will use viewer's rendering
 
     sim_ts = dict(
         ts=[],
@@ -263,6 +426,7 @@ def simulate_model(headless=False):
     )
     time_last_ctrl = 0.0
     q_des = np.ones(data.qpos.shape[0])*0.2
+    # print(np.shape(q_des))
 
     task_error_log = []
     q_vel = []
@@ -273,23 +437,31 @@ def simulate_model(headless=False):
 
 
     last_ctrl = time.time()
-    max_sim_time = 50.0  # Run for 1 second of simulation time
+    max_sim_time = 25.0  # Run for 25 seconds of simulation time
     log_frequency = 5  # Log every 5 steps instead of every step
     step_count = 0
-    threshold  = 0.001
-
+    threshold  = 0.005
+    
     if headless:
         # Run simulation without viewer for maximum performance
         print("Running headless simulation...")
+        video_frame_interval = max(1, int(1.0 / (video_fps * dt))) if record_video else float('inf')
+        
         while (len(task_error_log) < 2 or
             abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold ):
             step_start = time.time()
-            task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+            V, task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution,S)
             mujoco.mj_step(model, data)
+            
+            # Capture video frame if recording
+            if record_video and step_count % video_frame_interval == 0:
+                renderer.update_scene(data, camera=camera)
+                frame = renderer.render()
+                frames.append(frame)
             
             # Only log every N steps to reduce overhead
             if step_count % log_frequency == 0:
-                # print(f"Sim time: {data.time:.3f}s")
+                print(f"Sim time: {data.time:.3f}s")
                 
                 sim_ts["ts"].append(data.time)
                 # extract the sensor data
@@ -316,14 +488,26 @@ def simulate_model(headless=False):
         # Run simulation with viewer
         with mujoco.viewer.launch_passive(model, data) as viewer:
             sim_start = time.time()
+            video_frame_interval = max(1, int(1.0 / (video_fps * dt))) if record_video else float('inf')
+            
+            if record_video:
+                # Create renderer for video capture from viewer
+                renderer = mujoco.Renderer(model, height=1080, width=1920)
+            
             while viewer.is_running() and (
                 len(task_error_log) < 2 or
                 abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold 
             ):
                 step_start = time.time()
                 first_time = time.time()
-                task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
+                task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution,S)
                 mujoco.mj_step(model, data)
+                
+                # Capture video frame if recording
+                if record_video and step_count % video_frame_interval == 0:
+                    renderer.update_scene(data, camera=camera)
+                    frame = renderer.render()
+                    frames.append(frame)
                 
                 # Only log every N steps to reduce overhead
                 if step_count % log_frequency == 0:
@@ -360,6 +544,18 @@ def simulate_model(headless=False):
                 # time_until_next_step = model.opt.timestep - (time.time() - step_start)
                 # if time_until_next_step > 0:
                 #     time.sleep(time_until_next_step)
+    
+    # Save video if recording was enabled
+    if record_video and frames:
+        print(f"Saving video with {len(frames)} frames...")
+        try:
+            with imageio.get_writer(video_filename, fps=video_fps, codec='libx264') as writer:
+                for frame in frames:
+                    writer.append_data(frame)
+            print(f"Video saved successfully: {video_filename}")
+        except Exception as e:
+            print(f"Error saving video: {e}")
+    
     print(f"Simulation finished after {sim_ts['ts'][-1]} seconds")
     return task_error_log, q_vel, q_pos, time_log, sim_ts
 
@@ -369,13 +565,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run optimized tendon control simulation')
     parser.add_argument('--headless', action='store_true', help='Run simulation without GUI for maximum performance')
     parser.add_argument('--no-plots', action='store_true', help='Skip generating plots at the end')
+    parser.add_argument('--record-video', action='store_true', help='Record simulation video to MP4 file')
+    parser.add_argument('--video-fps', type=int, default=30, help='Video frame rate (default: 30)')
     args = parser.parse_args()
     
     # Record start time for performance measurement
     start_time = time.time()
     
     # Simulate the model
-    task_error_log, q_vel, q_pos, time_log, sim_ts = simulate_model(headless=args.headless)
+    task_error_log, q_vel, q_pos, time_log, sim_ts = simulate_model(
+        headless=args.headless, 
+        record_video=args.record_video, 
+        video_fps=args.video_fps
+    )
     
     # Record end time
     end_time = time.time()
@@ -399,6 +601,7 @@ if __name__ == "__main__":
     plt.title("End-Effector Position Error Over Time")
     plt.grid(True)
     plt.legend()
+    plt.show()
 
     # # Joint Angles (qq) 
     # actuated_indices = np.where(np.any(B != 0, axis=0))[0]  # shape: (n_actuated,)
@@ -446,5 +649,4 @@ if __name__ == "__main__":
     # fig.suptitle("Control Inputs at Actuated Joints")
     # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-    plt.show()
 

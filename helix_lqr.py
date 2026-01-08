@@ -146,7 +146,7 @@ def precompute_invariants(model):
     Kp_null = np.asarray([1] * model.nv)
     Kd_null = damping_ratio * 2 * np.sqrt(Kp_null)
     
-    # CLF matrices
+    # LQR matrices
     m = 6
     F = np.zeros((2*m, 2*m))
     F[:m, m:] = np.eye(m, m)
@@ -162,8 +162,6 @@ def precompute_invariants(model):
     
     # Selection matrix for compression/extension actuators
     nu = 9
-    sel = np.ones((nu, 1))
-    sel[[2, 5, 8]] = 0.0
     
     return {
         'Kp_null': Kp_null,
@@ -172,7 +170,6 @@ def precompute_invariants(model):
         'G': G,
         'Pe': Pe,
         'pinv_B': pinv_B,
-        'sel': sel,
         'K': K,
         'R': R
     }
@@ -190,15 +187,9 @@ def controller(model, data, invariants, previous_solution=None):
     mocap_id = model.body(mocap_name).mocapid[0]
 
     # Extract pre-computed values
-    Kp_null = invariants['Kp_null']
-    Kd_null = invariants['Kd_null']
-    F = invariants['F']
-    G = invariants['G']
-    Pe = invariants['Pe']
     pinv_B = invariants['pinv_B']
-    sel = invariants['sel']
     K = invariants['K']
-    R = invariants['R']
+
 
     site_name = "ee"
     site_id = model.site(site_name).id

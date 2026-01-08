@@ -178,66 +178,66 @@ def finite_difference_Mdot(model, data, delta_t=1e-6):
     Mdot = (M1 - M0) / delta_t
     return Mdot
 
-# def pos_traj_circle_xy(t):
-#     """Circle in XY, fixed Z."""
-#     center = np.array([0, 0.00, 0.7])   # near your current target
-#     Ax, Ay, Az = 0.435, 0, 0.435           # radii (m)
-#     theta = np.pi/6 * 1                       
-#     return center + np.array([Ax*np.cos(theta), 0, Ay*np.sin(theta)])
-
-# def pos_traj_circle_xy(t):
-#     """Circle in XY, fixed Z."""
-#     # center = np.array([0, 0.00, 0.35])   # near your current target
-#     center = np.array([0, 0.00, 0.265])   # near your current target
-#     Ax, Ay, Az = 0.1, 0.1, 0.1           # radii (m); Az=0 keeps Z fixed
-#     wx = 0.5 * np.pi           
-#     wy = 2 * np.pi                            # rad/s
-#     return center + np.array([Ax*np.cos(wx*t), Ay*np.sin(wy*t), 0*Az*np.sin(w*t)])
-
-# def vel_traj_circle_xy(t):
-#     """Velocity for circular XY trajectory, fixed Z."""
-#     Ax, Ay, Az = 0.1, 0.1, 0.1
-#     wx = 0.5 * np.pi           
-#     wy = 2 * np.pi  
-#     return np.array([
-#         -Ax * wx * np.sin(wx * t),
-#          Ay * wy * np.cos(wy * t),
-#          0*Az * w * np.cos(w * t)
-#     ])
-
-# def acc_traj_circle_xy(t):
-#     """Acceleration for circular XY trajectory, fixed Z."""
-#     Ax, Ay, Az = 0.1, 0.1, 0.1
-#     wx = 0.5 * np.pi           
-#     wy = 2 * np.pi  
-#     return np.array([
-#         -Ax * wx**2 * np.cos(wx*t),
-#         -Ay * wy**2 * np.sin(wy*t),
-#         -0*Az * w**2 * np.sin(w*t)
-#     ])
-
-
-TIP = np.array([0.0, 0.0, 0.265])
-
-Ax = 0.10        # meters (X amplitude)
-Az = 0.06        # meters (Z amplitude)
-w  = 2*np.pi     # rad/s
+def pos_traj_circle_xy(t):
+    """Circle in XY, fixed Z."""
+    center = np.array([0, 0.00, 0.7])   # near your current target
+    Ax, Ay, Az = 0.435, 0, 0.435           # radii (m)
+    theta = np.pi/6 * 1                       
+    return center + np.array([Ax*np.cos(theta), 0, Ay*np.sin(theta)])
 
 def pos_traj_circle_xy(t):
-    x0, y0, z0 = TIP
-    x = x0 + Ax * np.sin(w*t)            # x(0)=x0
-    z = z0 + Az * (1.0 - np.cos(w*t))    # z(0)=z0
-    return np.array([x, y0, z])
+    """Circle in XY, fixed Z."""
+    # center = np.array([0, 0.00, 0.35])   # near your current target
+    center = np.array([0, 0.00, 0.265])   # near your current target
+    Ax, Ay, Az = 0.1, 0.1, 0.1           # radii (m); Az=0 keeps Z fixed
+    wx = 0.5 * np.pi           
+    wy = 2 * np.pi                            # rad/s
+    return center + np.array([Ax*np.cos(wx*t), Ay*np.sin(wy*t), 0*Az*np.sin(w*t)])
 
 def vel_traj_circle_xy(t):
-    xdot = Ax * w * np.cos(w*t)
-    zdot = Az * w * np.sin(w*t)
-    return np.array([xdot, 0.0, zdot])
+    """Velocity for circular XY trajectory, fixed Z."""
+    Ax, Ay, Az = 0.1, 0.1, 0.1
+    wx = 0.5 * np.pi           
+    wy = 2 * np.pi  
+    return np.array([
+        -Ax * wx * np.sin(wx * t),
+         Ay * wy * np.cos(wy * t),
+         0*Az * w * np.cos(w * t)
+    ])
 
 def acc_traj_circle_xy(t):
-    xddot = -Ax * w**2 * np.sin(w*t)
-    zddot =  Az * w**2 * np.cos(w*t)
-    return np.array([xddot, 0.0, zddot])
+    """Acceleration for circular XY trajectory, fixed Z."""
+    Ax, Ay, Az = 0.1, 0.1, 0.1
+    wx = 0.5 * np.pi           
+    wy = 2 * np.pi  
+    return np.array([
+        -Ax * wx**2 * np.cos(wx*t),
+        -Ay * wy**2 * np.sin(wy*t),
+        -0*Az * w**2 * np.sin(w*t)
+    ])
+
+
+# TIP = np.array([0.0, 0.0, 0.265])
+
+# Ax = 0.10        # meters (X amplitude)
+# Az = 0.06        # meters (Z amplitude)
+# w  = 2*np.pi     # rad/s
+
+# def pos_traj_circle_xy(t):
+#     x0, y0, z0 = TIP
+#     x = x0 + Ax * np.sin(w*t)            # x(0)=x0
+#     z = z0 + Az * (1.0 - np.cos(w*t))    # z(0)=z0
+#     return np.array([x, y0, z])
+
+# def vel_traj_circle_xy(t):
+#     xdot = Ax * w * np.cos(w*t)
+#     zdot = Az * w * np.sin(w*t)
+#     return np.array([xdot, 0.0, zdot])
+
+# def acc_traj_circle_xy(t):
+#     xddot = -Ax * w**2 * np.sin(w*t)
+#     zddot =  Az * w**2 * np.cos(w*t)
+#     return np.array([xddot, 0.0, zddot])
 
 
 
@@ -346,14 +346,14 @@ def controller(model, data,vel_d,acc_d):
     # twist = y_d - y
     # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist  - D_task @ (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
 
-    objective = cp.Minimize(cp.square(cp.norm((dJ_dt @ dq + jac @ qdd - acc_d) - (1500 * twist  + 20 * (vel_d - jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl) ) 
+    objective = cp.Minimize(cp.square(cp.norm((dJ_dt @ dq + jac @ qdd - acc_d) - (500 * twist  + 20 * (vel_d - jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl) ) 
 
     # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (acc_d + K_task @ twist  + D_task @ (vel_d - jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
 #
     # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (1000 * twist  - 20 * (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
 
 
-    constraints = [ dV <= - 2/0.05 * V + 0.01*dl, 
+    constraints = [ dV <= - 2/0.05 * V + dl, 
                       pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
                     -25*sel <= u,
                     25*np.ones((nu,1)) >= u]
@@ -818,35 +818,35 @@ if __name__ == "__main__":
 #     theta = np.pi/6 * 3                       
 #     return center + np.array([Ax*np.cos(theta), 0, Ay*np.sin(theta)])
 
-# # def pos_traj_circle_xy(t):
-# #     """Circle in XY, fixed Z."""
-# #     center = np.array([0, 0.00, 0.35])   # near your current target
-# #     Ax, Ay, Az = 0.1, 0.1, 0.1           # radii (m); Az=0 keeps Z fixed
-# #     wx = 0.5 * np.pi           
-# #     wy = 2 * np.pi                            # rad/s
-# #     return center + np.array([Ax*np.cos(wx*t), Ay*np.sin(wy*t), 0*Az*np.sin(w*t)])
+# def pos_traj_circle_xy(t):
+#     """Circle in XY, fixed Z."""
+#     center = np.array([0, 0.00, 0.35])   # near your current target
+#     Ax, Ay, Az = 0.1, 0.1, 0.1           # radii (m); Az=0 keeps Z fixed
+#     wx = 0.5 * np.pi           
+#     wy = 2 * np.pi                            # rad/s
+#     return center + np.array([Ax*np.cos(wx*t), Ay*np.sin(wy*t), 0*Az*np.sin(w*t)])
 
-# # def vel_traj_circle_xy(t):
-# #     """Velocity for circular XY trajectory, fixed Z."""
-# #     Ax, Ay, Az = 0.1, 0.1, 0.1
-# #     wx = 0.5 * np.pi           
-# #     wy = 2 * np.pi  
-# #     return np.array([
-# #         -Ax * wx * np.sin(wx * t),
-# #          Ay * wy * np.cos(wy * t),
-# #          0*Az * w * np.cos(w * t)
-# #     ])
+# def vel_traj_circle_xy(t):
+#     """Velocity for circular XY trajectory, fixed Z."""
+#     Ax, Ay, Az = 0.1, 0.1, 0.1
+#     wx = 0.5 * np.pi           
+#     wy = 2 * np.pi  
+#     return np.array([
+#         -Ax * wx * np.sin(wx * t),
+#          Ay * wy * np.cos(wy * t),
+#          0*Az * w * np.cos(w * t)
+#     ])
 
-# # def acc_traj_circle_xy(t):
-# #     """Acceleration for circular XY trajectory, fixed Z."""
-# #     Ax, Ay, Az = 0.1, 0.1, 0.1
-# #     wx = 0.5 * np.pi           
-# #     wy = 2 * np.pi  
-# #     return np.array([
-# #         -Ax * wx**2 * np.cos(wx*t),
-# #         -Ay * wy**2 * np.sin(wy*t),
-# #         -0*Az * w**2 * np.sin(w*t)
-# #     ])
+# def acc_traj_circle_xy(t):
+#     """Acceleration for circular XY trajectory, fixed Z."""
+#     Ax, Ay, Az = 0.1, 0.1, 0.1
+#     wx = 0.5 * np.pi           
+#     wy = 2 * np.pi  
+#     return np.array([
+#         -Ax * wx**2 * np.cos(wx*t),
+#         -Ay * wy**2 * np.sin(wy*t),
+#         -0*Az * w**2 * np.sin(w*t)
+#     ])
 
 
 
@@ -931,41 +931,40 @@ if __name__ == "__main__":
     
 #     # Vdot for our main CLF
 #     dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
-#     # dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
 
 
 #     yd = np.copy(jac @ data.qvel)
 
 #     # ---------------------------------------------------------
-#     # Task critical damping https://www.sciencedirect.com/topics/engineering/critical-damping
-#     Mx_inv = jac @ M_inv @ jac.T
-#     if abs(np.linalg.det(Mx_inv)) >= 1e-2:
-#         M_task = np.linalg.inv(Mx_inv)
-#     else:
-#         M_task = np.linalg.pinv(Mx_inv, rcond=1e-2)
+#     # # Task critical damping https://www.sciencedirect.com/topics/engineering/critical-damping
+#     # Mx_inv = jac @ M_inv @ jac.T
+#     # if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+#     #     M_task = np.linalg.inv(Mx_inv)
+#     # else:
+#     #     M_task = np.linalg.pinv(Mx_inv, rcond=1e-2)
     
-#     # Choose desired modal frequencies (eigenvalues of M^{-1} K)
+#     # # Choose desired modal frequencies (eigenvalues of M^{-1} K)
 
-#     omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 10 # omega^2
+#     # omega_sq = np.diag([100, 100, 100, 100, 100, 100])  * 10 # omega^2
 
-#     # Compute eigenvectors of M (to use as modal basis)
-#     eigvals, P = eigh(M_task)  # P: eigenvectors of M
-#     P_inv = np.linalg.inv(P)
+#     # # Compute eigenvectors of M (to use as modal basis)
+#     # eigvals, P = eigh(M_task)  # P: eigenvectors of M
+#     # P_inv = np.linalg.inv(P)
 
-#     # Construct K in modal coordinates, then transform to original coordinates
-#     K_modal = omega_sq
-#     K_task = P_inv.T @ K_modal @ P_inv  # K = P^{-T} * Omega^2 * P^{-1}
+#     # # Construct K in modal coordinates, then transform to original coordinates
+#     # K_modal = omega_sq
+#     # K_task = P_inv.T @ K_modal @ P_inv  # K = P^{-T} * Omega^2 * P^{-1}
 
-#     # Choose damping ratios (zeta = 1 for critical damping)
-#     zeta = 1.0
-#     D_modal = 2 * zeta * np.sqrt(omega_sq)  # 2ζω
+#     # # Choose damping ratios (zeta = 1 for critical damping)
+#     # zeta = 1.0
+#     # D_modal = 2 * zeta * np.sqrt(omega_sq)  # 2ζω
 
-#     # Step 5: Construct C in modal coordinates and transform back
-#     D_task = P_inv.T @ D_modal @ P_inv
+#     # # Step 5: Construct C in modal coordinates and transform back
+#     # D_task = P_inv.T @ D_modal @ P_inv
 #     # ---------------------------------------------------------
 
-#     objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist  - D_task @ (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
-#     # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (500 * twist  - 20 * (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl))
+#     # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K_task @ twist  - D_task @ (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd)) + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
+#     objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (500 * twist  - 20 * (jac @ data.qvel)))) + 0.2 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl))
 
 #     constraints = [ dV <= - 2/e * V + 0.01*dl, 
 #                       pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,

@@ -152,7 +152,7 @@ def precompute_invariants(model):
     F[:m, m:] = np.eye(m, m)
     G = np.zeros((2*m, m))
     G[m:, :] = np.eye(m)
-    e = 0.015
+    e = 0.05
     Pe = linalg.block_diag(np.eye(m) / e, np.eye(m) ).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m) )
     R = np.eye(m)
     K = np.linalg.inv(R) @ G.T @ Pe  # Optimal state feedback gain
@@ -190,21 +190,19 @@ def controller(model, data, invariants, previous_solution=None):
     mocap_id = model.body(mocap_name).mocapid[0]
 
     # Extract pre-computed values
-    Kp_null = invariants['Kp_null']
-    Kd_null = invariants['Kd_null']
     F = invariants['F']
     G = invariants['G']
-    Pe = invariants['Pe']
     pinv_B = invariants['pinv_B']
     sel = invariants['sel']
-    K = invariants['K']
-    R = invariants['R']
+
 
     site_name = "ee"
     site_id = model.site(site_name).id
-    data.mocap_pos[mocap_id] = ([-0.0553837,   0.05965076,  0.45050877])
+    # data.mocap_pos[mocap_id] = np.array([0.2, 0.2, 0.3])
     # data.mocap_pos[mocap_id] = np.array([0.23312815, -0.31631513, 0.44791383])
     # data.mocap_pos[mocap_id] = np.array([0.27083678, 0.00194196, 0.58488434])
+    data.mocap_pos[mocap_id] = ([-0.055,   0.06,  0.45])
+
     target = data.mocap_pos[mocap_id]
     dx = data.mocap_pos[mocap_id] - data.site(site_id).xpos
     twist[:3] = dx 
@@ -213,6 +211,7 @@ def controller(model, data, invariants, previous_solution=None):
     mujoco.mju_mulQuat(error_quat, data.mocap_quat[mocap_id], site_quat_conj)
     mujoco.mju_quat2Vel(twist[3:], error_quat, 1.0)
     twist[3:] *= Kori 
+    twist[3:] = 0.0
 
     q = data.qpos
     mujoco.mj_kinematics(model,data)
@@ -225,9 +224,6 @@ def controller(model, data, invariants, previous_solution=None):
     M = M * np.random.normal(1.0, 0.01, size=M.shape)  # Add some noise to the inertia matrix
     dJ_dt = compute_jacobian_derivative(model, data, site_id)
 
-    # Define decision variables (create fresh variables each time)
-    twist[3:] = 0.0
-
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
 
@@ -238,11 +234,12 @@ def controller(model, data, invariants, previous_solution=None):
     gamma = 0.9
     dt = 1.0 / f_ctrl
 
+    # Define decision variables (create fresh variables each time)
     nu = 9
     mu   = cp.Variable((6, N))      # mu[:,k] = mu_k
     u_k  = cp.Variable((nu, 1))     # single applied control (keep as you had)
     eta_k = cp.Variable((12, N))    # eta_k[:,k] = eta at step k
-    dl   = cp.Variable((1, 1))
+
 
     # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
     eta_target = np.zeros((12, 1))
@@ -255,21 +252,19 @@ def controller(model, data, invariants, previous_solution=None):
     constraints = []
     constraints += [eta_k[:, 0:1] == eta0]
 
+    objective = 0
     # Linear discrete dynamics rollout as constraints
     for k in range(N - 1):
         constraints += [eta_k[:, k+1:k+2] == eta_k[:, k:k+1] + dt * (F @ eta_k[:, k:k+1] + G @ mu[:, k:k+1])]
-
-    objective = 0
-    for k in range(N - 1):
         eta_k1 = eta_k[:, k+1:k+2]
         mu_k1  = mu[:, k:k+1]
         mu_des_k = -500 * eta_k[0:6, k:k+1] - 20 * eta_k[6:12, k:k+1]
-
-        objective += (gamma**k) * (0.2*cp.sum_squares(mu_k1 - mu_des_k) + 0.2*cp.sum_squares(eta_k1 - eta_target))
+        objective += (gamma**k) * (cp.sum_squares(mu_k1 - mu_des_k) + (gamma**k)*cp.sum_squares(eta_k1 - eta_target))
 
     # Terminal penalty (use eta_k at terminal, not eta_next)
     eta_N = eta_k[:, N-1:N]
-    objective = cp.Minimize(objective + 0.02 * cp.sum_squares(u_k) + (gamma**N) * cp.sum_squares(eta_N - eta_target))
+    objective = cp.Minimize(objective + 0.2 * cp.sum_squares(u_k) + 0.2 * cp.sum_squares(qdd) + 10 * cp.sum_squares(eta_N - eta_target))
+
 
     # Inverse dynamics constraint
     constraints += [
@@ -284,8 +279,6 @@ def controller(model, data, invariants, previous_solution=None):
     if previous_solution is not None:
         try:
             u_k.value = previous_solution['u']
-            # qdd.value = previous_solution['qdd'] 
-            dl.value = previous_solution['dl']
         except:
             pass  # If warm start fails, proceed without it
 
@@ -303,8 +296,6 @@ def controller(model, data, invariants, previous_solution=None):
             # Cache solution for next iteration
             current_solution = {
                 'u': u_k.value.copy(),
-            # 'qdd': qdd.value.copy(),
-                'dl': dl.value.copy()
             }
             # print(f"converged\n")
             return task_error, q, dq, current_solution
@@ -367,11 +358,13 @@ def simulate_model(headless=False):
     max_sim_time = 5.0  # Run for 1 second of simulation time
     log_frequency = 5  # Log every 5 steps instead of every step
     step_count = 0
-    
+    threshold  = 0.001
+
     if headless:
         # Run simulation without viewer for maximum performance
         print("Running headless simulation...")
-        while data.time < max_sim_time:
+        while (len(task_error_log) < 2 or
+            abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold ):
             step_start = time.time()
             task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
             mujoco.mj_step(model, data)
@@ -405,7 +398,10 @@ def simulate_model(headless=False):
         # Run simulation with viewer
         with mujoco.viewer.launch_passive(model, data) as viewer:
             sim_start = time.time()
-            while viewer.is_running() and data.time < max_sim_time:
+            while viewer.is_running() and (
+                len(task_error_log) < 2 or
+                abs(task_error_log[-1] - task_error_log[-2]) / dt > threshold 
+            ):
                 step_start = time.time()
                 first_time = time.time()
                 task_error, q, dq, previous_solution = controller(model, data, invariants, previous_solution)
