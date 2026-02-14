@@ -22,35 +22,29 @@
     </default>
   </default>
   <worldbody>
+    <!-- Table -->
+  <body name="table_body">
+  <geom name="table"
+        type="box"
+        pos="0.20 0.16 0.1"
+        size="0.15 0.15 0.02"
+        rgba="0.6 0.6 0.6 1"
+        contype="1"
+        conaffinity="1"
+        friction="1 0.01 0.001"/>
+  </body>
 
+  <body name="cube_body" pos="0.1 0.0 0.1">
+    <freejoint/>
 
-    <!-- <body name="cube_body" mocap="true" pos="0.2 0.0 0.3"> -->
-    <!-- <body name="cube_body" mocap="true" pos="0.1 0.0 0.3">
     <geom name="cube"
           type="box"
-          size="0.03 0.06 0.03"
+          size="0.03 0.08 0.03"
           rgba="0.8 0.2 0.2 1"
           contype="1"
           conaffinity="1"
-          friction="1 0.5 0.1"/>
-    </body> -->
-
-
-    <!-- Sliding cube -->
-    <!-- <body name="cube_body" pos="0.1 0.0 0.4"> -->
-
-    <!-- This makes it a fully dynamic rigid body -->
-    <!-- <freejoint name="cube_free"/>
-
-    <geom name="cube"
-          type="box"
-          size="0.03 0.03 0.03"
-          rgba="0.8 0.2 0.2 1"
-          friction="1.2 0.01 0.0005"
-          density="800"
-          contype="1"
-          conaffinity="1"/>
-    </body> -->
+          density="800"/>
+  </body>
 
 
 

@@ -1,4 +1,4 @@
-<mujoco model="tendon_control">
+<mujoco model="4link_tendon_planar">
     <compiler angle="radian"/>
     <option gravity="0 0 -9.81" integrator="implicitfast"/>
 
@@ -9,7 +9,7 @@
 
 
     <worldbody>
-        <camera name="side_view" pos="0 0.1 0.05" xyaxes="1 0 0  0 0 1"/>
+        <camera name="ortho_side" pos="0 0.1 0.05" xyaxes="1 0 0  0 0 1"/>
         <body name="link1" pos="0 0 0">
             <joint name="joint1" />
             <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
@@ -28,6 +28,12 @@
                     </body>
                 </body>
             </body>
+        </body>
+    </worldbody>
+
+    <worldbody>
+        <body name="target" pos="0.1 0.0 -0.15" quat="0 1 0 0" mocap="true">
+        <site type="sphere" size="0.01" rgba="0 0 1 1" group="2"/>
         </body>
     </worldbody>
 

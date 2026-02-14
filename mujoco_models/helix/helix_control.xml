@@ -6,6 +6,11 @@
     <include file="helix_actuators.xml" />
     <include file="helix_sensors.xml" />
     <worldbody>
+        <camera name="ortho_side"
+        mode="fixed"
+        pos="0.2 35.0 0.6"
+        xyaxes="-1 0 0   0 0 1"
+        fovy="2"/>
         <body name="target" pos="0.0 0 0.05" quat="0 1 0 0" mocap="true">
         <geom type="box" size=".05 .05 .05" contype="0" conaffinity="0" rgba=".6 .3 .3 .5"/>
         <site type="sphere" size="0.01" rgba="0 0 1 1" group="2"/>
@@ -17,6 +22,7 @@
         <headlight diffuse="0.6 0.6 0.6" ambient="0.6 0.6 0.6" specular="0.9 0.9 0.9"/>
         <rgba haze="0.15 0.25 0.35 1"/>
         <global azimuth="140" elevation="-20" offwidth="3840" offheight="2160"/>
+
     </visual>
 
     <asset>
