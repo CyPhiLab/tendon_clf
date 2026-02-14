@@ -306,20 +306,23 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
 
     F = invariants['F']
     G = invariants['G']
+    Pe = invariants['Pe']
+    e = invariants['e']
+    Kp = invariants['Kp']
+    Kd = invariants['Kd']
+
+    # Get joint velocity
+    dq = data.qvel.reshape(-1,1)
+
+    # Desired task acceleration 
+    mu_des = target_acc.reshape(-1,1) + Kp * twist.reshape(-1,1) + Kd * (target_vel.reshape(-1,1) - jac @ dq)
+
+    # Lyapunov function
+    V = eta.T @ Pe @ eta
 
     if model_name == 'tendon':
-        Pe = invariants['Pe']
         pinv_B = invariants['pinv_B']
         Bp = invariants['Bp']
-        e = invariants['e']
-        Kp = invariants['Kp']
-        Kd = invariants['Kd']
-
-        V = eta.T @ Pe @ eta
-
-        # Use original constraint formulation
-        dq = data.qvel.reshape(-1,1)
-        mu_des = target_acc.reshape(-1,1) + Kp * twist.reshape(-1,1) + Kd * (target_vel.reshape(-1,1) - jac @ dq)
 
         # define decision variables (create fresh variables each time)
         nu = 2
@@ -369,19 +372,9 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
             return V, previous_solution, None
         
     elif model_name == 'helix':
-        Pe = invariants['Pe']
         B = invariants['B']
         pinv_B = invariants['pinv_B']
         sel = invariants['sel']
-        e = invariants['e']
-        Kp = invariants['Kp']
-        Kd = invariants['Kd']
-
-        V = eta.T @ Pe @ eta
-
-        # Use original constraint formulation
-        dq = data.qvel.reshape(-1,1)
-        mu_des = target_acc.reshape(-1,1) + Kp * twist.reshape(-1,1) + Kd * (target_vel.reshape(-1,1) - jac @ dq)
 
         # define decision variables (create fresh variables each time)
         nu = 9
@@ -433,11 +426,7 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
             return V, previous_solution, None
         
     elif model_name == 'spirob':
-        Pe = invariants['Pe']
         sel = invariants['sel']
-        e = invariants['e']
-        Kp = invariants['Kp']
-        Kd = invariants['Kd']
 
         # Sprirob input matrix depends on current configuration, so we compute it at the current state
         nv, nu = model.nv, model.nu
@@ -457,12 +446,6 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
 
         # Compute the pseudoinverse of B
         pinv_B = np.linalg.pinv(B)
-
-        V = eta.T @ Pe @ eta
-
-        # Use original constraint formulation
-        dq = data.qvel.reshape(-1,1)
-        mu_des = target_acc.reshape(-1,1) + Kp * twist.reshape(-1,1) + Kd * (target_vel.reshape(-1,1) - jac @ dq)
 
         # define decision variables (create fresh variables each time)
         nu = model.nu
@@ -563,26 +546,30 @@ def impedance_control(model_name, model, data, invariants, target_vel, target_ac
     return u.copy()
 
 def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twist, jac, M, dJ_dt, previous_solution=None):
+    Pe = invariants['Pe']
+    e = invariants['e']
     F = invariants['F']
     G = invariants['G']
     m = invariants['m']
+    Kp = invariants['Kp']
+    Kd = invariants['Kd']
+
+    # eta_0 (numeric)
+    eta_0 = np.concatenate((-twist, jac @ data.qvel - target_vel)).reshape(2*m, 1)
+
+    N = 10  # prediction horizon
+    gamma = 0.9
+    dt = 0.005
+
+    # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
+    eta_target = np.zeros((2*m, 1))
+
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
 
     if model_name == 'tendon':
-        Pe = invariants['Pe']
         pinv_B = invariants['pinv_B']
         Bp = invariants['Bp']
-        e = invariants['e']
-        Kp = invariants['Kp']
-        Kd = invariants['Kd']
-
-        # eta_0 (numeric)
-        eta_0 = np.concatenate((-twist, jac @ data.qvel - target_vel)).reshape(2*m, 1)
-
-        N = 10  # prediction horizon
-        gamma = 0.9
-        dt = 0.005
 
         # Define decision variables (create fresh variables each time)
         nu = 2
@@ -591,9 +578,6 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
         mu   = cp.Variable((m, N))      # mu[:,k] = mu_k
         u_k  = cp.Variable((nu, N))     # single applied control (keep as you had)
         eta_k = cp.Variable((2*m, N))    # eta_k[:,k] = eta at step k
-
-        # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
-        eta_target = np.zeros((2*m, 1))
 
         # Initial condition constraint
         constraints = []
@@ -643,20 +627,9 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             return previous_solution, u_k.value[:, 0]
     
     elif model_name == 'helix':
-        Pe = invariants['Pe']
         B = invariants['B']
         pinv_B = invariants['pinv_B']
         sel = invariants['sel']
-        e = invariants['e']
-        Kp = invariants['Kp']
-        Kd = invariants['Kd']
-
-        # eta_0 (numeric)
-        eta_0 = np.concatenate((-twist, jac @ data.qvel - target_vel)).reshape(2*m, 1)
-
-        N = 10  # prediction horizon
-        gamma = 0.9
-        dt = 0.005
 
         # Define decision variables (create fresh variables each time)
         nu = 9
@@ -665,9 +638,6 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
         mu   = cp.Variable((m, N))      # mu[:,k] = mu_k
         u_k  = cp.Variable((nu, N))     # single applied control (keep as you had)
         eta_k = cp.Variable((2*m, N))    # eta_k[:,k] = eta at step k
-
-        # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
-        eta_target = np.zeros((2*m, 1))
 
         # Initial condition constraint
         constraints = []
@@ -717,11 +687,7 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             return previous_solution, u_k.value[:, 0]
     
     elif model_name == 'spirob':
-        Pe = invariants['Pe']
         sel = invariants['sel']
-        e = invariants['e']
-        Kp = invariants['Kp']
-        Kd = invariants['Kd']
 
         # Sprirob input matrix depends on current configuration, so we compute it at the current state
         nv, nu = model.nv, model.nu
@@ -738,15 +704,7 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             data_temp.ctrl[i] = 1.0
             mujoco.mj_forward(model, data_temp)
             B[:, i] = data_temp.qfrc_actuator.copy()
-
         pinv_B = np.linalg.pinv(B)
-
-        # eta_0 (numeric)
-        eta_0 = np.concatenate((-twist, jac @ data.qvel - target_vel)).reshape(2*m, 1)
-
-        N = 10  # prediction horizon
-        gamma = 0.9
-        dt = 0.005
 
         # Define decision variables (create fresh variables each time)
         nu = model.nu
@@ -755,9 +713,6 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
         mu   = cp.Variable((m, N))      # mu[:,k] = mu_k
         u_k  = cp.Variable((nu, N))     # single applied control (keep as you had)
         eta_k = cp.Variable((2*m, N))    # eta_k[:,k] = eta at step k
-
-        # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
-        eta_target = np.zeros((2*m, 1))
 
         # Initial condition constraint
         constraints = []
@@ -880,9 +835,6 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
     # except Exception as e:
     #     print(f"failed convergence - exception: {e}\n")
     #     return previous_solution
-
-
-
 
 def simulate_model(headless=False,control_scheme=None, target_pos=None,controller=None, experiment = None, model_name=None):
     
