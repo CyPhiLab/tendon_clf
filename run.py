@@ -130,36 +130,16 @@ if __name__ == "__main__":
     if args.no_plots:
         print("Skipping plot generation")
         exit(0)
-        
+    
+    csv_path = save_results(experiment=args.experiment, 
+                            control_scheme=args.control_scheme, 
+                            model_name=args.robot, 
+                            target_pos=args.target_pos, 
+                            time_log=time_log,
+                            sim_ts=sim_ts, 
+                            V_log=V_log if args.control_scheme == 'id_clf_qp' else None, 
+                            task_error_log=task_error_log, u_log=u_log)
 
-
-    # Save control inputs and task error to CSV
-    if args.control_scheme == 'id_clf_qp':
-        V_log = np.array(V_log)
-    u_log = np.array(u_log)
-    time_log_csv = np.array(time_log)
-    sim_time_csv = np.array(sim_ts['ts'])
-    error_log = np.array(task_error_log)
-    df = pd.DataFrame(
-        u_log,
-        columns=[f"u{i}" for i in range(u_log.shape[1])]
-    )
-    df.insert(0, "time", time_log_csv)
-    df.insert(1, "sim_time", sim_time_csv)
-    if args.control_scheme == 'id_clf_qp':
-        df.insert(2, "lyapunov_V", V_log)
-    df.insert(3, "task_error", error_log)
-    # Create results directory if it doesn't exist
-    if args.experiment == 'set':
-        os.makedirs(f"results/{args.robot}/{args.control_scheme}", exist_ok=True)
-    if args.experiment == 'tracking':
-        os.makedirs(f"results/{args.robot}/{args.control_scheme}", exist_ok=True)
-    if args.experiment == 'set':
-        csv_path = f"results/{args.robot}/{args.control_scheme}/{args.experiment}_{args.control_scheme}_{args.target_pos}.csv"
-    if args.experiment == 'tracking':
-        csv_path = f"results/{args.robot}/{args.control_scheme}/{args.experiment}_{args.control_scheme}.csv"
-    df.to_csv(csv_path, index=False)
-    print(f"Saved CSV to {csv_path}")
 
     # #Lyapunov Function Over Time – shows how stability evolves.
     # plt.figure()

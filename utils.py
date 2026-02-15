@@ -122,7 +122,7 @@ def circular_trajectory(t, model_name):
         R = L/2
         h = 0.7 - 2*L
     elif model_name == 'tendon':
-        L = -0.24/2
+        L = 0.24/2
         R = L/2
         h = 0
     elif model_name == 'spirob':
@@ -131,7 +131,7 @@ def circular_trajectory(t, model_name):
         h = 0
 
     # Circle parameters
-    cx, cy, cz = L, 0, L+h
+    cx, cy, cz = L, 0, -L+h
     r = R
 
     # Angle
@@ -166,11 +166,11 @@ def set_target(target_pos, model_name):
         R = L/2
         h = 0.7 - 2*L
     elif model_name == 'tendon':
-        L = -0.24/2
+        L = 0.24/2
         R = L/2
-        h = 0
+        h = -2*L
     elif model_name == 'spirob':
-        L = 0.5/2
+        L = 0.48/2
         R = L/2
         h = 0
 
@@ -178,6 +178,7 @@ def set_target(target_pos, model_name):
     pos2 = np.array([L+R, 0.0, L+h])
     pos3 = np.array([L, 0.0, L+R+h])
     pos4 = np.array([L, 0.0, L-R+h])
+
 
     targets = {
         'pos1': pos1,
@@ -207,7 +208,7 @@ def precompute_invariants(model, model_name=None):
         Pe = linalg.block_diag(np.eye(m) / e, np.eye(m)).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m))
         Kp = 500
         Kd = 2 * np.sqrt(Kp)
-        damping = 0.01
+        damping = 0.02
         stiffness = 0.01
 
         return {
@@ -331,8 +332,12 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
         qdd = cp.Variable(shape=(nq, 1))
         dl = cp.Variable(shape=(1, 1))
 
-        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
-                                + 0.02 * cp.square(cp.norm(qdd))  + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
+        # # Null-space projection to handle redundancy
+        # N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
+        # qdd_null = N @ qdd
+
+        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + 0.02 * cp.square(cp.norm(qdd))  
+                                + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
 
         # Vdot for our main CLF
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc.reshape(-1,1))
@@ -462,7 +467,7 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc.reshape(-1,1))
 
         objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
-                                + 0.2 * cp.square(cp.norm(qdd))  + 0.5 * cp.square(cp.norm(u)) 
+                                + 0.2 * cp.square(cp.norm(qdd))  + 0.2 * cp.square(cp.norm(u)) 
                                 + 0.5 * cp.square(cp.norm(qdd_null)) + 1000 * cp.square(dl)) 
 
         constraints = [ dV <= - 1/e * V + dl, 
@@ -558,7 +563,7 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
     eta_0 = np.concatenate((-twist, jac @ data.qvel - target_vel)).reshape(2*m, 1)
 
     N = 10  # prediction horizon
-    gamma = 0.9
+    gamma = 0.95
     dt = 0.005
 
     # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
@@ -589,13 +594,14 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             constraints += [eta_k[:, k+1:k+2] == eta_k[:, k:k+1] + dt * (F @ eta_k[:, k:k+1] + G @ mu[:, k:k+1])]
             constraints += [mu[:, k:k+1] == jac @ qdd_k[:, k:k+1] + dJ_dt @ dq - target_acc.reshape(-1,1)] 
             constraints += [pinv_B @ (M @ qdd_k[:, k:k+1] + data.qfrc_bias.reshape(-1,1) 
-                                      + data.qfrc_passive.reshape(-1,1)) == u_k[:, k:k+1]]
+                                       - data.qfrc_passive.reshape(-1,1)) == u_k[:, k:k+1]]
             constraints += [-1 <= u_k[:, k:k+1], u_k[:, k:k+1] <= 1 * np.ones((nu, 1))]
+            dq = dq + qdd_k[:, k:k+1] * dt  # Euler integration for velocity
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
-            mu_des_k = - Kp * eta_k[0:m, k:k+1] - 2 * Kd * eta_k[m:2*m, k:k+1]
+            mu_des_k = - Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
             objective += (gamma**k) * (cp.sum_squares(mu_k1 - mu_des_k) + cp.sum_squares(eta_k1 - eta_target) 
-                                    + 0.1 * cp.sum_squares(u_k[:, k:k+1]) + 0.1 * cp.sum_squares(qdd_k[:, k:k+1]))
+                                    + 0.02 * cp.sum_squares(u_k[:, k:k+1]) + 0.02 * cp.sum_squares(qdd_k[:, k:k+1]))
 
         # Terminal penalty (use eta_k at terminal, not eta_next)
         eta_N = eta_k[:, N-1:N]
@@ -653,7 +659,7 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             constraints += [-25 * sel <= u_k[:, k:k+1], u_k[:, k:k+1] <= 25 * np.ones((nu, 1))]
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
-            mu_des_k = - Kp * eta_k[0:m, k:k+1] - 2*Kd * eta_k[m:2*m, k:k+1]
+            mu_des_k = - Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
             objective += (gamma**k) * (cp.sum_squares(mu_k1 - mu_des_k) + cp.sum_squares(eta_k1 - eta_target) 
                                     + 0.1 * cp.sum_squares(u_k[:, k:k+1]) + 0.1 * cp.sum_squares(qdd_k[:, k:k+1]))
 
@@ -724,11 +730,11 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             constraints += [eta_k[:, k+1:k+2] == eta_k[:, k:k+1] + dt * (F @ eta_k[:, k:k+1] + G @ mu[:, k:k+1])]
             constraints += [mu[:, k:k+1] == jac @ qdd_k[:, k:k+1] + dJ_dt @ dq - target_acc.reshape(-1,1)] 
             constraints += [pinv_B @ (M @ qdd_k[:, k:k+1] + data.qfrc_bias.reshape(-1,1) 
-                                      + data.qfrc_passive.reshape(-1,1)) == u_k[:, k:k+1]]
+                                      - data.qfrc_passive.reshape(-1,1)) == u_k[:, k:k+1]]
             constraints += [np.zeros((nu,1)) >= u_k[:, k:k+1]]
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
-            mu_des_k = -Kp * eta_k[0:m, k:k+1] - 2*Kd * eta_k[m:2*m, k:k+1]
+            mu_des_k = -Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
             objective += (gamma**k) * (cp.sum_squares(mu_k1 - mu_des_k) + cp.sum_squares(eta_k1 - eta_target) 
                                     + 0.1 * cp.sum_squares(u_k[:, k:k+1]) + 0.1 * cp.sum_squares(qdd_k[:, k:k+1]))
 
@@ -760,81 +766,6 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
         except Exception as e:
             print(f"failed convergence - exception: {e}\n")
             return previous_solution, u_k.value[:, 0]
-
-    # # eta_0 (numeric)
-    # eta_0 = np.concatenate((-twist, jac @ data.qvel)).reshape(6, 1)
-
-    # N = 10  # prediction horizon
-    # gamma = 0.9
-    # dt = 1.0 / 2000
-
-    # # Define decision variables (create fresh variables each time)
-    # nu = 2
-    # mu = cp.Variable(shape=(3, N))      # mu[:,k] = mu_k
-    # u_k  = cp.Variable((nu, 1))     # single applied control (keep as you had)
-    # eta_k = cp.Variable((6, N))    # eta_k[:,k] = eta at step k
-
-    # # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
-    # eta_target = np.zeros((6, 1))
-
-    # # qdd must be a CVXPY expression (and keep only k=0 since you apply u_k once)
-    # Jpinv = cp.Constant(np.linalg.pinv(jac))
-    # qdd = Jpinv @ (mu[:, 0:1] - dJ_dt @ dq)   # (nv x 1)
-
-    # # Initial condition constraint
-    # constraints = []
-    # constraints += [eta_k[:, 0:1] == eta_0]
-    # objective = 0.0
-
-    # # Linear discrete dynamics rollout as constraints
-    # for k in range(N - 1):
-    #     constraints += [eta_k[:, k+1:k+2] == eta_k[:, k:k+1] + dt * (F @ eta_k[:, k:k+1] + G @ mu[:, k:k+1])]
-    #     eta_k1 = eta_k[:, k+1:k+2]
-    #     mu_k1  = mu[:, k:k+1]
-    #     mu_des_k = -Kp * eta_k[0:3, k:k+1] - Kd * eta_k[3:6, k:k+1]
-    #     objective += (gamma**k) * (cp.sum_squares(mu_k1 - mu_des_k) + (gamma**k)*cp.sum_squares(eta_k1 - eta_target))
-
-    # # Terminal penalty (use eta_k at terminal, not eta_next)
-    # eta_N = eta_k[:, N-1:N]
-    # objective += 10*cp.quad_form(eta_N, Pe)
-    # objective = cp.Minimize(objective + 0.2 * cp.sum_squares(u_k) )# + 0.2 * cp.square(cp.norm(qdd)))
-
-    # # Inverse dynamics constraint
-    # constraints += [pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u_k,
-    #     -1.0 <= u_k,
-    #     1.0 >= u_k,
-    # ]
-
-    # prob = cp.Problem(objective=objective, constraints=constraints)
-    
-    # # Warm start with previous solution if available
-    # if previous_solution is not None:
-    #     try:
-    #         u_k.value = previous_solution['u']
-    #         qdd.value = previous_solution['qdd'] 
-    #     except:
-    #         pass  # If warm start fails, proceed without it
-    # try:
-    #     prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
-
-    #     if u_k.value is not None:
-    #         u = u_k.value.copy()
-
-    #         # data.ctrl[:] = np.squeeze(u_tendon)
-    #         data.ctrl[:] = np.squeeze(Bp @ u)
-
-    #         current_solution = {
-    #             'u': u.copy(),
-    #         }
-
-    #         return current_solution, u.copy()
-
-    #     else:
-    #         print(f"failed convergence - no solution\n")
-    #         return previous_solution
-    # except Exception as e:
-    #     print(f"failed convergence - exception: {e}\n")
-    #     return previous_solution
 
 def simulate_model(headless=False,control_scheme=None, target_pos=None,controller=None, experiment = None, model_name=None):
     
@@ -1006,3 +937,35 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
         return V_log, task_error_log, time_log, sim_ts, u_log
     else:
         return task_error_log, time_log, sim_ts, u_log
+    
+def save_results(experiment, control_scheme, model_name, task_error_log, time_log, sim_ts, u_log, V_log=None, target_pos=None):
+    # Save control inputs and task error to CSV
+    if control_scheme == 'id_clf_qp':
+        V_log = np.array(V_log)
+    u_log = np.array(u_log)
+    time_log_csv = np.array(time_log)
+    sim_time_csv = np.array(sim_ts['ts'])
+    error_log = np.array(task_error_log)
+    df = pd.DataFrame(
+        u_log,
+        columns=[f"u{i}" for i in range(u_log.shape[1])]
+    )
+    df.insert(0, "time", time_log_csv)
+    df.insert(1, "sim_time", sim_time_csv)
+    if control_scheme == 'id_clf_qp':
+        df.insert(2, "lyapunov_V", V_log)
+    df.insert(3, "task_error", error_log)
+    
+    # Create results directory if it doesn't exist
+    if experiment == 'set':
+        os.makedirs(f"results/{model_name}/{control_scheme}", exist_ok=True)
+    if experiment == 'tracking':
+        os.makedirs(f"results/{model_name}/{control_scheme}", exist_ok=True)
+    if experiment == 'set':
+        csv_path = f"results/{model_name}/{control_scheme}/{experiment}_{control_scheme}_{target_pos}.csv"
+    if experiment == 'tracking':
+        csv_path = f"results/{model_name}/{control_scheme}/{experiment}_{control_scheme}.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"Saved CSV to {csv_path}")
+
+    return csv_path

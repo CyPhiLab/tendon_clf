@@ -30,7 +30,7 @@ mjcf = """
 
     <worldbody>
         <camera name="side_view" pos="0 0.1 0.05" xyaxes="1 0 0  0 0 1"/>
-        <body name="link1" pos="0 0 0">
+        <body name="link1" pos="0 0 0.24">
             <joint name="joint1" />
             <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
             <body name="link2" pos="0.06 0 0">
@@ -42,7 +42,7 @@ mjcf = """
                     <body name="link4" pos="0.06 0 0">
                         <joint name="joint4"/>
                         <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
-                        <body name="attachment" pos="0.03 0.0 0.0">
+                        <body name="attachment" pos="0.0 0.0 0.0">
                               <site name="ee" rgba="1 0 0 1" size="0.001" group="1"/>
                         </body>
                     </body>
@@ -125,24 +125,63 @@ w = 2 * np.pi / T
 # # Print actuator matrix
 # B = compute_B_matrix(model, data)
 B = np.array([[0.1, 0.0], [0.1, 0.0], [0.0, 0.1], [0.0, 0.1]])
+Bp = np.array([[1, 0.0], [-1, 0.0], [0.0, 1], [0.0, -1]])
 
 
+
+# def circular_trajectory(t):
+#     """
+#     Circular trajectory through the 4 given points.
+#     One full revolution in time T.
+#     """
+
+#     L = 0.24/2
+#     R = L/2
+#     h = 0
+
+#     # Circle parameters
+#     cx, cy, cz = L, 0, -L+h
+#     r = R
+
+#     # Angle
+#     omega = 0.5 * np.pi 
+#     theta = omega * t
+
+#     # Position
+#     x = cx + r * np.cos(theta)
+#     y = cy
+#     z = cz + r * np.sin(theta)
+
+#     # Velocity
+#     xd = -r * omega * np.sin(theta)
+#     yd = 0.0
+#     zd =  r * omega * np.cos(theta)
+
+#     # Acceleration
+#     xdd = -r * omega**2 * np.cos(theta)
+#     ydd = 0.0
+#     zdd = -r * omega**2 * np.sin(theta)
+
+#     pos = np.array([x, y, z])
+#     vel = np.array([xd, yd, zd])
+#     acc = np.array([xdd, ydd, zdd])
+
+#     return {"pos": pos, "vel": vel, "acc": acc}
 def circular_trajectory(t):
     """
     Circular trajectory through the 4 given points.
     One full revolution in time T.
     """
-
     L = 0.24/2
     R = L/2
     h = 0
 
     # Circle parameters
-    cx, cy, cz = L, 0, -L+h
+    cx, cy, cz = L, 0, L+h
     r = R
 
     # Angle
-    omega = 0.5 * np.pi 
+    omega = 0.25 * np.pi 
     theta = omega * t
 
     # Position
@@ -165,7 +204,6 @@ def circular_trajectory(t):
     acc = np.array([xdd, ydd, zdd])
 
     return {"pos": pos, "vel": vel, "acc": acc}
-
 # print(B)
 
 def get_coriolis_and_gravity(model, data):
@@ -358,7 +396,7 @@ def controller(model, data, invariants, previous_solution=None, trajectory=None)
 
     # qdd must be a CVXPY expression (and keep only k=0 since you apply u_k once)
     Jpinv = cp.Constant(np.linalg.pinv(jac))
-    qdd = Jpinv @ (mu[:, 0:1] - dJ_dt @ dq)   # (nv x 1)
+    qdd = Jpinv @ (mu[:, 0:1] - dJ_dt @ dq )   # (nv x 1)
 
     # Initial condition constraint
     constraints = []
@@ -413,7 +451,7 @@ def controller(model, data, invariants, previous_solution=None, trajectory=None)
             ])
 
             # data.ctrl[:] = np.squeeze(u_tendon)
-            data.ctrl[:] = u_tendon
+            data.ctrl[:] = Bp @ u_k.value.flatten()
 
             current_solution = {
                 'u': u_opt,

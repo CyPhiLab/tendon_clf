@@ -22,7 +22,7 @@
                     <body name="link4" pos="0.06 0 0">
                         <joint name="joint4"/>
                         <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
-                        <body name="attachment" pos="0.03 0.0 0.0">
+                        <body name="attachment" pos="0.00 0.0 0.0">
                               <site name="ee" rgba="1 0 0 1" size="0.001" group="1"/>
                         </body>
                     </body>

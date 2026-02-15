@@ -1,0 +1,9 @@
+Robot,Controller,Experiment,Avg Final Error ± std,Max Control Input,Control Limit
+Spirob,MPC,Static Point Tracking,0.1203 ± 0.0828,22.170,u ≤ 0
+Spirob,ID_CLF_QP,Static Point Tracking,0.0439 ± 0.0336,1140.495,u ≤ 0
+Tendon,MPC,Static Point Tracking,0.4054 ± 0.0000,0.630,-1 ≤ u ≤ 1
+Tendon,IMPEDANCE,Static Point Tracking,0.0000 ± 0.0000,7.886,-1 ≤ u ≤ 1
+Tendon,ID_CLF_QP,Static Point Tracking,0.0243 ± 0.0126,1.009,-1 ≤ u ≤ 1
+Helix,MPC,Static Point Tracking,0.0531 ± 0.0418,25.000,-25 ≤ u ≤ 25
+Helix,IMPEDANCE,Static Point Tracking,0.1568 ± 0.0000,4.928,-25 ≤ u ≤ 25
+Helix,ID_CLF_QP,Static Point Tracking,0.0540 ± 0.0387,13.806,-25 ≤ u ≤ 25

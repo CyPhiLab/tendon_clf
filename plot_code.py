@@ -2,365 +2,317 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
+import os
+
+# -------- Paper style (sans serif) --------
 plt.rcParams.update({
-    "font.size": 16,          # base font
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+    "mathtext.fontset": "dejavusans",
+    "font.size": 16,
     "axes.titlesize": 18,
     "axes.labelsize": 18,
     "xtick.labelsize": 14,
     "ytick.labelsize": 14,
-    "legend.fontsize": 16,
+    "legend.fontsize": 14,
 })
 
-# ============================================================
-# Helper: Load logs from one robot
-# ============================================================
+def load_single_csv(file):
 
-def load_robot_logs(pattern):
+    df = pd.read_csv(file)
 
-    files = sorted(glob.glob(pattern))
-    if len(files) == 0:
-        raise RuntimeError(f"No files found for pattern: {pattern}")
+    # --- required columns ---
+    t = df["time"].values
 
-    time_list, V_list, error_list, u_list = [], [], [], []
+    # Lyapunov (some controllers might not have it)
+    if "lyapunov_V" in df.columns:
+        V = df["lyapunov_V"].values
+    else:
+        V = None
+
+    # task error (always exists)
+    error = df["task_error"].values
+
+    # control inputs (any number of actuators)
+    u_cols = [c for c in df.columns if c.startswith("u")]
+    u = df[u_cols].values if len(u_cols) > 0 else None
+
+    return t, V, error, u
+
+
+def process_set_experiment(files):
+
+    time_list, V_list, err_list = [], [], []
+    has_V = True
 
     for f in files:
-        print("Loading:", f)
-        df = pd.read_csv(f)
-
-        t     = df.iloc[:, 0].values
-        V     = df.iloc[:, 1].values
-        error = df.iloc[:, 2].values
-        u     = df.iloc[:, 3:].values
+        print("SET:", f)
+        t, V, e, _ = load_single_csv(f)
 
         time_list.append(t)
-        V_list.append(V)
-        error_list.append(error)
-        u_list.append(u)
+        err_list.append(e)
 
-    return time_list, V_list, error_list, u_list
+        if V is None:
+            has_V = False
+        else:
+            V_list.append(V)
 
-
-# ============================================================
-# Helper: Interpolate + Mean/Std
-# ============================================================
-
-def interpolate_and_average(time_list, V_list, error_list, u_list):
-
+    # common time grid
     t_min = max(t[0] for t in time_list)
     t_max = min(t[-1] for t in time_list)
-
     N = max(len(t) for t in time_list)
     t_grid = np.linspace(t_min, t_max, N)
 
-    V_interp, err_interp, u_interp = [], [], []
+    # --- error always exists ---
+    err_interp = [
+        np.interp(t_grid, t, e)
+        for t, e in zip(time_list, err_list)
+    ]
 
-    for t, V, err, u in zip(time_list, V_list, error_list, u_list):
+    result = {
+        "time": t_grid,
+        "err_mean": np.mean(err_interp, axis=0),
+        "err_std":  np.std(err_interp, axis=0),
+    }
 
-        # Normalize V by initial value
-        V_norm = V / V[0]
+    # --- Lyapunov only if available ---
+    if has_V:
+        V_interp = [
+            np.interp(t_grid, t, V/V[0])
+            for t, V in zip(time_list, V_list)
+        ]
 
-        V_interp.append(np.interp(t_grid, t, V_norm))
-        err_interp.append(np.interp(t_grid, t, err))
+        result["V_mean"] = np.mean(V_interp, axis=0)
+        result["V_std"]  = np.std(V_interp, axis=0)
 
-        u_i = np.zeros((len(t_grid), u.shape[1]))
-        for j in range(u.shape[1]):
-            u_i[:, j] = np.interp(t_grid, t, u[:, j])
+    return result
 
-        u_interp.append(u_i)
+def process_tracking_experiment(file):
 
-    V_interp   = np.array(V_interp)
-    err_interp = np.array(err_interp)
-    u_interp   = np.array(u_interp)
+    print("TRACK:", file)
+    t, V, e, _ = load_single_csv(file)
 
-    V_mean, V_std     = np.mean(V_interp, axis=0), np.std(V_interp, axis=0)
-    err_mean, err_std = np.mean(err_interp, axis=0), np.std(err_interp, axis=0)
+    result = {"time": t, "error": e}
 
-    u_mean = np.mean(u_interp, axis=0)
-    u_std  = np.std(u_interp, axis=0)
+    if V is not None:
+        result["V"] = V / V[0]
 
-    return t_grid, V_mean, V_std, err_mean, err_std, u_mean, u_std
+    return result
 
 
-# ============================================================
-# Load ALL robots
-# ============================================================
+def load_all_results(root="results"):
 
-helix_time, helix_V, helix_err, helix_u = load_robot_logs(
-    "helix_id_clf_qp_pos*.csv"
-)
+    robots = {}
 
-tendon_time, tendon_V, tendon_err, tendon_u = load_robot_logs(
-    "tendon_id_clf_qp_pos*.csv"
-)
+    for robot in os.listdir(root):
 
-spirob_time, spirob_V, spirob_err, spirob_u = load_robot_logs(
-    "spirob_id_clf_qp_pos*.csv"
-)
+        robot_path = os.path.join(root, robot)
+        if not os.path.isdir(robot_path):
+            continue
 
-# helix_time, helix_V, helix_err, helix_u = load_robot_logs(
-#     "helix_id_clf_qp_tracking.csv"
-# )
+        robots[robot] = {}
 
-# tendon_time, tendon_V, tendon_err, tendon_u = load_robot_logs(
-#     "tendon_id_clf_qp_tracking.csv"
-# )
+        for ctrl in os.listdir(robot_path):
 
-# spirob_time, spirob_V, spirob_err, spirob_u = load_robot_logs(
-#     "spirob_id_clf_qp_tracking.csv"
-# )
+            ctrl_path = os.path.join(robot_path, ctrl)
+            if not os.path.isdir(ctrl_path):
+                continue
 
-# ============================================================
-# Process ALL robots
-# ============================================================
+            set_files = sorted(glob.glob(os.path.join(ctrl_path, "set_*.csv")))
+            track_files = glob.glob(os.path.join(ctrl_path, "tracking*.csv"))
 
-tA, VA_mean, VA_std, eA_mean, eA_std, uA_mean, uA_std = interpolate_and_average(
-    helix_time, helix_V, helix_err, helix_u
-)
+            if len(set_files) == 0:
+                continue
 
-tB, VB_mean, VB_std, eB_mean, eB_std, uB_mean, uB_std = interpolate_and_average(
-    tendon_time, tendon_V, tendon_err, tendon_u
-)
+            robots[robot][ctrl] = {}
 
-tC, VC_mean, VC_std, eC_mean, eC_std, uC_mean, uC_std = interpolate_and_average(
-    spirob_time, spirob_V, spirob_err, spirob_u
-)
+            # SET
+            robots[robot][ctrl]["set"] = process_set_experiment(set_files)
 
+            # TRACKING
+            if len(track_files) > 0:
+                robots[robot][ctrl]["tracking"] = process_tracking_experiment(track_files[0])
 
-# # ============================================================
-# # Plot 1: Task Error Comparison
-# # ============================================================
+    return robots
 
-# plt.figure(figsize=(8,5))
+def plot_set_clf(robots):
 
-# plt.plot(tA, eA_mean, linewidth=2, label="Helix Error")
-# plt.fill_between(tA, eA_mean - eA_std, eA_mean + eA_std, alpha=0.2)
+    for robot, controllers in robots.items():
 
-# plt.plot(tB, eB_mean, linewidth=2, label="Tendon Error")
-# plt.fill_between(tB, eB_mean - eB_std, eB_mean + eB_std, alpha=0.2)
+        plt.figure(figsize=(8,5))
+        plotted_any = False
 
-# plt.plot(tC, eC_mean, linewidth=2, label="Spirob Error")
-# plt.fill_between(tC, eC_mean - eC_std, eC_mean + eC_std, alpha=0.2)
+        for ctrl, data in controllers.items():
 
-# plt.xlabel("Time (s)")
-# plt.ylabel("Task Error (m)")
-# plt.grid(True)
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
+            # ---- skip controllers without Lyapunov ----
+            if "V_mean" not in data["set"]:
+                continue
 
+            t = data["set"]["time"]
+            V = data["set"]["V_mean"]
+            S = data["set"]["V_std"]
 
-# ============================================================
-# Plot 2: Normalized CLF Comparison V/V(0)
-# ============================================================
+            plt.plot(t, V, linewidth=3, label=ctrl)
+            plt.fill_between(t, V-S, V+S, alpha=0.25)
 
-plt.figure(figsize=(8,5))
+            plotted_any = True
 
-plt.plot(tA, VA_mean, linewidth=4, label="Helix")
-plt.fill_between(tA, VA_mean - VA_std, VA_mean + VA_std, alpha=0.3)
+        if not plotted_any:
+            plt.close()
+            continue
 
-plt.plot(tB, VB_mean, linewidth=4, label="Tendon")
-plt.fill_between(tB, VB_mean - VB_std, VB_mean + VB_std, alpha=0.3)
+        plt.title(f"{robot.upper()} — Lyapunov Convergence")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Normalized Lyapunov Function")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
-plt.plot(tC, VC_mean, linewidth=4, label="Spirob")
-plt.fill_between(tC, VC_mean - VC_std, VC_mean + VC_std, alpha=0.3)
 
-plt.xlabel("Time (s)")
-plt.ylabel("Normalized Lyapunov Function ")
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
+def plot_tracking_error(robots):
 
+    for robot, controllers in robots.items():
 
-# # ============================================================
-# # Plot 3: Mean Control Effort Comparison
-# # ============================================================
+        plt.figure(figsize=(8,5))
 
-# uA_scalar_mean = np.mean(uA_mean, axis=1)
-# uB_scalar_mean = np.mean(uB_mean, axis=1)
-# uC_scalar_mean = np.mean(uC_mean, axis=1)
+        for ctrl, data in controllers.items():
 
-# uA_scalar_std  = np.mean(uA_std, axis=1)
-# uB_scalar_std  = np.mean(uB_std, axis=1)
-# uC_scalar_std  = np.mean(uC_std, axis=1)
+            if "tracking" not in data:
+                continue
 
-# plt.figure(figsize=(8,5))
+            t = data["tracking"]["time"]
+            e = data["tracking"]["error"]
 
-# plt.plot(tA, uA_scalar_mean, linewidth=2, label="Helix Control")
-# plt.fill_between(tA,
-#                  uA_scalar_mean - uA_scalar_std,
-#                  uA_scalar_mean + uA_scalar_std,
-#                  alpha=0.2)
+            plt.plot(t, e, linewidth=3, label=ctrl)
 
-# plt.plot(tB, uB_scalar_mean, linewidth=2, linestyle="--", label="Tendon Control")
-# plt.fill_between(tB,
-#                  uB_scalar_mean - uB_scalar_std,
-#                  uB_scalar_mean + uB_scalar_std,
-#                  alpha=0.2)
+        plt.title(f"{robot.upper()} — Tracking Experiment")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Task Error (m)")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
-# plt.plot(tC, uC_scalar_mean, linewidth=2, linestyle=":", label="Spirob Control")
-# plt.fill_between(tC,
-#                  uC_scalar_mean - uC_scalar_std,
-#                  uC_scalar_mean + uC_scalar_std,
-#                  alpha=0.2)
+def compute_rtf(df):
+    return df["sim_time"].iloc[-1] / df["time"].iloc[-1]
 
-# plt.xlabel("Time (s)")
-# plt.ylabel("Mean Control Input")
-# plt.title("Mean Control Effort Comparison")
-# plt.grid(True)
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
+def max_control_input(df):
+    u_cols = [c for c in df.columns if c.startswith("u")]
+    if len(u_cols) == 0:
+        return np.nan
+    return np.abs(df[u_cols].values).max()
 
 
-# -------------------------------------------------------------
+def final_error(df):
+    return df["task_error"].iloc[-1]
 
-# import pandas as pd
-# import matplotlib.pyplot as plt
-# import os
 
-# # ============================================================
-# # User: Put all your CSV files in the same folder as this script
-# # ============================================================
+def mse_error(df):
+    e = df["task_error"].values
+    return np.mean(e**2)
 
-# controller_files = {
-#     "MPC": "helix_mpc_tracking.csv",
-#     "OSC": "helix_osc_tracking.csv",
-#     "Impedance": "helix_impedance_tracking.csv",
-#     "ID-CLF-QP": "helix_id_clf_qp_tracking.csv"
-# }
+def summarize_set(files):
 
-# # ============================================================
-# # 1) Load all controller logs
-# # ============================================================
+    finals = []
+    max_inputs = []
 
-# data = {}
+    for f in files:
+        df = pd.read_csv(f)
 
-# print("\nLoading controller CSV logs...\n")
+        finals.append(final_error(df))
+        max_inputs.append(max_control_input(df))
 
-# for name, filename in controller_files.items():
+    return {
+        "final_mean": np.mean(finals),
+        "final_std":  np.std(finals),
+        "max_input":  np.max(max_inputs)
+    }
 
-#     if not os.path.exists(filename):
-#         print(f"❌ File not found: {filename}")
-#         continue
+def summarize_tracking(file):
 
-#     df = pd.read_csv(filename)
-#     data[name] = df
+    df = pd.read_csv(file)
 
-#     print(f"✅ Loaded: {filename} ({len(df)} rows)")
+    return {
+        "mse": mse_error(df),
+        "rtf": compute_rtf(df),
+        "max_input": max_control_input(df)
+    }
 
-# # ============================================================
-# # 2) Plot Task Error Over Time
-# # ============================================================
+CONTROL_LIMITS = {
+    "tendon": "-1 ≤ u ≤ 1",
+    "helix": "-25 ≤ u ≤ 25",
+    "spirob": "u ≤ 0"
+}
 
-# plt.figure(figsize=(9,6))
+def generate_report(root="results"):
 
-# for name, df in data.items():
-#     plt.plot(df["time"], df["task_error"], label=name)
+    set_rows = []
+    track_rows = []
 
-# plt.xlabel("Time (s)")
-# plt.ylabel("Task Error (m)")
-# # plt.title("Task-Space Error Over Time (4 Controllers)")
-# plt.legend()
-# # plt.grid(True)
-# plt.tight_layout()
-# plt.show()
+    for robot in os.listdir(root):
 
-# # ============================================================
-# # 3) Create Summary Table Report
-# # ============================================================
+        robot_path = os.path.join(root, robot)
+        if not os.path.isdir(robot_path):
+            continue
 
-# rows = []
+        for ctrl in os.listdir(robot_path):
 
-# for name, df in data.items():
+            ctrl_path = os.path.join(robot_path, ctrl)
+            if not os.path.isdir(ctrl_path):
+                continue
 
-#     # --- Average task error ---
-#     avg_error = df["task_error"].mean()
+            set_files = sorted(glob.glob(os.path.join(ctrl_path, "set_*.csv")))
+            track_files = glob.glob(os.path.join(ctrl_path, "tracking*.csv"))
 
-#     # --- Extract control input columns u0,u1,... ---
-#     u_cols = [c for c in df.columns if c.startswith("u")]
+            # ---------- SET ----------
+            if len(set_files) > 0:
+                s = summarize_set(set_files)
 
-#     # --- Max/Min input across all actuators ---
-#     max_input = df[u_cols].max().max()
-#     min_input = df[u_cols].min().min()
+                set_rows.append([
+                    robot.capitalize(),
+                    ctrl.upper(),
+                    "Static Point Tracking",
+                    f"{s['final_mean']:.4f} ± {s['final_std']:.4f}",
+                    f"{s['max_input']:.3f}",
+                    CONTROL_LIMITS.get(robot, "")
+                ])
 
-#     rows.append([name, avg_error, max_input, min_input])
+            # ---------- TRACK ----------
+            if len(track_files) > 0:
+                t = summarize_tracking(track_files[0])
 
-# # Build table
-# summary = pd.DataFrame(
-#     rows,
-#     columns=["Control Scheme", "Avg Error Over Time (m)", "Max Input", "Min Input"]
-# )
+                track_rows.append([
+                    robot.capitalize(),
+                    ctrl.upper(),
+                    "Trajectory Tracking",
+                    f"{t['mse']:.5f}",
+                    f"{t['rtf']:.2f}x",
+                    f"{t['max_input']:.3f}",
+                    CONTROL_LIMITS.get(robot, "")
+                ])
 
-# print("\n===================================================")
-# print(" Controller Comparison Report")
-# print("===================================================\n")
-# print(summary.to_string(index=False))
+    set_df = pd.DataFrame(set_rows, columns=[
+        "Robot","Controller","Experiment",
+        "Avg Final Error ± std","Max Control Input","Control Limit"
+    ])
 
-# # Optional: Save table as CSV
-# summary.to_csv("controller_report.csv", index=False)
-# print("\n✅ Report saved as: controller_report.csv\n")
+    track_df = pd.DataFrame(track_rows, columns=[
+        "Robot","Controller","Experiment",
+        "MSE","RTF","Max Input","Control Limit"
+    ])
 
-# # ----------------------------------------------------------------------
-# import pandas as pd
-# import numpy as np
-# import matplotlib.pyplot as plt
-# import os
+    set_df.to_csv("set_report.csv", index=False)
+    track_df.to_csv("tracking_report.csv", index=False)
 
-# # ============================================================
-# # CSV files for the 4 controllers
-# # ============================================================
+    print("\nGenerated:")
+    print("  set_report.csv")
+    print("  tracking_report.csv")
 
-# controller_files = {
-#     "MPC": "helix_mpc_tracking.csv",
-#     "OSC": "helix_osc_tracking.csv",
-#     "Impedance": "helix_impedance_tracking.csv",
-#     "ID-CLF-QP": "helix_id_clf_qp_tracking.csv"
-# }
+if __name__ == "__main__":
 
-# # ============================================================
-# # Plot Control Inputs (Mean ± Std)
-# # ============================================================
+    robots = load_all_results("results")
 
-# plt.figure(figsize=(9,6))
-
-# for name, filename in controller_files.items():
-
-#     if not os.path.exists(filename):
-#         print(f"❌ File not found: {filename}")
-#         continue
-
-#     df = pd.read_csv(filename)
-
-#     # ---- time ----
-#     t = df["time"].values
-
-#     # ---- control columns u0,u1,... ----
-#     u_cols = [c for c in df.columns if c.startswith("u")]
-#     U = df[u_cols].values   # shape = (T, nu)
-
-#     # ---- mean + std across actuators ----
-#     u_mean = np.mean(U, axis=1)
-#     u_std  = np.std(U, axis=1)
-
-#     # ---- plot mean curve ----
-#     plt.plot(t, u_mean, label=f"{name} Input")
-
-#     # ---- shaded band ----
-#     plt.fill_between(
-#         t,
-#         u_mean - u_std,
-#         u_mean + u_std,
-#         alpha=0.2
-#     )
-
-# # ============================================================
-# # Plot formatting
-# # ============================================================
-
-# plt.xlabel("Time (s)")
-# plt.ylabel("Control Input (mean ± std)")
-# # plt.title("Control Inputs Over Time (4 Controllers)")
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
+    plot_set_clf(robots)
+    plot_tracking_error(robots)
+    generate_report("results")
