@@ -85,6 +85,9 @@ def controller(experiment, control_scheme, model_name, target, model, data, inva
     elif control_scheme == 'impedance':
         u = impedance_control(model_name, model, data, invariants, target_vel, target_acc, twist, jac, M_inv, dJ_dt)
         return task_error, u
+    elif control_scheme == 'impedance_QP':
+        previous_solution, u = impedance_QP_control(model_name, model, data, invariants, target_vel, target_acc, twist, jac, M, dJ_dt, previous_solution)
+        return task_error, previous_solution, u
     elif control_scheme == 'mpc':
         previous_solution, u = mpc_control(model_name, model, data, invariants, 
                                            target_vel, target_acc, twist, jac, M, dJ_dt, previous_solution=None)
@@ -96,7 +99,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run optimized tendon control simulation')
     parser.add_argument('--headless', action='store_true', help='Run simulation without GUI for maximum performance')
     parser.add_argument('--no-plots', action='store_true', help='Skip generating plots at the end')
-    parser.add_argument('--control_scheme', type=str, default='id_clf_qp', choices=['id_clf_qp', 'impedance', 'mpc', 'osc'], help='Controller type to use')
+    parser.add_argument('--control_scheme', type=str, default='id_clf_qp', choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP'], help='Controller type to use')
     parser.add_argument('--robot', type=str, default='helix', choices=['helix', 'tendon','spirob'], help='Robot to simulate')
     parser.add_argument('--experiment', type=str, default='set', choices=['set', 'tracking'], help='Experiment name')
     parser.add_argument('--target_pos', type=str, default='pos4', choices=['pos1', 'pos2', 'pos3', 'pos4'], help='Target position for the end-effector')
@@ -104,22 +107,38 @@ if __name__ == "__main__":
     
     # Record start time for performance measurement
     start_time = time.time()
-    
+
     # Simulate the model
     if args.control_scheme == 'id_clf_qp':
-        V_log, task_error_log, time_log, sim_ts, u_log = simulate_model(headless=args.headless,
+        if args.experiment == 'tracking':
+            V_log, x_log, xd_log, task_error_log, time_log, sim_ts, u_log = simulate_model(headless=args.headless,
+                                                                        control_scheme=args.control_scheme, 
+                                                                        target_pos=args.target_pos, 
+                                                                        controller=controller, 
+                                                                        experiment=args.experiment, 
+                                                                        model_name=args.robot)
+        else:
+            V_log, task_error_log, time_log, sim_ts, u_log = simulate_model(headless=args.headless,
                                                                         control_scheme=args.control_scheme, 
                                                                         target_pos=args.target_pos, 
                                                                         controller=controller, 
                                                                         experiment=args.experiment, 
                                                                         model_name=args.robot)
     else:
-        task_error_log, time_log, sim_ts, u_log = simulate_model(headless=args.headless,
-                                                                 control_scheme=args.control_scheme, 
-                                                                 target_pos=args.target_pos, 
-                                                                 controller=controller, 
-                                                                 experiment=args.experiment, 
-                                                                 model_name=args.robot)
+        if args.experiment == 'tracking':
+            x_log, xd_log, task_error_log, time_log, sim_ts, u_log = simulate_model(headless=args.headless,
+                                                                                     control_scheme=args.control_scheme, 
+                                                                                     target_pos=args.target_pos, 
+                                                                                     controller=controller, 
+                                                                                     experiment=args.experiment, 
+                                                                                     model_name=args.robot)
+        else:
+            task_error_log, time_log, sim_ts, u_log = simulate_model(headless=args.headless,
+                                                                     control_scheme=args.control_scheme, 
+                                                                     target_pos=args.target_pos, 
+                                                                     controller=controller, 
+                                                                     experiment=args.experiment, 
+                                                                    model_name=args.robot)
 
     # Record end time
     end_time = time.time()
@@ -131,53 +150,34 @@ if __name__ == "__main__":
         print("Skipping plot generation")
         exit(0)
     
-    csv_path = save_results(experiment=args.experiment, 
-                            control_scheme=args.control_scheme, 
-                            model_name=args.robot, 
-                            target_pos=args.target_pos, 
+    # csv_path = save_results(experiment=args.experiment, 
+    #                         control_scheme=args.control_scheme, 
+    #                         model_name=args.robot, 
+    #                         task_error_log=task_error_log, 
+    #                         time_log=time_log,
+    #                         sim_ts=sim_ts, 
+    #                         u_log=u_log,
+    #                         V_log=V_log if args.control_scheme == 'id_clf_qp' else None, 
+    #                         target_pos=args.target_pos, 
+    #                         x_log=x_log if args.experiment == 'tracking' else None,
+    #                         xd_log=xd_log if args.experiment == 'tracking' else None)
+
+    wall = end_time - start_time
+    sim = sim_ts['ts'][-1]
+    csv_path = save_results(experiment=args.experiment,
+                            control_scheme=args.control_scheme,
+                            model_name=args.robot,
+                            target_pos=args.target_pos,
                             time_log=time_log,
-                            sim_ts=sim_ts, 
-                            V_log=V_log if args.control_scheme == 'id_clf_qp' else None, 
-                            task_error_log=task_error_log, u_log=u_log)
+                            sim_ts=sim_ts,
+                            V_log=V_log if args.control_scheme == 'id_clf_qp' else None,
+                            task_error_log=task_error_log,
+                            u_log=u_log,
+                            x_log=x_log if args.experiment=="tracking" else None,
+                            xd_log=xd_log if args.experiment=="tracking" else None,
+                            wall_time=wall,
+                            sim_time_total=sim)
 
+    print(f"Results saved to {csv_path}")
 
-    # #Lyapunov Function Over Time – shows how stability evolves.
-    # plt.figure()
-    # plt.plot(time_log, V_log, label="Lyapunov Function V")
-    # plt.xlabel("Time (s)")
-    # plt.ylabel("Lyapunov Function V")
-    # plt.title("Lyapunov Function Over Time")
-    # plt.grid(True)
-    # plt.legend()  # <--- Add legend
-
-    # #End-Effector Position Error – checks task-space convergence.
-    # plt.figure()
-    # plt.plot(time_log, task_error_log, label="‖x_desired - x_actual‖")
-    # plt.xlabel("Time (s)")
-    # plt.ylabel("Task-Space Position Error (m)")
-    # plt.title("End-Effector Position Error Over Time")
-    # plt.grid(True)
-    # plt.legend()
-
-    # # # Control inputs plot
-    # # actuated_indices = np.where(np.any(B != 0, axis=0))[0]  # shape: (n_actuated,)
-    # # ctrl = np.array(sim_ts["ctrl"])  # shape: (timesteps, nu)
-    # # num_actuators = ctrl.shape[1]
-    # # control_limit = 25
-
-    # # fig, axs = plt.subplots(actuated_indices, 1, figsize=(10, 8), sharex=True)
-
-    # # for i in range(actuated_indices):
-    # #     axs[i].plot(time_log, ctrl[:, i], label=f"Actuator {i}")
-    # #     axs[i].axhline(control_limit, color='r', linestyle='--', linewidth=1)
-    # #     axs[i].axhline(-control_limit, color='r', linestyle='--', linewidth=1)
-    # #     axs[i].set_ylabel("Torque (Nm)")
-    # #     axs[i].legend()
-    # #     axs[i].grid(True)
-
-    # # axs[-1].set_xlabel("Time (s)")
-    # # fig.suptitle("Control Inputs at Actuated Joints")
-    # # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-    plt.show()
 

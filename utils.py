@@ -117,18 +117,20 @@ def circular_trajectory(t, model_name):
     Circular trajectory through the 4 given points.
     One full revolution in time T.
     """
-    if model_name == 'helix':
-        L = 0.435/2
-        R = L/2
-        h = 0.7 - 2*L
-    elif model_name == 'tendon':
+    if model_name == 'tendon':
         L = 0.24/2
         R = L/2
-        h = 0
-    elif model_name == 'spirob':
-        L = 0.5/2
+        h = 2*L
+    
+    elif model_name == 'helix':
+        L = 0.435/2
         R = L/2
-        h = 0
+        h = 0.7 
+
+    elif model_name == 'spirob':
+        L = 0.48/2
+        R = L/2
+        h = 0.5
 
     # Circle parameters
     cx, cy, cz = L, 0, -L+h
@@ -139,7 +141,7 @@ def circular_trajectory(t, model_name):
     theta = omega * t
 
     # Position
-    x = cx + r * np.cos(theta)
+    x = cx + r * np.cos(theta)  # Start at pos1
     y = cy
     z = cz + r * np.sin(theta)
 
@@ -160,15 +162,14 @@ def circular_trajectory(t, model_name):
     return omega,{"pos": pos, "vel": vel, "acc": acc}
 
 def set_target(target_pos, model_name):
-    
-    if model_name == 'helix':
+    if model_name == 'tendon':
+        L = 0.24/2
+        R = L/2
+        h = 0
+    elif model_name == 'helix':
         L = 0.435/2
         R = L/2
         h = 0.7 - 2*L
-    elif model_name == 'tendon':
-        L = 0.24/2
-        R = L/2
-        h = -2*L
     elif model_name == 'spirob':
         L = 0.48/2
         R = L/2
@@ -204,7 +205,7 @@ def precompute_invariants(model, model_name=None):
         F[:m, m:] = np.eye(m, m)
         G = np.zeros((2*m, m))
         G[m:, :] = np.eye(m)
-        e = 0.05
+        e = 0.2
         Pe = linalg.block_diag(np.eye(m) / e, np.eye(m)).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m))
         Kp = 500
         Kd = 2 * np.sqrt(Kp)
@@ -240,9 +241,9 @@ def precompute_invariants(model, model_name=None):
         F[:m, m:] = np.eye(m, m)
         G = np.zeros((2*m, m))
         G[m:, :] = np.eye(m)
-        e = 0.1
+        e = 0.5
         Pe = linalg.block_diag(np.eye(m) / e, np.eye(m)).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m))
-        Kp = 200
+        Kp = 500
         Kd = 2 * np.sqrt(Kp)
         damping = 0.2
         stiffness = 0.1
@@ -285,7 +286,7 @@ def precompute_invariants(model, model_name=None):
         sel = np.ones((nu, 1))  # All control inputs are active
 
         # PD gains for impedance control (can be tuned)
-        Kp = 500.0
+        Kp = 1000.0
         Kd = 2 * np.sqrt(Kp)
         damping = 0.01
         stiffness = 0.01
@@ -336,8 +337,8 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
         # N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
         # qdd_null = N @ qdd
 
-        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + 0.02 * cp.square(cp.norm(qdd))  
-                                + 0.02 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
+        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + 0.1 * cp.square(cp.norm(qdd))  
+                                + 0.1 * cp.square(cp.norm(u)) + 1000 * cp.square(dl)) 
 
         # Vdot for our main CLF
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc.reshape(-1,1))
@@ -361,7 +362,7 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
 
             if u.value is not None:
                 u = u.value.copy()
-                data.ctrl[:] = np.squeeze(Bp @ u)
+                data.ctrl[:] = np.squeeze(Bp @ u).clip(-1, 1)
 
                 current_solution = {
                     'u': u.copy(),
@@ -414,7 +415,7 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
 
             if u.value is not None:
                 u = u.value.copy()
-                data.ctrl[:] = np.squeeze(B @ u)
+                data.ctrl[:] = np.squeeze(B @ u).clip(-25, 25)
 
                 current_solution = {
                     'u': u.copy(),
@@ -463,16 +464,27 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
         N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
         qdd_null = N @ qdd
 
+        # # Manipulability workaround: add a term to the objective that encourages staying away from singularities
+        # d = twist[:3]/ np.linalg.norm(twist[:3] + 1e-8)  # direction of desired task-space motion
+        # site_id = model.site("ee").id
+        # g = grad_wd(model, data, site_id=site_id, d=d).reshape(-1)
+        # g /= (np.linalg.norm(g) + 1e-8)
+        # k_a = 40.0
+        # tau_align = (k_a * (N @ g)).reshape(-1, 1)  # (nv,1)
+
         # Vdot for our main CLF
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc.reshape(-1,1))
 
-        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
-                                + 0.2 * cp.square(cp.norm(qdd))  + 0.2 * cp.square(cp.norm(u)) 
-                                + 0.5 * cp.square(cp.norm(qdd_null)) + 1000 * cp.square(dl)) 
+        objective = cp.Minimize(1 * cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
+                                + 0.5 * cp.square(cp.norm(qdd))  + 0.5 * cp.square(cp.norm(u,1)) 
+                                + 0.0* cp.square(cp.norm(qdd_null)) 
+                                + 1000 * cp.square(dl)) 
 
         constraints = [ dV <= - 1/e * V + dl, 
                         pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
-                        np.zeros((nu,1)) >= u]
+                        np.zeros((nu,1)) >= u,
+                        -100 * np.ones((nu,1)) <= u,
+                        dl >= 0]
 
         prob = cp.Problem(objective=objective, constraints=constraints)
         
@@ -489,7 +501,7 @@ def id_clf_qp_control(model_name, model, data, invariants, eta, target_vel, targ
 
             if u.value is not None:
                 u = u.value.copy()
-                data.ctrl[:] = np.squeeze(u)
+                data.ctrl[:] = np.squeeze(u).clip(-100, 0)
 
                 current_solution = {
                     'u': u.copy(),
@@ -518,7 +530,24 @@ def impedance_control(model_name, model, data, invariants, target_vel, target_ac
         Kp = invariants['Kp']
         Kd = invariants['Kd']
     elif model_name == 'spirob':
-        pinv_B = invariants['pinv_B']
+        # Sprirob input matrix depends on current configuration, so we compute it at the current state
+        nv, nu = model.nv, model.nu
+        B = np.zeros((nv, nu))
+
+        data_temp = mujoco.MjData(model)
+        data_temp.qpos[:] = data.qpos
+        data_temp.qvel[:] = data.qvel  # optional; usually 0 is fine too
+
+        mujoco.mj_forward(model, data_temp)
+
+        for i in range(nu):
+            data_temp.ctrl[:] = 0.0
+            data_temp.ctrl[i] = 1.0
+            mujoco.mj_forward(model, data_temp)
+            B[:, i] = data_temp.qfrc_actuator.copy()
+
+        # Compute the pseudoinverse of B
+        pinv_B = np.linalg.pinv(B)
         Kp = invariants['Kp']
         Kd = invariants['Kd']
 
@@ -539,16 +568,189 @@ def impedance_control(model_name, model, data, invariants, target_vel, target_ac
     
     try:
         if model_name == 'tendon':
-            data.ctrl = Bp @ u
+            data.ctrl = Bp @ u.clip(-1, 1)
         elif model_name == 'helix':
-            data.ctrl = B @ u
+            data.ctrl = B @ u.clip(-25, 25)
         elif model_name == 'spirob':
-            data.ctrl = u
+            data.ctrl = u.clip(-100, 0)
 
     except:
         print(f"failed convergence\n")
         pass
     return u.copy()
+
+def impedance_QP_control(model_name, model, data, invariants, target_vel, target_acc, twist, jac, M, dJ_dt, previous_solution=None):
+    
+    Kp = invariants['Kp']
+    Kd = invariants['Kd']
+
+    # Get joint velocity
+    dq = data.qvel.reshape(-1,1)
+
+    # Desired task acceleration 
+    mu_des = target_acc.reshape(-1,1) + Kp * twist.reshape(-1,1) + Kd * (target_vel.reshape(-1,1) - jac @ dq)
+
+    if model_name == 'tendon':
+        pinv_B = invariants['pinv_B']
+        Bp = invariants['Bp']
+
+        # define decision variables (create fresh variables each time)
+        nu = 2
+        nq = model.nq
+        u = cp.Variable(shape=(nu, 1))
+        qdd = cp.Variable(shape=(nq, 1))
+        mu = cp.Variable(shape=(nq, 1))
+
+        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + 0.1 * cp.square(cp.norm(qdd))  
+                                + 0.1 * cp.square(cp.norm(u))) 
+
+        constraints = [pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
+                        -1.0 <= u,
+                        1.0 >= u]
+
+        prob = cp.Problem(objective=objective, constraints=constraints)
+        
+        # Warm start with previous solution if available
+        if previous_solution is not None:
+            try:
+                u.value = previous_solution['u']
+                qdd.value = previous_solution['qdd'] 
+            except:
+                pass  # If warm start fails, proceed without it
+        try:
+            prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
+
+            if u.value is not None:
+                u = u.value.copy()
+                data.ctrl[:] = np.squeeze(Bp @ u).clip(-1, 1)
+
+                current_solution = {
+                    'u': u.copy(),
+                }
+
+                return current_solution, u.copy()
+            else:
+                print(f"failed convergence - no solution\n")
+                return previous_solution, None
+        except Exception as e:
+            print(f"failed convergence - exception: {e}\n")
+            return previous_solution, None
+        
+    elif model_name == 'helix':
+        B = invariants['B']
+        pinv_B = invariants['pinv_B']
+        sel = invariants['sel']
+
+        # define decision variables (create fresh variables each time)
+        nu = 9
+        nq = model.nq
+        u = cp.Variable(shape=(nu, 1))
+        qdd = cp.Variable(shape=(nq, 1))
+
+        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
+                                + 0.5 * cp.square(cp.norm(qdd))  + 0.5 * cp.square(cp.norm(u))) 
+
+        constraints = [pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
+                        -25*sel <= u,
+                        25*np.ones((nu,1)) >= u]
+
+        prob = cp.Problem(objective=objective, constraints=constraints)
+        
+        # Warm start with previous solution if available
+        if previous_solution is not None:
+            try:
+                u.value = previous_solution['u']
+                qdd.value = previous_solution['qdd'] 
+            except:
+                pass  # If warm start fails, proceed without it
+        try:
+            prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
+
+            if u.value is not None:
+                u = u.value.copy()
+                data.ctrl[:] = np.squeeze(B @ u).clip(-25, 25)
+
+                current_solution = {
+                    'u': u.copy(),
+                    'qdd': qdd.value.copy()
+                }
+
+                return current_solution, u.copy()
+            else:
+                print(f"failed convergence - no solution\n")
+                return previous_solution, None
+        except Exception as e:
+            print(f"failed convergence - exception: {e}\n")
+            return previous_solution, None
+        
+    elif model_name == 'spirob':
+        sel = invariants['sel']
+
+        # Sprirob input matrix depends on current configuration, so we compute it at the current state
+        nv, nu = model.nv, model.nu
+        B = np.zeros((nv, nu))
+
+        data_temp = mujoco.MjData(model)
+        data_temp.qpos[:] = data.qpos
+        data_temp.qvel[:] = data.qvel  # optional; usually 0 is fine too
+
+        mujoco.mj_forward(model, data_temp)
+
+        for i in range(nu):
+            data_temp.ctrl[:] = 0.0
+            data_temp.ctrl[i] = 1.0
+            mujoco.mj_forward(model, data_temp)
+            B[:, i] = data_temp.qfrc_actuator.copy()
+
+        # Compute the pseudoinverse of B
+        pinv_B = np.linalg.pinv(B)
+
+        # define decision variables (create fresh variables each time)
+        nu = model.nu
+        nq = model.nq
+        u = cp.Variable(shape=(nu, 1))
+        qdd = cp.Variable(shape=(nq, 1))
+        
+        # Null-space projection to handle redundancy
+        N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
+        qdd_null = N @ qdd
+
+        objective = cp.Minimize(1 * cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
+                                + 0.5 * cp.square(cp.norm(qdd))  + 0.5 * cp.square(cp.norm(u,1)) 
+                                + 0.0* cp.square(cp.norm(qdd_null)) )
+
+        constraints = [ pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
+                        np.zeros((nu,1)) >= u,
+                        -100 * np.ones((nu,1)) <= u
+                        ]
+
+        prob = cp.Problem(objective=objective, constraints=constraints)
+        
+        # Warm start with previous solution if available
+        if previous_solution is not None:
+            try:
+                u.value = previous_solution['u']
+                qdd.value = previous_solution['qdd'] 
+            except:
+                pass  # If warm start fails, proceed without it
+        try:
+            prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
+
+            if u.value is not None:
+                u = u.value.copy()
+                data.ctrl[:] = np.squeeze(u).clip(-100, 0)
+
+                current_solution = {
+                    'u': u.copy(),
+                }
+
+                return current_solution, u.copy()
+            else:
+                print(f"failed convergence - no solution\n")
+                return previous_solution, None
+        except Exception as e:
+            print(f"failed convergence - exception: {e}\n")
+            return previous_solution, None
 
 def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twist, jac, M, dJ_dt, previous_solution=None):
     Pe = invariants['Pe']
@@ -596,7 +798,6 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             constraints += [pinv_B @ (M @ qdd_k[:, k:k+1] + data.qfrc_bias.reshape(-1,1) 
                                        - data.qfrc_passive.reshape(-1,1)) == u_k[:, k:k+1]]
             constraints += [-1 <= u_k[:, k:k+1], u_k[:, k:k+1] <= 1 * np.ones((nu, 1))]
-            dq = dq + qdd_k[:, k:k+1] * dt  # Euler integration for velocity
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
             mu_des_k = - Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
@@ -605,7 +806,7 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
 
         # Terminal penalty (use eta_k at terminal, not eta_next)
         eta_N = eta_k[:, N-1:N]
-        objective += cp.quad_form(eta_N, Pe)
+        objective += 10 * cp.quad_form(eta_N, Pe)
         objective = cp.Minimize(objective)
         
         prob = cp.Problem(objective, constraints)
@@ -735,12 +936,12 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
             mu_des_k = -Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
-            objective += (gamma**k) * (cp.sum_squares(mu_k1 - mu_des_k) + cp.sum_squares(eta_k1 - eta_target) 
+            objective += (gamma**k) * (0.5*cp.sum_squares(mu_k1 - mu_des_k) + cp.sum_squares(eta_k1 - eta_target) 
                                     + 0.1 * cp.sum_squares(u_k[:, k:k+1]) + 0.1 * cp.sum_squares(qdd_k[:, k:k+1]))
 
         # Terminal penalty (use eta_k at terminal, not eta_next)
         eta_N = eta_k[:, N-1:N]
-        objective += cp.quad_form(eta_N, Pe)
+        objective += 10*cp.quad_form(eta_N, Pe)
         objective = cp.Minimize(objective)
         
         prob = cp.Problem(objective, constraints)
@@ -753,7 +954,7 @@ def mpc_control(model_name, model, data, invariants, target_vel, target_acc, twi
         try:
             prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
             if u_k.value is not None:
-                data.ctrl = np.squeeze(u_k.value[:, 0]) 
+                data.ctrl = np.squeeze(u_k.value[:, 0]).clip(-100, 0) 
                 # Cache solution for next iteration
                 current_solution = {
                     'u': u_k.value.copy(),
@@ -772,6 +973,8 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
     model = robot(model_name)
     model.opt.gravity = (0, 0, -9.81)
     data = mujoco.MjData(model)
+
+
 
     # Pre-compute invariant matrices
     print("Pre-computing invariant matrices...")
@@ -812,6 +1015,8 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
     V_log = []
     task_error_log = []
     u_log = []
+    x_log = []
+    xd_log = []
     time_log = []
     t = 0.0
     dt = model.opt.timestep
@@ -831,7 +1036,9 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
                 V, task_error, previous_solution, u = controller(experiment, control_scheme, model_name, 
                                                                  target, model, data, invariants, previous_solution)
             elif control_scheme == 'impedance':
-                task_error, u = controller(experiment, model_name, control_scheme, model_name, target, model, data, invariants)
+                task_error, u = controller(experiment, control_scheme, model_name, target, model, data, invariants, previous_solution=None)
+            elif control_scheme == 'impedance_QP':
+                task_error, previous_solution, u = controller(experiment, control_scheme, model_name, target, model, data, invariants, previous_solution)
             elif control_scheme == 'mpc':
                 task_error, previous_solution, u = controller(experiment, control_scheme, model_name, 
                                                               target, model, data, invariants, previous_solution)
@@ -857,6 +1064,9 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
 
                 if control_scheme == 'id_clf_qp':
                     V_log.append(V)
+                if experiment == 'tracking':
+                    x_log.append(data.site("ee").xpos.copy())
+                    xd_log.append(target["pos"].copy())
 
                 task_error_log.append(task_error)
                 u_log.append(u.squeeze().copy())
@@ -873,7 +1083,10 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
     else:
         # Run simulation with viewer
         with mujoco.viewer.launch_passive(model, data) as viewer:
+            viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+            viewer.cam.fixedcamid = model.camera("ortho_side").id
             while viewer.is_running():
+
                 if experiment == 'tracking':
                     omega,target = circular_trajectory(t, model_name)
                 elif experiment == 'set':
@@ -883,6 +1096,8 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
                                                                      target, model, data, invariants, previous_solution)
                 elif control_scheme == 'impedance':
                     task_error, u = controller(experiment, control_scheme, model_name, target, model, data, invariants)
+                elif control_scheme == 'impedance_QP':
+                    task_error, previous_solution, u = controller(experiment, control_scheme, model_name, target, model, data, invariants, previous_solution)
                 elif control_scheme == 'mpc':
                     task_error, previous_solution, u = controller(experiment, control_scheme, model_name, 
                                                                   target, model, data, invariants, previous_solution)
@@ -908,6 +1123,9 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
 
                     if control_scheme == 'id_clf_qp':
                         V_log.append(V)
+                    if experiment == 'tracking':
+                        x_log.append(data.site("ee").xpos.copy())
+                        xd_log.append(target["pos"].copy())
 
                     task_error_log.append(task_error)
                     u_log.append(u.squeeze().copy())
@@ -934,38 +1152,129 @@ def simulate_model(headless=False,control_scheme=None, target_pos=None,controlle
     print(f"Simulation finished after {sim_ts['ts'][-1]} seconds")
 
     if control_scheme == 'id_clf_qp':
-        return V_log, task_error_log, time_log, sim_ts, u_log
+        if experiment == 'tracking':
+            return V_log, x_log, xd_log, task_error_log, time_log, sim_ts, u_log
+        else:
+            return V_log, task_error_log, time_log, sim_ts, u_log
     else:
-        return task_error_log, time_log, sim_ts, u_log
-    
-def save_results(experiment, control_scheme, model_name, task_error_log, time_log, sim_ts, u_log, V_log=None, target_pos=None):
-    # Save control inputs and task error to CSV
-    if control_scheme == 'id_clf_qp':
-        V_log = np.array(V_log)
-    u_log = np.array(u_log)
-    time_log_csv = np.array(time_log)
-    sim_time_csv = np.array(sim_ts['ts'])
-    error_log = np.array(task_error_log)
-    df = pd.DataFrame(
-        u_log,
-        columns=[f"u{i}" for i in range(u_log.shape[1])]
-    )
-    df.insert(0, "time", time_log_csv)
-    df.insert(1, "sim_time", sim_time_csv)
-    if control_scheme == 'id_clf_qp':
-        df.insert(2, "lyapunov_V", V_log)
-    df.insert(3, "task_error", error_log)
-    
-    # Create results directory if it doesn't exist
-    if experiment == 'set':
-        os.makedirs(f"results/{model_name}/{control_scheme}", exist_ok=True)
-    if experiment == 'tracking':
-        os.makedirs(f"results/{model_name}/{control_scheme}", exist_ok=True)
-    if experiment == 'set':
-        csv_path = f"results/{model_name}/{control_scheme}/{experiment}_{control_scheme}_{target_pos}.csv"
-    if experiment == 'tracking':
-        csv_path = f"results/{model_name}/{control_scheme}/{experiment}_{control_scheme}.csv"
-    df.to_csv(csv_path, index=False)
-    print(f"Saved CSV to {csv_path}")
+        if experiment == 'tracking':
+            return  x_log, xd_log, task_error_log, time_log, sim_ts, u_log
+        else:
+            return task_error_log, time_log, sim_ts, u_log
 
+def save_results(experiment,
+                 control_scheme,
+                 model_name,
+                 task_error_log,
+                 time_log,
+                 sim_ts,
+                 u_log,
+                 V_log=None,
+                 target_pos=None,
+                 x_log=None,
+                 xd_log=None,
+                 wall_time=None,
+                 sim_time_total=None):
+
+    # ================================
+    # Convert to numpy safely
+    # ================================
+    u_log = np.asarray(u_log)
+    time_log = np.asarray(time_log)
+    sim_time_csv = np.asarray(sim_ts['ts'])
+    error_log = np.asarray(task_error_log)
+
+    if V_log is not None:
+        V_log = np.asarray(V_log)
+
+    if experiment == "tracking":
+        x_log = np.asarray(x_log).squeeze().tolist()
+        xd_log = np.asarray(xd_log).squeeze().tolist()
+
+    # ================================
+    # Build dataframe
+    # ================================
+    df = pd.DataFrame()
+
+    df["time"] = time_log
+    df["sim_time"] = sim_time_csv
+
+    if V_log is not None:
+        df["lyapunov_V"] = V_log
+
+    if experiment == "tracking":
+        # store vectors as strings
+        df["x_log"] = [list(v) for v in x_log]
+        df["xd_log"] = [list(v) for v in xd_log]
+
+    df["task_error"] = error_log
+
+    # control inputs
+    for i in range(u_log.shape[1]):
+        df[f"u{i}"] = u_log[:, i]
+
+    # ================================
+    # Create folder
+    # ================================
+    out_dir = f"results/{model_name}/{control_scheme}"
+    os.makedirs(out_dir, exist_ok=True)
+
+    if experiment == "set":
+        csv_path = f"{out_dir}/{experiment}_{control_scheme}_{target_pos}.csv"
+    else:
+        csv_path = f"{out_dir}/{experiment}_{control_scheme}.csv"
+
+    # ================================
+    # Compute performance metrics
+    # ================================
+    if wall_time is not None and sim_time_total is not None:
+        rtf = sim_time_total / wall_time
+    else:
+        rtf = None
+
+    # ================================
+    # Write CSV with metadata header
+    # ================================
+    with open(csv_path, "w") as f:
+
+        f.write("# ===== Simulation Performance =====\n")
+
+        if wall_time is not None:
+            f.write(f"# wall_clock_time,{wall_time:.6f}\n")
+
+        if sim_time_total is not None:
+            f.write(f"# physics_time,{sim_time_total:.6f}\n")
+
+        if rtf is not None:
+            f.write(f"# real_time_factor,{rtf:.6f}\n")
+
+        f.write("# ==================================\n\n")
+
+        df.to_csv(f, index=False)
+
+    print(f"Saved CSV to {csv_path}")
     return csv_path
+
+def auto_frame_camera(model, data, cam_name="side_perp", scale=2.2):
+    cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name)
+    if cam_id == -1:
+        return
+
+    extent = model.stat.extent
+    center = model.stat.center
+
+    distance = scale * extent
+
+    # Position: straight along -Y
+    model.cam_pos[cam_id] = np.array([
+        center[0],
+        center[1] - distance,
+        center[2]
+    ])
+
+    # Look at robot center
+    model.cam_target[cam_id] = center
+
+    # FORCE ORTHOGRAPHIC
+    model.cam_orthographic[cam_id] = 1
+

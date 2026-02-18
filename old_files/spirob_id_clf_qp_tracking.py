@@ -17,7 +17,7 @@ import pandas as pd
 os.environ["MUJOCO_GL"] = "egl"
 
 
-model_name = f"scene"
+model_name = f"spirob_control"
 
 # Cartesian impedance control gains.
 impedance_pos = np.asarray([50.0, 50.0, 50.0])  # [N/m]
@@ -56,14 +56,14 @@ def circular_trajectory(t):
     """
 
     # Circle parameters
-    L = 0.5/2
-    R = L/4
+    L = 0.45/2
+    R = L/2
 
     cx, cy, cz = L, 0.0, L
     r = R
 
     # Angle
-    omega =  np.pi/4 
+    omega =  np.pi/5 
     theta = omega * t
 
     # Position
@@ -278,171 +278,202 @@ def precompute_invariants(model):
         'e': e
     }
 
-def manipulability_grad_fd(model, data, site_id, eps=1e-4, delta=1e-6):
-    """
-    Finite-difference gradient of a stable manipulability proxy:
-        s(q) = 0.5 * log det(Jp Jp^T + delta I)
-    where Jp is the 3×nv position Jacobian at the site.
+def grad_wd(model, data, site_id, d):
 
-    Returns: g (nv,1)
-    NOTE: Assumes data.qpos indexing is compatible with nv DOFs (typical hinge-chain).
-    """
     nv = model.nv
-    qpos0 = data.qpos.copy()
+    grad = np.zeros(nv)
+
+    # --- current Jacobian ---
+    Jp = np.zeros((3, nv))
+    Jr = np.zeros((3, nv))
+    mujoco.mj_jacSite(model, data, Jp, Jr, site_id)
+
+    y = Jp.T @ d
+
     qvel0 = data.qvel.copy()
 
-    def s_of_q():
-        jac_tmp = np.zeros((6, nv))
-        mujoco.mj_forward(model, data)
-        mujoco.mj_jacSite(model, data, jac_tmp[:3], jac_tmp[3:], site_id)
-        Jp = jac_tmp[:3, :]
-        A = Jp @ Jp.T + delta * np.eye(3)
-        sign, logdet = np.linalg.slogdet(A)
-        return 0.5 * logdet if sign > 0 else -1e12
-
-    s0 = s_of_q()
-    g = np.zeros((nv, 1))
-
     for i in range(nv):
-        data.qpos[:] = qpos0
-        data.qvel[:] = qvel0
-        data.qpos[i] += eps
-        si = s_of_q()
-        g[i, 0] = (si - s0) / eps
+        # set unit joint velocity
+        data.qvel[:] = 0.0
+        data.qvel[i] = 1.0
+
+        mujoco.mj_forward(model, data)
+
+        # compute Jdot
+        Jdot = compute_jacobian_derivative(model, data, site_id, h=1e-6) # you likely already have this
+        Jdot = Jdot[:3, :]
+
+        grad[i] = 2.0 * d.T @ (Jdot @ y)
 
     # restore
-    data.qpos[:] = qpos0
     data.qvel[:] = qvel0
     mujoco.mj_forward(model, data)
 
-    return g
-
+    return grad
 
 def controller(model, data, invariants, previous_solution=None, trajectory=None):
-    jac = np.zeros((6, model.nv))
-    twist = np.zeros(6)
-    site_quat = np.zeros(4)
-    site_quat_conj = np.zeros(4)
-    error_quat = np.zeros(4)
-    M_inv = np.zeros((model.nv, model.nv))
-    M = np.zeros((model.nv, model.nv))
 
-    mocap_name = "target"
-    mocap_id = model.body(mocap_name).mocapid[0]
+    nv, nu = model.nv, model.nu
 
-    # Extract pre-computed values
-    F = invariants['F']
-    G = invariants['G']
-    Pe = invariants['Pe']
-    pinv_B = invariants['pinv_B']
-    sel = invariants['sel']
-    e = invariants['e']
+    # =========================
+    # IDs
+    # =========================
+    mocap_id = model.body("target").mocapid[0]
+    site_id  = model.site("ee").id
 
-    # Track desired trajectory
-    pos = np.hstack([trajectory['pos'], [0, 0, 0]])
-    vel = np.hstack([trajectory['vel'], [0, 0, 0]])
-    acc = np.hstack([trajectory['acc'], [0, 0, 0]])
+    # =========================
+    # Desired trajectory (6D)
+    # =========================
+    pos = np.hstack([trajectory["pos"], [0,0,0]])
+    vel = np.hstack([trajectory["vel"], [0,0,0]])
+    acc = np.hstack([trajectory["acc"], [0,0,0]])
 
-    Bp = calculate_input_matrix_at_state(model, data)
-    pinv_Bp = np.linalg.pinv(Bp)
-
-    site_name = "ee"
-    site_id = model.site(site_name).id
     data.mocap_pos[mocap_id] = pos[:3]
 
-    dx = data.mocap_pos[mocap_id] - data.site(site_id).xpos
-    twist[:3] = dx
-
-    mujoco.mju_mat2Quat(site_quat, data.site(site_id).xmat)
-    mujoco.mju_negQuat(site_quat_conj, site_quat)
-    mujoco.mju_mulQuat(error_quat, data.mocap_quat[mocap_id], site_quat_conj)
-    mujoco.mju_quat2Vel(twist[3:], error_quat, 1.0)
-    twist[3:] *= Kori
-
-    # if you want position-only control:
-    twist[3:] = 0.0
-
+    # =========================
+    # Kinematics
+    # =========================
+    jac = np.zeros((6, nv))
     mujoco.mj_kinematics(model, data)
     mujoco.mj_comPos(model, data)
     mujoco.mj_jacSite(model, data, jac[:3], jac[3:], site_id)
 
-    # inertia matrices
-    mujoco.mj_solveM(model, data, M_inv, np.eye(model.nv))
+    dq = data.qvel.reshape(-1,1)
+    xdot = jac @ dq
+
+    # =========================
+    # Position error
+    # =========================
+    dx = pos[:3] - data.site(site_id).xpos
+    twist = np.zeros((6,1))
+    twist[:3,0] = dx
+
+    # =========================
+    # CLF state (12D — DO NOT CHANGE)
+    # =========================
+    eta = np.vstack([
+        -twist,
+        xdot - vel.reshape(6,1)
+    ])
+
+    F  = invariants["F"]
+    G  = invariants["G"]
+    Pe = invariants["Pe"]
+    e_clf = invariants["e"]
+
+    V = float(eta.T @ Pe @ eta)
+
+    # =========================
+    # Dynamics
+    # =========================
+    M = np.zeros((nv,nv))
     mujoco.mj_fullM(model, M, data.qM)
-    M = M * np.random.normal(1.0, 0.01, size=M.shape)  # optional noise
+
+    bias = data.qfrc_bias.reshape(-1,1)
+    passive = data.qfrc_passive.reshape(-1,1)
+
+    Bp = calculate_input_matrix_at_state(model, data)
+    pinv_Bp = np.linalg.pinv(Bp)
 
     dJ_dt = compute_jacobian_derivative(model, data, site_id)
 
-    # decision variables
-    nu = model.nu
-    u = cp.Variable(shape=(nu, 1))
-    qdd = cp.Variable(shape=(model.nv, 1))
-    dl = cp.Variable(shape=(1, 1))
+    # =========================
+    # Decision variables
+    # =========================
+    qdd = cp.Variable((nv,1))
+    u   = cp.Variable((nu,1))
+    dl  = cp.Variable((1,1))
 
-    # CLF error state
-    dq = data.qvel.reshape(-1, 1)
-    eta = np.concatenate((-twist, jac @ data.qvel))  # shape (6+6,) if full; your code uses 12 total
-
-    # null-space projector (for redundancy)
-    N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
-    qdd_null = N @ qdd
-
-    # ----------------------------
-    # Main CLF terms
-    # ----------------------------
-    K = 500.0
-    V = eta.T @ Pe @ eta
+    # =========================
+    # Task acceleration
+    # =========================
+    xdd = dJ_dt @ dq + jac @ qdd
+    xdd_des = acc.reshape(6,1)
 
     dV = (
         eta.T @ (F.T @ Pe + Pe @ F) @ eta
-        + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - acc.reshape(-1, 1))
+        + 2 * eta.T @ Pe @ G @ (xdd - xdd_des)
     )
 
-    mu_des = (K * twist.reshape(-1, 1) - 2 * np.sqrt(K) * (vel.reshape(-1, 1) - jac @ dq))
+    # =========================
+    # Directional manipulability alignment
+    # (POSITION ONLY)
+    # =========================
+    Jp = jac[:3,:]
 
-    # objective
+    # direction = desired velocity direction (for trajectory tracking)
+    v = trajectory["vel"]
+    if np.linalg.norm(v) > 1e-6:
+        d_dir = v / np.linalg.norm(v)
+    else:
+        d_dir = dx / (np.linalg.norm(dx)+1e-8)
+
+    Jpinv = np.linalg.pinv(Jp)
+    N = np.eye(nv) - Jpinv @ Jp
+
+    g = grad_wd(model, data, site_id, d_dir).reshape(-1)
+    g /= (np.linalg.norm(g)+1e-8)
+
+    k_align = 30.0
+    tau_align = (k_align * (N.T @ g)).reshape(-1,1)
+
+    # =========================
+    # Tracking objective
+    # =========================
+    Kp = 2500.0
+    Kd = 2*np.sqrt(Kp)
+
+    xdd_ref = xdd_des + Kp*twist + Kd*(vel.reshape(6,1)-xdot)
+
     objective = cp.Minimize(
-        cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - acc.reshape(-1, 1) - mu_des))
-        + 0.2 * cp.square(cp.norm(qdd))
-        + 0.5 * cp.square(cp.norm(u, 1))
-        + 1000 * cp.square(dl)
+        cp.sum_squares(xdd - xdd_ref)
+        + 0.05*cp.sum_squares(qdd)
+        + 0.5*cp.norm1(u)
+        + 1000*cp.sum_squares(dl)
     )
 
+    # =========================
+    # Constraints
+    # =========================
     constraints = [
-        dV <= -1 / e * V + dl,
-        pinv_Bp @ (M @ qdd + data.qfrc_bias.reshape(-1, 1) - data.qfrc_passive.reshape(-1, 1)) == u,
-        np.zeros((nu, 1)) >= u,
-        u >= -100.0,
-        dl >= 0,
+        dV <= -1/max(e_clf,1e-6)*V + dl,
+        pinv_Bp @ (M@qdd + bias - passive - tau_align) == u,
+        u <= 0,
+        u >= -100,
+        dl >= 0
     ]
 
-    prob = cp.Problem(objective=objective, constraints=constraints)
+    prob = cp.Problem(objective, constraints)
 
     # warm start
     if previous_solution is not None:
         try:
-            u.value = previous_solution['u']
-            qdd.value = previous_solution['qdd']
-            dl.value = previous_solution.get('dl', None)
-        except Exception:
+            u.value   = previous_solution["u"]
+            qdd.value = previous_solution["qdd"]
+        except:
             pass
 
-    task_error = np.linalg.norm(dx)
-    q = data.qpos.copy()
-    dq_out = data.qvel.copy()
-
+    # =========================
+    # Solve
+    # =========================
     try:
-        prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
-        if u.value is not None:
-            data.ctrl = np.squeeze(u.value)
-            current_solution = {'u': u.value.copy(), 'qdd': qdd.value.copy()}
-            return V, task_error, q, dq_out, current_solution, u.value.copy()
-        else:
-            print("failed convergence - no solution\n")
-            return V, task_error, q, dq_out, previous_solution, None
+        prob.solve(solver=cp.SCS, warm_start=True, verbose=False)
+
+        if u.value is None:
+            return V, np.linalg.norm(dx), data.qpos.copy(), data.qvel.copy(), previous_solution, None
+
+        data.ctrl = np.squeeze(u.value).clip(-100,0)
+
+        current_solution = {
+            "u":u.value.copy(),
+            "qdd":qdd.value.copy()
+        }
+
+        return V, np.linalg.norm(dx), data.qpos.copy(), data.qvel.copy(), current_solution, u.value.copy()
+
     except Exception as ex:
-        print(f"failed convergence - exception: {ex}\n")
-        return V, task_error, q, dq_out, previous_solution, None
+        print("QP fail:",ex)
+        return V, np.linalg.norm(dx), data.qpos.copy(), data.qvel.copy(), previous_solution, None
 
 
 def simulate_model(headless=False, record_video=False, video_fps=30):

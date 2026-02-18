@@ -1,8 +1,9 @@
 Robot,Controller,Experiment,MSE,RTF,Max Input,Control Limit
-Spirob,MPC,Trajectory Tracking,0.12281,1.01x,24.222,u ≤ 0
-Spirob,ID_CLF_QP,Trajectory Tracking,0.01252,1.00x,184.110,u ≤ 0
-Tendon,MPC,Trajectory Tracking,0.00171,1.00x,1.000,-1 ≤ u ≤ 1
-Tendon,IMPEDANCE,Trajectory Tracking,0.00184,1.00x,3.036,-1 ≤ u ≤ 1
-Tendon,ID_CLF_QP,Trajectory Tracking,0.00103,1.00x,1.602,-1 ≤ u ≤ 1
-Helix,MPC,Trajectory Tracking,0.00495,1.00x,24.575,-25 ≤ u ≤ 25
-Helix,ID_CLF_QP,Trajectory Tracking,0.00708,1.00x,14.967,-25 ≤ u ≤ 25
+Helix,ID-CLF-QP,Trajectory Tracking,0.00237,0.74x,25.001,-25 ≤ u ≤ 25
+Helix,IC,Trajectory Tracking,0.00192,12.90x,25.821,-25 ≤ u ≤ 25
+Helix,IC-QP,Trajectory Tracking,0.00964,0.94x,25.000,-25 ≤ u ≤ 25
+Helix,MPC,Trajectory Tracking,0.00136,0.06x,25.000,-25 ≤ u ≤ 25
+Finger,ID-CLF-QP,Trajectory Tracking,0.00028,0.37x,1.002,-1 ≤ u ≤ 1
+Finger,IC,Trajectory Tracking,0.00027,19.29x,1.015,-1 ≤ u ≤ 1
+Finger,IC-QP,Trajectory Tracking,0.00117,0.46x,0.613,-1 ≤ u ≤ 1
+Finger,MPC,Trajectory Tracking,0.00044,0.05x,0.835,-1 ≤ u ≤ 1

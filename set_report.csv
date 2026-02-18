@@ -1,9 +1,13 @@
-Robot,Controller,Experiment,Avg Final Error ± std,Max Control Input,Control Limit
-Spirob,MPC,Static Point Tracking,0.1203 ± 0.0828,22.170,u ≤ 0
-Spirob,ID_CLF_QP,Static Point Tracking,0.0439 ± 0.0336,1140.495,u ≤ 0
-Tendon,MPC,Static Point Tracking,0.4054 ± 0.0000,0.630,-1 ≤ u ≤ 1
-Tendon,IMPEDANCE,Static Point Tracking,0.0000 ± 0.0000,7.886,-1 ≤ u ≤ 1
-Tendon,ID_CLF_QP,Static Point Tracking,0.0243 ± 0.0126,1.009,-1 ≤ u ≤ 1
-Helix,MPC,Static Point Tracking,0.0531 ± 0.0418,25.000,-25 ≤ u ≤ 25
-Helix,IMPEDANCE,Static Point Tracking,0.1568 ± 0.0000,4.928,-25 ≤ u ≤ 25
-Helix,ID_CLF_QP,Static Point Tracking,0.0540 ± 0.0387,13.806,-25 ≤ u ≤ 25
+Robot,Controller,Experiment,Avg Final Error ± std,RTF,Max Control Input,Control Limit
+Helix,ID-CLF-QP,Static Point Tracking,0.0392 ± 0.0297,0.78 ± 0.04x,25.005,-25 ≤ u ≤ 25
+Helix,IC,Static Point Tracking,0.0184 ± 0.0183,7.46 ± 1.51x,26.704,-25 ≤ u ≤ 25
+Helix,IC-QP,Static Point Tracking,0.0418 ± 0.0326,0.87 ± 0.07x,25.000,-25 ≤ u ≤ 25
+Helix,MPC,Static Point Tracking,0.0392 ± 0.0333,0.08 ± 0.01x,25.000,-25 ≤ u ≤ 25
+SpiRob,ID-CLF-QP,Static Point Tracking,0.0425 ± 0.0372,0.13 ± 0.03x,113.593,u ≤ 0
+SpiRob,IC,Static Point Tracking,0.3642 ± 0.0824,0.32 ± 0.01x,1.540,u ≤ 0
+SpiRob,IC-QP,Static Point Tracking,0.0335 ± 0.0372,0.24 ± 0.01x,9.210,u ≤ 0
+SpiRob,MPC,Static Point Tracking,0.3221 ± 0.0855,0.04 ± 0.00x,7.948,u ≤ 0
+Finger,ID-CLF-QP,Static Point Tracking,0.0094 ± 0.0028,0.38 ± 0.00x,0.942,-1 ≤ u ≤ 1
+Finger,IC,Static Point Tracking,0.1770 ± 0.0425,16.05 ± 0.19x,4.532,-1 ≤ u ≤ 1
+Finger,IC-QP,Static Point Tracking,0.0244 ± 0.0294,0.46 ± 0.01x,0.724,-1 ≤ u ≤ 1
+Finger,MPC,Static Point Tracking,0.1774 ± 0.0432,0.05 ± 0.00x,1.000,-1 ≤ u ≤ 1

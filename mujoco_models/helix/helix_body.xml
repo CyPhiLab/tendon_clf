@@ -98,7 +98,7 @@
                             <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_1"/>
                             <!-- <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate1"/> -->
                             <body name="attachment" pos="0.0 0.04 0.0" quat="0 0 0 1">
-                              <site name="ee" rgba="1 0 0 1" size="0.01" group="1"/>
+                              <site name="ee" rgba="0.682353 0.333333 0.737255 1" size="0.01" group="1"/>
                             </body>
                           </body>
                         </body>

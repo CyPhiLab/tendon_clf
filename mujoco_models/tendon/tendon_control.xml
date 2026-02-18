@@ -4,25 +4,31 @@
 
     <default>
         <joint type="hinge" axis="0 1 0" limited="true" range="-1.57 1.57" damping="0.01"/>
-        <geom type="capsule" size="0.005 0.03" rgba="0.5 0.5 0.5 1" mass="0.01"/>
+        <geom type="capsule" size="0.005 0.03" rgba="1 1 1 1" mass="0.01"/>
+
     </default>
 
 
     <worldbody>
-        <camera name="ortho_side" pos="0 0.1 0.05" xyaxes="1 0 0  0 0 1"/>
-        <body name="link1" pos="0 0 0">
+        <camera name="ortho_side"
+            mode="fixed"
+            orthographic="true"
+            pos="0.1 -1 0.25"
+            xyaxes="1 0 0  0 0 1"
+            fovy="0.5"/>
+        <body name="link1" pos="0 0 0.24">
             <joint name="joint1" />
-            <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+            <geom fromto="0 0 0 0.06 0 0" size="0.008"/>
             <body name="link2" pos="0.06 0 0">
                 <joint name="joint2"/>
-                <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                <geom fromto="0 0 0 0.06 0 0" size="0.008"/>
                 <body name="link3" pos="0.06 0 0">
                     <joint name="joint3"/>
-                    <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
+                    <geom fromto="0 0 0 0.06 0 0" size="0.008"/>
                     <body name="link4" pos="0.06 0 0">
                         <joint name="joint4"/>
-                        <geom fromto="0 0 0 0.06 0 0" size="0.005"/>
-                        <body name="attachment" pos="0.00 0.0 0.0">
+                        <geom fromto="0 0 0 0.06 0 0" size="0.008"/>
+                        <body name="attachment" pos="0.06 0.0 0.0">
                               <site name="ee" rgba="1 0 0 1" size="0.001" group="1"/>
                         </body>
                     </body>
@@ -33,7 +39,7 @@
 
     <worldbody>
         <body name="target" pos="0.1 0.0 -0.15" quat="0 1 0 0" mocap="true">
-        <site type="sphere" size="0.01" rgba="0 0 1 1" group="2"/>
+        <site type="sphere" size="0.01" rgba="1 0.2 0.2 0.9" group="2"/>
         </body>
     </worldbody>
 

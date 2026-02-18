@@ -262,23 +262,33 @@ def controller(model, data, invariants, previous_solution=None, trajectory=None)
     u = cp.Variable(shape=(nu, 1))
     mu = cp.Variable(shape=(6, 1))
     qdd = cp.Variable(shape=(nq, 1))
+    s = cp.Variable(shape=(6, 1), nonneg=True)
     twist[3:] = 0.0
     
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
 
     # Impedance-style task acceleration command
-    mu_des = (10 * twist.reshape(-1,1) - 20 * (vel - jac @ dq))
+    mu_des = (100 * twist.reshape(-1,1) - 2 * np.sqrt(100) * (vel - jac @ dq))
     N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
     qdd_null = N @ qdd
 
 
-    objective = cp.Minimize(cp.square(cp.norm(mu - acc.reshape(-1,1) - mu_des))  + 0.5 * cp.square(cp.norm(u)) + 5.2 * cp.square(cp.norm(qdd)))# + 0.5 * cp.sum_squares(qdd_null))
+    objective = cp.Minimize(cp.square(cp.norm(mu - acc.reshape(-1,1) - mu_des))  
+                            + 0.5 * cp.square(cp.norm(u)) + 0.5 * cp.square(cp.norm(qdd)) + 1000*cp.square(cp.norm(s)))
+                            # + 0.5 * cp.sum_squares(qdd_null))
 
     constraints = [ pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
-                    dJ_dt @ dq + jac @ qdd == mu,
+                    dJ_dt @ dq + jac @ qdd == mu + acc.reshape(-1,1) + s,
                     -25*sel <= u,
                     25*np.ones((nu,1)) >= u]
+    
+    # objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - acc.reshape(-1,1) - mu_des))  
+    #                         + 0.5 * cp.square(cp.norm(u)) + 10 * cp.square(cp.norm(qdd)) + 10000 * cp.sum_squares(qdd_null))
+
+    # constraints = [ pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
+    #                 -25*sel <= u,
+    #                 25*np.ones((nu,1)) >= u]
 
     prob = cp.Problem(objective=objective, constraints=constraints)
     

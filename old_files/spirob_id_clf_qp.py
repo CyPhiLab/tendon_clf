@@ -18,7 +18,7 @@ import pandas as pd
 os.environ["MUJOCO_GL"] = "egl"
 
 
-model_name = f"scene"
+model_name = f"spirob_control"
 
 # Cartesian impedance control gains.
 impedance_pos = np.asarray([50.0, 50.0, 50.0])  # [N/m]
@@ -218,7 +218,7 @@ def precompute_invariants(model):
     F[:m, m:] = np.eye(m, m)
     G = np.zeros((2*m, m))
     G[m:, :] = np.eye(m)
-    e = 0.01
+    e = 0.05
     Pe = linalg.block_diag(np.eye(m) / e, np.eye(m)).T @ linalg.solve_continuous_are(F, G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / e, np.eye(m))
     
     # Input matrix pseudoinverse
@@ -310,7 +310,7 @@ def controller(model, data, invariants, sigma, previous_solution=None):
     # data.mocap_pos[mocap_id] = np.array([0.1, 0.0, 0.1])
     # data.mocap_pos[mocap_id] = np.array([0.2, 0.0, 0.2])
     # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.15])
-    # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.2])
+    data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.2])
     # data.mocap_pos[mocap_id] = np.array([0.15, 0.0, 0.25])
     # data.mocap_pos[mocap_id] = np.array([0.16, 0.0, 0.35])
     # data.mocap_pos[mocap_id] = np.array([0.2, 0, 0.3])
@@ -319,7 +319,7 @@ def controller(model, data, invariants, sigma, previous_solution=None):
     R = L/2
     # data.mocap_pos[mocap_id] = np.array([L-R, 0.0, L])
     # data.mocap_pos[mocap_id] = np.array([L+R, 0.0, L])
-    data.mocap_pos[mocap_id] = np.array([L, 0.0, L+R])
+    # data.mocap_pos[mocap_id] = np.array([L, 0.0, L+R])
     # data.mocap_pos[mocap_id] = np.array([L, 0.0, L-R])
 
 
@@ -395,7 +395,6 @@ def controller(model, data, invariants, sigma, previous_solution=None):
     # Use original constraint formulation
     dq = data.qvel.reshape(-1,1)
     N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
-    qdd_null = N @ qdd
 
 
     # Vdot for our main CLF
@@ -404,13 +403,26 @@ def controller(model, data, invariants, sigma, previous_solution=None):
     V = eta.T @ Pe @ eta   
     dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd)
     qdd_null = N @ qdd
-    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - (K * twist.reshape(-1,1)  - 2 * np.sqrt(K) * (jac @ dq)))) + 0.2 * cp.square(cp.norm(qdd)) 
-                            + 0.5 * cp.square(cp.norm(u,1)) + 1000 * cp.square(dl) + 0.5 * cp.square(cp.norm(qdd_null)))  # Add manipulability objective
+
+    delta_q = cp.Variable(shape=(model.nv, 1)) 
+    objective = cp.Minimize(cp.sum_squares(jac[:3, :] @ delta_q - twist[:3].reshape(-1,1)))
+    constraints = [delta_q <= 0.175, delta_q >= -0.175]
+    prob = cp.Problem(objective=objective, constraints=constraints)
+    prob.solve(solver=cp.SCS, verbose=False)
+
+    delta_q = delta_q.value
+    # print(f"delta_q: {delta_q.T}")
+
+    objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd 
+                                            - (K * twist.reshape(-1,1)  - 2 * np.sqrt(K) * (jac @ dq)))) 
+                                            + 0.05 * cp.square(cp.norm(qdd)) 
+                            + 0.5 * cp.square(cp.norm(u,1)) + 1000 * cp.square(dl) + 
+                            0.0 * cp.square(cp.norm(qdd_null)))  # Add manipulability objective
     constraints = [ 
                     dV <= - 1/e * V + dl, 
-                    pinv_Bp @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1)) == u,
+                    pinv_Bp @ (M @ qdd + data.qfrc_bias.reshape(-1,1) - data.qfrc_passive.reshape(-1,1) + 20*N @ np.random.randn(*qdd.shape)) == u,
                     np.zeros((nu,1)) >= u,
-                    u >= -50.0]
+                    u >= -100.0]
 
     prob = cp.Problem(objective=objective, constraints=constraints)
     
@@ -431,7 +443,7 @@ def controller(model, data, invariants, sigma, previous_solution=None):
     try:
         prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
         if u.value is not None:
-            data.ctrl = np.squeeze(u.value)
+            data.ctrl = np.squeeze(u.value).clip(-100, 0)  # Clip control inputs to valid range for MuJoCo
             # Cache solution for next iteration
             current_solution = {
                 'u': u.value.copy(),

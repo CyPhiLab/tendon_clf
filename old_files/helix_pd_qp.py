@@ -223,7 +223,7 @@ def controller(model, data, invariants, previous_solution=None):
     nu = 9
     nq = model.nq
     u = cp.Variable(shape=(nu, 1))
-    mu = cp.Variable(shape=(6, 1))
+    # mu = cp.Variable(shape=(6, 1))
     qdd = cp.Variable(shape=(nq, 1))
     twist[3:] = 0.0
     
@@ -234,12 +234,11 @@ def controller(model, data, invariants, previous_solution=None):
     mu_des = (500 * twist.reshape(-1,1)  - 20 * (jac @ dq))
     N = np.eye(model.nv) - np.linalg.pinv(jac) @ jac
     qdd_null = N @ qdd
-
+    mu = dJ_dt @ dq + jac @ qdd 
 
     objective = cp.Minimize(cp.square(cp.norm(mu - mu_des))  + 0.5 * cp.square(cp.norm(u)) + 0.2 * cp.square(cp.norm(qdd)))# + 0.5 * cp.sum_squares(qdd_null))
 
     constraints = [ pinv_B @ (M @ qdd + data.qfrc_bias.reshape(-1,1) + data.qfrc_passive.reshape(-1,1)) == u,
-                   dJ_dt @ dq + jac @ qdd == mu,
                     -25*sel <= u,
                     25*np.ones((nu,1)) >= u]
 
