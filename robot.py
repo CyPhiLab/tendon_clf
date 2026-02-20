@@ -30,8 +30,10 @@ class Robot:
             self.B_applied = np.array([[1, 0.0], [-1, 0.0], [0.0, 1], [0.0, -1]])
             self.pinv_B = np.linalg.pinv(self.B)
             # Control gains
-            self.Kp, self.Kd = 500, 2 * np.sqrt(500)
+            self.Kp = 500
+            self.Kd = 2 * np.sqrt(self.Kp)
             self.damping, self.stiffness = 0.02, 0.01
+            self.e = 0.2
             # Passive force sign (tendon uses -data.qfrc_passive)
             self.passive_sign = -1
             # Regularization coefficients for optimization
@@ -65,6 +67,7 @@ class Robot:
             # Control gains
             self.Kp, self.Kd = 500, 2 * np.sqrt(500)
             self.damping, self.stiffness = 0.2, 0.1
+            self.e = 0.5
             # Passive force sign (helix uses +data.qfrc_passive)
             self.passive_sign = 1
             # Regularization coefficients for optimization
@@ -89,8 +92,9 @@ class Robot:
             self.pinv_B = None
             self.sel = np.ones((self.nu, 1))
             # Control gains
-            self.Kp, self.Kd = 2000.0, 2 * np.sqrt(2000.0)
+            self.Kp, self.Kd = 1000.0, 2 * np.sqrt(1000.0)
             self.damping, self.stiffness = 0.01, 0.01
+            self.e = 0.01
             # Passive force sign (spirob uses -data.qfrc_passive)
             self.passive_sign = -1
             # Regularization coefficients for optimization  
@@ -119,17 +123,17 @@ class Robot:
         self.F[:m, m:] = np.eye(m, m)
         self.G = np.zeros((2*m, m))
         self.G[m:, :] = np.eye(m)
-        self.e = 0.2
+        
         self.Pe = linalg.block_diag(np.eye(m) / self.e, np.eye(m)).T @ linalg.solve_continuous_are(self.F, self.G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / self.e, np.eye(m))
     
-    def apply_control(self, u):
-        """Apply control inputs to the robot with proper scaling/mapping"""
-        if self.model_name == 'tendon':
-            self.data.ctrl[:] = np.squeeze(self.Bp @ u).clip(self.control_limits[0], self.control_limits[1])
-        elif self.model_name == 'helix':
-            self.data.ctrl[:] = np.squeeze(self.B @ u).clip(self.control_limits[0], self.control_limits[1])
-        elif self.model_name == 'spirob':
-            self.data.ctrl[:] = np.squeeze(u).clip(self.control_limits[0], self.control_limits[1])
+    # def apply_control(self, u):
+    #     """Apply control inputs to the robot with proper scaling/mapping"""
+    #     if self.model_name == 'tendon':
+    #         self.data.ctrl[:] = np.squeeze(self.Bp @ u).clip(self.control_limits[0], self.control_limits[1])
+    #     elif self.model_name == 'helix':
+    #         self.data.ctrl[:] = np.squeeze(self.B @ u).clip(self.control_limits[0], self.control_limits[1])
+    #     elif self.model_name == 'spirob':
+    #         self.data.ctrl[:] = np.squeeze(u).clip(self.control_limits[0], self.control_limits[1])
     
     def get_passive_forces(self):
         """Get passive forces with correct sign for each robot"""
@@ -218,8 +222,39 @@ class Robot:
     
     def get_coriolis_and_gravity(self):
         """Get Coriolis and gravity forces"""
-        mujoco.mj_rne(self.model, self.data, 0, self.data.qfrc_bias)
-        return self.data.qfrc_bias.copy()
+        nv = self.model.nv  # number of degrees of freedom
+
+        # Calculate gravity vector
+        g = np.zeros(nv)
+        dummy = np.zeros(nv,)
+        mujoco.mj_factorM(self.model, self.data)  # Compute sparse M factorization
+        mujoco.mj_rne(self.model, self.data, 0, dummy)  # Run RNE with zero acceleration and velocity
+        g = self.data.qfrc_bias.copy()
+
+        # Calculate Coriolis matrix
+        C = np.zeros((nv, nv))
+        q_vel = self.data.qvel.copy()
+
+        # Compute each column of C using finite differences
+        eps = 1e-6
+        for i in range(nv):
+            # Save current state
+            vel_orig = q_vel.copy()
+
+            # Perturb velocity
+            q_vel[i] += eps
+            self.data.qvel = q_vel
+
+            # Calculate forces with perturbed velocity
+            mujoco.mj_rne(self.model, self.data, 0, dummy)
+            tau_plus = self.data.qfrc_bias.copy()
+            # Restore original velocity
+            q_vel = vel_orig
+            self.data.qvel = q_vel
+
+            # Compute column of C using finite difference
+            C[:, i] = (tau_plus - self.data.qfrc_bias) / eps
+        return C, g
     
     # ===== ON-DEMAND PHYSICS INTERFACE =====
     
@@ -296,8 +331,4 @@ class Robot:
         
     def apply_control_input(self, u):
         """Apply control input to robot actuators"""
-        self.data.ctrl[:] = self.B_applied @ u
-    
-    def control(self, experiment, control_scheme, target, controller, previous_solution=None):
-        """DEPRECATED: This method will be removed in the new architecture"""
-        raise NotImplementedError("Robot.control() has been replaced by controller-driven architecture")
+        self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)

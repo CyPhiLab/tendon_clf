@@ -101,7 +101,7 @@ class IDCLFQPController(BaseController):
         dl = cp.Variable(shape=(1,))
 
         objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + robot.reg_qdd * cp.square(cp.norm(qdd))  
-                                + robot.reg_u * cp.square(cp.norm(u)) + robot.reg_dl * cp.square(dl)) 
+                                + robot.reg_u * cp.square(cp.norm(u,1)) + robot.reg_dl * cp.square(dl)) 
 
         # Vdot for our main CLF
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc)

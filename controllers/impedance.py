@@ -102,8 +102,10 @@ class ImpedanceController(BaseController):
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
         Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
         tau = jac.T @ (Mx @ ydd + Cy) + g + robot.get_passive_forces().flatten()
+        lower_bounds = robot.lower_bounds
+        upper_bounds = robot.upper_bounds
         u = robot.pinv_B @ tau
-        
+        # u = np.clip(u, lower_bounds, upper_bounds)
         try:
             robot.apply_control_input(u)
         except:
