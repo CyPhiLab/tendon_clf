@@ -62,7 +62,7 @@ class Robot:
             self.B_applied = self.B  # Use same matrix
             self.pinv_B = np.linalg.pinv(self.B)
             # Selection matrix
-            self.sel = np.ones((self.nu, 1))
+            self.sel = np.ones((self.nu,))
             self.sel[[2, 5, 8]] = 0.0
             # Control gains
             self.Kp, self.Kd = 500, 2 * np.sqrt(500)
