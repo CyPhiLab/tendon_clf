@@ -196,8 +196,8 @@ class ImpedanceQPController(BaseController):
         # Generic optimization formulation (robot-agnostic)
         nu = robot.nu
         nq = robot.model.nq
-        u = cp.Variable(shape=(nu, 1))
-        qdd = cp.Variable(shape=(nq, 1))
+        u = cp.Variable(shape=(nu, ))
+        qdd = cp.Variable(shape=(nq, ))
 
         objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + robot.reg_qdd * cp.square(cp.norm(qdd))  
                                 + robot.reg_u * cp.square(cp.norm(u))) 
