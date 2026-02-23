@@ -16,6 +16,7 @@ if __name__ == "__main__":
     parser.add_argument('--robot', type=str, default='helix', choices=['helix', 'tendon','spirob'], help='Robot to simulate')
     parser.add_argument('--experiment', type=str, default='set', choices=['set', 'tracking'], help='Experiment name')
     parser.add_argument('--target_pos', type=str, default='pos4', choices=['pos1', 'pos2', 'pos3', 'pos4'], help='Target position for the end-effector')
+    parser.add_argument('--sim_duration', type=float, default=10.0, help='Duration of the simulation in seconds')
     parser.add_argument('--verbose', action='store_true', help='Print detailed system information')
     args = parser.parse_args()
     
@@ -38,7 +39,8 @@ if __name__ == "__main__":
                             target_pos=args.target_pos, 
                             controller=None,  # Controller logic now in Robot class
                             experiment=args.experiment, 
-                            model_name=args.robot)
+                            model_name=args.robot,
+                            sim_duration=args.sim_duration)
     
     # Record end time and add runtime data to results
     end_time = time.time()

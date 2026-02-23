@@ -132,7 +132,7 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
 
 
 
-def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None):
+def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0):
     """Run physics simulation with specified controller and robot."""
     
     robot = Robot(model_name)
@@ -154,7 +154,6 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
 
     # Pre-allocate logging arrays for better performance
     dt = robot.model.opt.timestep
-    sim_duration = 5.0  # Fixed 5-second simulation
     max_steps = int(sim_duration / dt) + 100  # Add buffer
     log_frequency = 5  # Log every 5 steps
     max_log_steps = max_steps // log_frequency + 1
@@ -190,7 +189,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             # Compute target data (position, velocities, errors)
             target_vel, target_acc, twist = robot.compute_target_data(experiment, target)
             
-            # Call controller directly (controller-driven architecture)
+            # Call controller directly 
             result = controller(robot, target_vel, target_acc, twist, previous_solution)
             
             # Update previous_solution from result
@@ -203,17 +202,19 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             if step_count % log_frequency == 0 and log_idx < max_log_steps:
                 _log_simulation_data(logs, log_idx, robot.data, control_scheme, experiment, result, t, target)
                 log_idx += 1
+
+            # Terminate after fixed duration (10 seconds)
+            if t >= sim_duration:
+                break
             
             step_count += 1
-            t += dt
+            t = robot.data.time
             
             # Update viewer if in viewer mode
             if not headless:
                 viewer.sync()
             
-            # Terminate after fixed duration (5 seconds)
-            if t >= 5.0:
-                break
+            
                 
     finally:
         if viewer is not None:
