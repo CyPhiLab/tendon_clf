@@ -38,4 +38,3 @@ MJMODEL.TXT
 python/dist/
 
 .DS_Store
-MUJOCO_LOG.TXT

@@ -125,16 +125,7 @@ class Robot:
         self.G[m:, :] = np.eye(m)
         
         self.Pe = linalg.block_diag(np.eye(m) / self.e, np.eye(m)).T @ linalg.solve_continuous_are(self.F, self.G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / self.e, np.eye(m))
-    
-    # def apply_control(self, u):
-    #     """Apply control inputs to the robot with proper scaling/mapping"""
-    #     if self.model_name == 'tendon':
-    #         self.data.ctrl[:] = np.squeeze(self.Bp @ u).clip(self.control_limits[0], self.control_limits[1])
-    #     elif self.model_name == 'helix':
-    #         self.data.ctrl[:] = np.squeeze(self.B @ u).clip(self.control_limits[0], self.control_limits[1])
-    #     elif self.model_name == 'spirob':
-    #         self.data.ctrl[:] = np.squeeze(u).clip(self.control_limits[0], self.control_limits[1])
-    
+        
     def get_passive_forces(self):
         """Get passive forces with correct sign for each robot"""
         return self.passive_sign * self.data.qfrc_passive

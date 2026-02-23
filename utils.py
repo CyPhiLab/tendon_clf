@@ -1,3 +1,5 @@
+import time
+
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -31,7 +33,7 @@ def circular_trajectory(t, model_name):
     elif model_name == 'helix':
         L = 0.435/2
         R = L/2
-        h = 0.7 
+        h = 0.7
 
     elif model_name == 'spirob':
         L = 0.48/2
@@ -103,6 +105,7 @@ def _create_log_arrays(num_steps, control_scheme, experiment, nu):
         'time': np.zeros(num_steps),
         'sim_time': np.zeros(num_steps), 
         'task_error': np.zeros(num_steps),
+        'ctrl_time': np.zeros(num_steps),
         'u': np.zeros((num_steps, nu))
     }
     
@@ -115,9 +118,10 @@ def _create_log_arrays(num_steps, control_scheme, experiment, nu):
     
     return logs
 
-def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result, t, target):
+def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result, t, ctrl_t, target):
     """Log simulation data into pre-allocated arrays."""
     logs['time'][log_idx] = t
+    logs['ctrl_time'][log_idx] = ctrl_t
     logs['sim_time'][log_idx] = data.time
     logs['task_error'][log_idx] = result.task_error
     logs['u'][log_idx] = result.control_input.squeeze()
@@ -190,8 +194,9 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             target_vel, target_acc, twist = robot.compute_target_data(experiment, target)
             
             # Call controller directly 
+            t_ctrl_start = time.time()
             result = controller(robot, target_vel, target_acc, twist, previous_solution)
-            
+            t_ctrl = time.time() - t_ctrl_start
             # Update previous_solution from result
             previous_solution = result.previous_solution
             
@@ -200,7 +205,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             
             # Log data periodically
             if step_count % log_frequency == 0 and log_idx < max_log_steps:
-                _log_simulation_data(logs, log_idx, robot.data, control_scheme, experiment, result, t, target)
+                _log_simulation_data(logs, log_idx, robot.data, control_scheme, experiment, result, t, t_ctrl, target)
                 log_idx += 1
 
             # Terminate after fixed duration (10 seconds)
@@ -228,7 +233,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             actual_logs[key] = arr[:log_idx]
         else:
             actual_logs[key] = arr[:log_idx]
-    
+    print(f"Average Control Time {np.mean(actual_logs['ctrl_time']):.6f} seconds")
     print(f"Simulation finished after {actual_logs['sim_time'][-1]} seconds")
 
     return actual_logs

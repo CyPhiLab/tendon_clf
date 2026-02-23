@@ -102,8 +102,6 @@ class IDCLFQPController(BaseController):
 
         objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + robot.reg_qdd * cp.square(cp.norm(qdd))  
                                 + robot.reg_u * cp.square(cp.norm(u,1)) + robot.reg_dl * cp.square(dl)) 
-
-        test = robot.pinv_B @ (M @ qdd + robot.get_bias_forces() + robot.get_passive_forces()) 
         
         # Vdot for our main CLF
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc)
