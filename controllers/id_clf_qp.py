@@ -119,7 +119,7 @@ class IDCLFQPController(BaseController):
         # Vdot for our main CLF
         constraints = [dV <= - 1/e * V + dl, 
                        r_theta[:nu] == 0,
-                       r_theta[nu:] <= su]
+                       r_theta[nu:] == su]
         constraints += robot.get_control_constraints(u)
 
         prob = cp.Problem(objective=objective, constraints=constraints)
