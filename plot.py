@@ -6,10 +6,9 @@ from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from pandas import plotting
 
-# ============================================================
-# Paper style
-# ============================================================
+# Define font style
 
 plt.rcParams.update({
     "font.family": "serif",
@@ -24,53 +23,35 @@ plt.rcParams.update({
 })
 
 
-# ============================================================
-# Naming / legend utilities
-# ============================================================
-
-def pretty_controller_name(ctrl: str) -> str:
+# Naming utilities
+def naming(name, mapping):
     """
-    Convert internal controller name to paper-friendly legend label.
+    Convert internal name to paper-friendly legend label.
     """
-
-    if ctrl is None:
+    if name is None:
         return ""
 
-    c = ctrl.lower().strip()
+    n = name.lower().strip()
 
-    mapping = {
-        "id_clf_qp": "ID-CLF-QP",
-        "mpc": "MPC",
-        "impedance": "IC",
-        "impedance_pd": "IC-PD",
-        "impedance_qp": "IC-QP",
-    }
-
-    if c in mapping:
-        return mapping[c]
+    if n in mapping:
+        return mapping[n]
 
     # fallback: Capitalize words but don't scream case
-    return "-".join(word.capitalize() for word in c.split("_"))
+    return "-".join(word.capitalize() for word in n.split("_"))
 
+control_name = {
+    "id_clf_qp": "ID-CLF-QP",
+    "mpc": "MPC",
+    "impedance": "IC",
+    "impedance_pd": "IC-PD",
+    "impedance_qp": "IC-QP",
+}
 
-
-def pretty_robot_name(robot: str) -> str:
-    """
-    Convert robot folder name to paper-friendly label:
-      - helix  -> Helix
-      - tendon -> Finger
-      - spirob -> SpiRob
-    """
-    if robot is None:
-        return ""
-    r = robot.lower().strip()
-
-    mapping = {
-        "tendon": "Finger",
-        "helix": "Helix",
-        "spirob": "SpiRob"
-    }
-    return mapping.get(r, r.capitalize())
+robot_name = {
+    "tendon": "Finger",
+    "helix": "Helix",
+    "spirob": "SpiRob"
+}
 
 
 def legend_above(ax, ncol=None):
@@ -101,25 +82,20 @@ def legend_above(ax, ncol=None):
 
 
 
-def finalize_figure(fig: plt.Figure, ax: plt.Axes) -> None:
+def finalize_figure(fig, ax):
     """
     Ensure there is room for the outside legend.
     """
     fig.tight_layout()
     fig.subplots_adjust(top=0.82)
 
-
-# ============================================================
 # CSV parsing
-# ============================================================
-
-def parse_vec_series(series: pd.Series) -> np.ndarray:
+def parse_vec_series(series):
     """Parse strings like '[0.1, 0, 0.2]' into (N,3) numpy array."""
     return np.vstack(series.apply(ast.literal_eval).to_numpy())
 
 
-def load_single_csv(path: str) -> Tuple[np.ndarray, Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray],
-                                        Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+def load_single_csv(path):
     df = pd.read_csv(path, comment="#")
 
     t = df["time"].to_numpy()
@@ -136,11 +112,8 @@ def load_single_csv(path: str) -> Tuple[np.ndarray, Optional[np.ndarray], Option
 
     return t, sim_time, V, error, u, x, xd
 
-
-# ============================================================
 # Experiment processing
-# ============================================================
-def read_rtf_from_header(path: str) -> float:
+def read_rtf(path):
     """
     Extract real_time_factor from commented header of CSV.
     Returns NaN if not present.
@@ -158,7 +131,7 @@ def read_rtf_from_header(path: str) -> float:
 
     return float("nan")
 
-def process_set_experiment(files: List[str]) -> Dict[str, Any]:
+def set_experiment(files):
     """
     Aggregate multiple SET runs into mean/std on a common time grid.
     - Always produces err_mean/std
@@ -205,7 +178,7 @@ def process_set_experiment(files: List[str]) -> Dict[str, Any]:
     return result
 
 
-def process_tracking_experiment(file: str) -> Dict[str, Any]:
+def tracking_experiment(file):
     """
     Single tracking run (no averaging)
     """
@@ -224,7 +197,7 @@ def process_tracking_experiment(file: str) -> Dict[str, Any]:
     return out
 
 
-def load_all_results(root: str = "results") -> Dict[str, Dict[str, Dict[str, Any]]]:
+def load_results(root):
     """
     Structure:
       robots[robot][ctrl]["set"]      -> aggregated dict
@@ -256,91 +229,96 @@ def load_all_results(root: str = "results") -> Dict[str, Dict[str, Dict[str, Any
             robots[robot][ctrl] = {}
 
             if len(set_files) > 0:
-                robots[robot][ctrl]["set"] = process_set_experiment(set_files)
+                robots[robot][ctrl]["set"] = set_experiment(set_files)
 
             if len(track_files) > 0:
-                robots[robot][ctrl]["tracking"] = process_tracking_experiment(track_files[0])
+                robots[robot][ctrl]["tracking"] = tracking_experiment(track_files[0])
 
     return robots
 
-
-# ============================================================
 # Plotting
-# ============================================================
-def plot_set_clf_all_robots_one_plot(
-    robots: Dict[str, Dict[str, Dict[str, Any]]],
-    controller_filter: Optional[str] = None
-) -> None:
-    """
-    One plot, multiple robot curves (SET experiment).
-    Uses mean/std shading if V_mean exists.
-    Legend above plot, paper labels.
-    """
+def clf_plot(robots, control, experiment):
 
     fig, ax = plt.subplots(figsize=(8, 5))
     plotted_any = False
 
-    # -------------------------------------------------
-    # collect curves first
-    # -------------------------------------------------
     items = []
+
     for robot, controllers in robots.items():
         for ctrl, data in controllers.items():
-            if "set" not in data:
-                continue
-            if "V_mean" not in data["set"]:
-                continue
-            if controller_filter is not None and ctrl != controller_filter:
+
+            if experiment not in data:
                 continue
 
-            items.append((robot, ctrl, data))
+            exp_data = data[experiment]
 
-    # -------------------------------------------------
-    # deterministic ROBOT ordering: Finger → Helix → SpiRob
-    # (based on folder names)
-    # -------------------------------------------------
-    ROBOT_ORDER_INTERNAL = ["tendon", "helix", "spirob"]
+            # key depends on experiment type
+            if experiment == "set":
+                if "V_mean" not in exp_data:
+                    continue
+            elif experiment == "tracking":
+                if "V" not in exp_data:
+                    continue
+            else:
+                raise ValueError("experiment must be 'set' or 'tracking'")
+
+            if control is not None and ctrl != control:
+                continue
+
+            items.append((robot, ctrl, exp_data))
+
+    robot_order = ["tendon", "helix", "spirob"]
 
     items.sort(
-        key=lambda x: ROBOT_ORDER_INTERNAL.index(x[0]) if x[0] in ROBOT_ORDER_INTERNAL else 999
+        key=lambda x: robot_order.index(x[0]) if x[0] in robot_order else 999
     )
 
-    # -------------------------------------------------
-    # plot AFTER sorting
-    # -------------------------------------------------
-    for robot, ctrl, data in items:
-        t = data["set"]["time"]
-        V = data["set"]["V_mean"]
-        S = data["set"]["V_std"]
+    for robot, ctrl, exp_data in items:
 
-        label = f"{pretty_robot_name(robot)}"
-        line, = ax.plot(t, V, linewidth=4, label=label, zorder=3)
-        color = line.get_color()
+        if experiment == "set":
+            t = exp_data["time"]
+            V = exp_data["V_mean"]
+            S = exp_data["V_std"]
 
-        ax.fill_between(t, V - S, V + S, color=color, alpha=0.25, linewidth=0, zorder=2)
+            line, = ax.plot(t, V, linewidth=4,
+                            label=naming(robot, robot_name), zorder=3)
+
+            ax.fill_between(t, V - S, V + S,
+                            color=line.get_color(),
+                            alpha=0.25,
+                            linewidth=0,
+                            zorder=2)
+
+        else:  # tracking
+            t = exp_data["time"]
+            V = exp_data["V"]
+
+            ax.plot(t, V, linewidth=4,
+                    label=naming(robot, robot_name))
 
         plotted_any = True
 
     if not plotted_any:
         plt.close(fig)
-        print("No SET CLF curves found to plot.")
+        print(f"No {experiment.upper()} CLF curves found to plot.")
         return
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Normalized Lyapunov Function")
     ax.grid(True)
 
+    if experiment == "set":
+        plt.xlim(0, 0.8)
+        plt.ylim(0, 2)
+    else:
+        plt.xlim(0, 2)
+
     legend_above(ax, ncol=None)
     finalize_figure(fig, ax)
     plt.show()
 
 
-def plot_tracking_xy_circles_combined(
-    robots: Dict[str, Dict[str, Dict[str, Any]]],
-    robot_list: List[str],
-    plane: str = "xz",
-    start_time: float = 8.0
-):
+def plot_tracking_trajectory(robots, robot_list, plane, start_time):
     """
     Plot multiple robots in one figure with shared legend.
     Each robot becomes one subplot.
@@ -355,7 +333,6 @@ def plot_tracking_xy_circles_combined(
     axis_names = ["x", "y", "z"]
 
     n = len(robot_list)
-    # fig, axes = plt.subplots(1, n, figsize=(6.2*n, 6.2), sharex=False, sharey=False)
     fig, axes = plt.subplots(n, 1, figsize=(6.5, 6.2*n), sharex=False, sharey=False)
 
 
@@ -395,7 +372,7 @@ def plot_tracking_xy_circles_combined(
             x = x[mask]
             xd = xd[mask]
 
-            label = pretty_controller_name(ctrl)
+            label = naming(ctrl, control_name)
             line, = ax.plot(x[:, i], x[:, j], linewidth=4, label=label)
 
             # add uniquely
@@ -414,21 +391,11 @@ def plot_tracking_xy_circles_combined(
 
         ax.set_xlabel(f"{axis_names[i]} (m)")
         ax.set_ylabel(f"{axis_names[j]} (m)")
-        ax.set_title(pretty_robot_name(robot))
+        ax.set_title(naming(robot, robot_name))
         ax.axis("equal")
         ax.grid(True)
 
-    # -------- Shared legend --------
-    # fig.legend(
-    #     legend_handles,
-    #     legend_labels,
-    #     loc="upper center",
-    #     bbox_to_anchor=(0.5, 1.0),
-    #     ncol=len(legend_labels),
-    #     frameon=True
-    # )
 
-    # ---- reorder so Reference is last ----
     # ---- reorder so Reference is last ----
     ordered = sorted(
         zip(legend_handles, legend_labels),
@@ -436,20 +403,18 @@ def plot_tracking_xy_circles_combined(
     )
     legend_handles, legend_labels = zip(*ordered)
 
-    # ---- three column legend ----
     fig.legend(
         legend_handles,
         legend_labels,
         loc="upper center",
         bbox_to_anchor=(0.5, 1.0),
-        ncol=3,                 # <<< NOW 3 COLUMNS
+        ncol=3,              
         frameon=True,
         columnspacing=1.6,
         handlelength=2.4,
         handletextpad=0.6,
         borderpad=0.4
     )
-
 
     # -------- subplot labels (a), (b) --------
     labels = ["(a)", "(b)", "(c)", "(d)"]
@@ -464,181 +429,28 @@ def plot_tracking_xy_circles_combined(
     plt.tight_layout(rect=[0, 0, 1, 0.92])
     plt.show()
 
-
-def plot_tracking_clf_all_robots_one_plot(
-    robots: Dict[str, Dict[str, Dict[str, Any]]],
-    controller_filter: Optional[str] = None,
-    xlim: Tuple[float, float] = (0.0, 4.0)
-) -> None:
-    """
-    One plot, multiple robot curves (TRACKING experiment).
-    Legend above plot, paper labels.
-    """
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    plotted_any = False
-
-    # -------------------------------------------------
-    # flatten all curves into a single list
-    # -------------------------------------------------
-    items = []
-    for robot, controllers in robots.items():
-        for ctrl, data in controllers.items():
-            if "tracking" not in data:
-                continue
-            if "V" not in data["tracking"]:
-                continue
-            if controller_filter is not None and ctrl != controller_filter:
-                continue
-            items.append((robot, ctrl, data))
-
-    # -------------------------------------------------
-    # deterministic ROBOT ordering: Finger → Helix → SpiRob
-    # -------------------------------------------------
-    robot_order = ["tendon", "helix", "spirob"]   # folder names (not pretty names)
-
-    items.sort(
-        key=lambda x: robot_order.index(x[0]) if x[0] in robot_order else 999
-    )
-
-    # -------------------------------------------------
-    # plot
-    # -------------------------------------------------
-    for robot, ctrl, data in items:
-        t = data["tracking"]["time"]
-        V = data["tracking"]["V"]
-
-        label = pretty_robot_name(robot)
-        ax.plot(t, V, linewidth=4, label=label)
-        plotted_any = True
-
-    if not plotted_any:
-        plt.close(fig)
-        print("No TRACKING CLF curves found to plot.")
-        return
-
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Normalized Lyapunov Function ")
-    ax.grid(True)
-    ax.set_xlim(*xlim)
-
-    legend_above(ax, ncol=None)
-    finalize_figure(fig, ax)
-    plt.show()
-
-
-
-def plot_tracking_xy_circles(
-    robots: Dict[str, Dict[str, Dict[str, Any]]],
-    plane: str = "xz",
-    start_time: float = 8.0
-) -> None:
-    """
-    For EACH ROBOT:
-      - one figure
-      - all controllers overlayed
-      - plot only after t >= start_time
-      - legend above plot
-      - controller labels: ID_CLF_QP, MPC, IC
-      - reference label: Reference
-    """
-    plane = plane.lower()
-    idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
-    if plane not in idx:
-        raise ValueError("plane must be one of: 'xy', 'xz', 'yz'")
-
-    i, j = idx[plane]
-    axis_names = ["x", "y", "z"]
-
-    for robot, controllers in robots.items():
-        fig, ax = plt.subplots(figsize=(6.5, 6.5))
-        plotted_any = False
-        plotted_ref = False
-
-        # deterministic legend order: MPC, IC, ID_CLF_QP (then Reference)
-        ctrl_order = ["id_clf_qp", "impedance", "impedance_QP", "mpc"]
-        items = list(controllers.items())
-        items.sort(key=lambda kv: ctrl_order.index(kv[0]) if kv[0] in ctrl_order else 999)
-
-        for ctrl, data in items:
-            if "tracking" not in data:
-                continue
-
-            tr = data["tracking"]
-            if "x" not in tr or "xd" not in tr:
-                print(f"Skipping {robot}-{ctrl}: no x_log/xd_log")
-                continue
-
-            t = tr["time"]
-            x = tr["x"]
-            xd = tr["xd"]
-
-            mask = t >= start_time
-            if np.sum(mask) < 10:
-                print(f"Skipping {robot}-{ctrl}: not enough data after {start_time}s")
-                continue
-
-            x = x[mask]
-            xd = xd[mask]
-
-            # controller trajectory
-            ax.plot(
-                x[:, i], x[:, j],
-                linewidth=2.8,
-                label=pretty_controller_name(ctrl)
-            )
-
-            # reference plotted once
-            if not plotted_ref:
-                ax.plot(
-                    xd[:, i], xd[:, j],
-                    "k--", linewidth=4.0,
-                    label="Reference"
-                )
-                plotted_ref = True
-
-            plotted_any = True
-
-        if not plotted_any:
-            plt.close(fig)
-            print(f"No tracking trajectories for {robot}")
-            continue
-
-        ax.set_xlabel(f"{axis_names[i]} (m)")
-        ax.set_ylabel(f"{axis_names[j]} (m)")
-        ax.grid(True)
-        ax.axis("equal")
-
-        legend_above(ax, ncol=None)
-        finalize_figure(fig, ax)
-        plt.show()
-
-
-# ============================================================
 # Reports
-# ============================================================
-
-def compute_rtf(df: pd.DataFrame) -> float:
+def compute_rtf(df):
     return df["sim_time"].iloc[-1] / df["time"].iloc[-1]
 
 
-def max_control_input(df: pd.DataFrame) -> float:
+def max_control_input(df):
     u_cols = [c for c in df.columns if c.startswith("u")]
     if len(u_cols) == 0:
         return float("nan")
     return float(np.abs(df[u_cols].to_numpy()).max())
 
 
-def final_error(df: pd.DataFrame) -> float:
+def final_error(df):
     return float(df["task_error"].iloc[-1])
 
 
-def mse_error(df: pd.DataFrame) -> float:
+def mse_error(df):
     e = df["task_error"].to_numpy()
     return float(np.mean(e**2))
 
 
-def summarize_set(files: List[str]) -> Dict[str, float]:
+def summarize_set(files):
     finals: List[float] = []
     max_inputs: List[float] = []
     rtfs: List[float] = []
@@ -649,7 +461,7 @@ def summarize_set(files: List[str]) -> Dict[str, float]:
         finals.append(final_error(df))
         max_inputs.append(max_control_input(df))
 
-        rtf = read_rtf_from_header(f)
+        rtf = read_rtf(f)
         if not np.isnan(rtf):
             rtfs.append(rtf)
 
@@ -662,10 +474,10 @@ def summarize_set(files: List[str]) -> Dict[str, float]:
     }
 
 
-def summarize_tracking(file: str) -> Dict[str, float]:
+def summarize_tracking(file):
     df = pd.read_csv(file, comment="#")
 
-    rtf = read_rtf_from_header(file)
+    rtf = read_rtf(file)
     if np.isnan(rtf):  # fallback safety
         rtf = compute_rtf(df)
 
@@ -675,17 +487,14 @@ def summarize_tracking(file: str) -> Dict[str, float]:
         "max_input": max_control_input(df)
     }
 
-
-
-
-CONTROL_LIMITS = {
+control_limits = {
     "tendon": "-1 ≤ u ≤ 1",
     "helix": "-25 ≤ u ≤ 25",
     "spirob": "u ≤ 0"
 }
 
 
-def generate_report(root: str = "results") -> None:
+def generate_report(root):
     set_rows = []
     track_rows = []
 
@@ -705,38 +514,38 @@ def generate_report(root: str = "results") -> None:
             if len(set_files) > 0:
                 s = summarize_set(set_files)
                 set_rows.append([
-                pretty_robot_name(robot),
-                pretty_controller_name(ctrl),
-                "Static Point Tracking",
+                naming(robot, robot_name),
+                naming(ctrl, control_name),
+                "Set Point",
                 f"{s['final_mean']:.4f} ± {s['final_std']:.4f}",
                 f"{s['rtf_mean']:.2f} ± {s['rtf_std']:.2f}x",
                 f"{s['max_input']:.3f}",
-                CONTROL_LIMITS.get(robot, "")
+                control_limits.get(robot, "")
             ])
 
 
             if len(track_files) > 0:
                 t = summarize_tracking(track_files[0])
                 track_rows.append([
-                    pretty_robot_name(robot),
-                    pretty_controller_name(ctrl),
+                    naming(robot, robot_name),
+                    naming(ctrl, control_name),
                     "Trajectory Tracking",
                     f"{t['mse']:.5f}",
                     f"{t['rtf']:.2f}x",
                     f"{t['max_input']:.3f}",
-                    CONTROL_LIMITS.get(robot, "")
+                    control_limits.get(robot, "")
                 ])
 
     set_df = pd.DataFrame(set_rows, columns=[
     "Robot", "Controller", "Experiment",
-    "Avg Final Error ± std", "RTF", "Max Control Input", "Control Limit"
+    "Mean Final Error ± std", "% Real-time", "Max Control Input", "Control Limit"
     ])
 
 
 
     track_df = pd.DataFrame(track_rows, columns=[
         "Robot", "Controller", "Experiment",
-        "MSE", "RTF", "Max Input", "Control Limit"
+        "MSE", "% Real-time", "Max Input", "Control Limit"
     ])
 
     set_df.to_csv("set_report.csv", index=False)
@@ -747,28 +556,20 @@ def generate_report(root: str = "results") -> None:
     print("  tracking_report.csv")
 
 
-# ============================================================
-# Main
-# ============================================================
-
 if __name__ == "__main__":
-    robots = load_all_results("results")
+    robots = load_results("results")
 
-    # SET Lyapunov
-    plot_set_clf_all_robots_one_plot(robots, controller_filter="id_clf_qp")
-
-    # TRACKING Lyapunov
-    plot_tracking_clf_all_robots_one_plot(robots, controller_filter="id_clf_qp", xlim=(0.0, 4.0))
+    # Lyapunov plotting
+    clf_plot(robots, control="id_clf_qp", experiment="set")
+    clf_plot(robots, control="id_clf_qp", experiment="tracking")
 
     # Trajectory circles
-    # plot_tracking_xy_circles(robots, plane="xz", start_time=8.0)
-    plot_tracking_xy_circles_combined(
+    plot_tracking_trajectory(
     robots,
-    robot_list=["tendon", "helix"],   # order defines (a) and (b)
+    robot_list=["tendon", "helix", "spirob"],
     plane="xz",
     start_time=8.0
 )
-
 
     # Reports
     generate_report("results")
