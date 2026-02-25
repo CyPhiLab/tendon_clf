@@ -108,18 +108,17 @@ class IDCLFQPController(BaseController):
         u = cp.Variable(shape=(nu,))
         qdd = cp.Variable(shape=(nq,))
         dl = cp.Variable(shape=(1,))
-        su = cp.Variable(shape=(nq-nu,))
+        # su = cp.Variable(shape=(nq-nu,))
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc)
         # D = np.diag([robot.damping]*nq)
 
         r_theta = Mbar @ robot.T @ qdd + hbar - Bbar @ u
         objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + robot.reg_qdd * cp.square(cp.norm(qdd))  
-                                + robot.reg_u * cp.square(cp.norm(u,1)) + robot.reg_dl * (cp.square(dl)) + 1.0*cp.square(cp.norm(su))) 
+                                + robot.reg_u * cp.square(cp.norm(u)) + robot.reg_dl * (cp.square(dl))) 
         
         # Vdot for our main CLF
         constraints = [dV <= - 1/e * V + dl, 
-                       r_theta[:nu] == 0,
-                       r_theta[nu:] == su]
+                       r_theta[:nu] == 0]
         constraints += robot.get_control_constraints(u)
 
         prob = cp.Problem(objective=objective, constraints=constraints)
@@ -146,7 +145,7 @@ class IDCLFQPController(BaseController):
                     'u': u.value.copy(),
                     'qdd': qdd.value.copy(),
                     'dl': dl.value.copy(),
-                    'su': su.value.copy()
+                    # 'su': su.value.copy()
                 }
 
                 return ControllerResult(

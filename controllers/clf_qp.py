@@ -111,9 +111,9 @@ class CLFQPController(BaseController):
         LgLfy = jac @ M_inv @ robot.B
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ mu
 
-        objective = cp.Minimize(cp.square(dV) + cp.square(cp.norm(mu - mu_des)) + robot.reg_dl * cp.square(dl) + robot.reg_u*10 * cp.square(cp.norm(u,1)))
+        objective = cp.Minimize(cp.square(dV) + cp.square(cp.norm(mu - mu_des)) + robot.reg_dl * cp.square(dl) + robot.reg_u * cp.square(cp.norm(u,1)))
         # Vdot for our main CLF
-        constraints = [dV <= - 1/e/10 * V + dl, 
+        constraints = [dV <= - 1/e * V + dl, 
                        LgLfy @ u == -L2fy + mu]
         constraints += robot.get_control_constraints(u)
 

@@ -106,11 +106,11 @@ class Robot:
             # Control gains
             self.Kp, self.Kd = 1000.0, 2 * np.sqrt(1000.0)
             self.damping, self.stiffness = 0.01, 0.01
-            self.e = 0.02
+            self.e = 0.05
             # Passive force sign (spirob uses -data.qfrc_passive)
             self.passive_sign = -1
             # Regularization coefficients for optimization  
-            self.reg_qdd = 0.5
+            self.reg_qdd = 1.0
             self.reg_u = 0.5
             self.reg_dl = 1000
             # MPC-specific coefficients
