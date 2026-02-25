@@ -281,7 +281,7 @@ def clf_plot(robots, control, experiment):
             S = exp_data["V_std"]
 
             line, = ax.plot(t, V, linewidth=4,
-                            label=robot_naming(robot), zorder=3)
+                            label=naming(robot, robot_name), zorder=3)
 
             ax.fill_between(t, V - S, V + S,
                             color=line.get_color(),
@@ -294,7 +294,7 @@ def clf_plot(robots, control, experiment):
             V = exp_data["V"]
 
             ax.plot(t, V, linewidth=4,
-                    label=robot_naming(robot))
+                    label=naming(robot, robot_name))
 
         plotted_any = True
 
@@ -391,7 +391,7 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
         ax.set_xlabel(f"{axis_names[i]} (m)")
         ax.set_ylabel(f"{axis_names[j]} (m)")
-        ax.set_title(robot_naming(robot))
+        ax.set_title(naming(robot, robot_name))
         ax.axis("equal")
         ax.grid(True)
 
