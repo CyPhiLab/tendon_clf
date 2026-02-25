@@ -85,8 +85,10 @@ class MPCController(BaseController):
             mu_des_k = - Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
             test = eta_k1 - eta_target
             
-            objective += (gamma**k) * (robot.mpc_task_weight * cp.sum_squares(mu_k1 - mu_des_k) + cp.sum_squares(eta_k1 - eta_target) 
-                                    + robot.reg_u * cp.sum_squares(u_k[:, k:k+1]) + robot.reg_qdd * cp.sum_squares(qdd_k[:, k:k+1]))
+            objective += (gamma**k) * (robot.mpc_task_weight * cp.sum_squares(mu_k1 - mu_des_k) 
+                                       + cp.sum_squares(eta_k1 - eta_target) 
+                                    + robot.reg_u * cp.sum_squares(u_k[:, k:k+1]) 
+                                    + robot.reg_qdd * cp.sum_squares(qdd_k[:, k:k+1]))
 
         # Terminal penalty (use eta_k at terminal, not eta_next)
         eta_N = eta_k[:, N-1:N]
