@@ -26,23 +26,20 @@ def circular_trajectory(t, model_name):
     One full revolution in time T.
     """
     if model_name == 'tendon':
-        L = 0.24/2
-        R = L/2
-        h = 2*L
+        L = 0.24
+        h = L
     
     elif model_name == 'helix':
-        L = 0.435/2
-        R = L/2
+        L = 0.435
         h = 0.7
 
     elif model_name == 'spirob':
-        L = 0.48/2
-        R = L/2
-        h = 0.5
+        L = 0.5
+        h = L
 
     # Circle parameters
-    cx, cy, cz = L, 0, -L+h
-    r = R
+    cx, cy, cz = 3*L/4 * np.cos(np.pi/4), 0, -3*L/4 * np.sin(np.pi/4) + h
+    r = L/4
 
     # Angle
     omega = 0.25 * np.pi 
@@ -71,23 +68,28 @@ def circular_trajectory(t, model_name):
 
 def set_target(target_pos, model_name):
     if model_name == 'tendon':
-        L = 0.24/2
-        R = L/2
-        h = 0
+        L = 0.24
+        h = L
     elif model_name == 'helix':
-        L = 0.435/2
-        R = L/2
-        h = 0.7 - 2*L
+        L = 0.435
+        h = 0.7
     elif model_name == 'spirob':
-        L = 0.48/2
-        R = L/2
-        h = 0
+        L = 0.48
+        h = L
+    # Circle parameters
+    cx, cy, cz = 3*L/4 * np.cos(np.pi/4), 0, -3*L/4 * np.sin(np.pi/4) + h
+    r = L/4
 
-    pos1 = np.array([L-R, 0.0, L+h])
-    pos2 = np.array([L+R, 0.0, L+h])
-    pos3 = np.array([L, 0.0, L+R+h])
-    pos4 = np.array([L, 0.0, L-R+h])
+    # Position
+    theta = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
+    x = cx + r * np.cos(theta)  # Start at pos1
+    y = cy
+    z = cz + r * np.sin(theta)
 
+    pos1 = np.array([x[0], y, z[0]])
+    pos2 = np.array([x[1], y, z[1]])
+    pos3 = np.array([x[2], y, z[2]])
+    pos4 = np.array([x[3], y, z[3]])
 
     targets = {
         'pos1': pos1,
