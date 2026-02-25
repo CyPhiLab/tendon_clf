@@ -24,49 +24,34 @@ plt.rcParams.update({
 
 
 # Naming utilities
-def name_mapping(ctrl):
+def naming(name, mapping):
     """
-    Convert internal controller name to paper-friendly legend label.
+    Convert internal name to paper-friendly legend label.
     """
-
-    if ctrl is None:
+    if name is None:
         return ""
 
-    c = ctrl.lower().strip()
+    n = name.lower().strip()
 
-    mapping = {
-        "id_clf_qp": "ID-CLF-QP",
-        "mpc": "MPC",
-        "impedance": "IC",
-        "impedance_pd": "IC-PD",
-        "impedance_qp": "IC-QP",
-    }
-
-    if c in mapping:
-        return mapping[c]
+    if n in mapping:
+        return mapping[n]
 
     # fallback: Capitalize words but don't scream case
-    return "-".join(word.capitalize() for word in c.split("_"))
+    return "-".join(word.capitalize() for word in n.split("_"))
 
+control_name = {
+    "id_clf_qp": "ID-CLF-QP",
+    "mpc": "MPC",
+    "impedance": "IC",
+    "impedance_pd": "IC-PD",
+    "impedance_qp": "IC-QP",
+}
 
-
-def robot_naming(robot):
-    """
-    Convert robot folder name to paper-friendly label:
-      - helix  -> Helix
-      - tendon -> Finger
-      - spirob -> SpiRob
-    """
-    if robot is None:
-        return ""
-    r = robot.lower().strip()
-
-    mapping = {
-        "tendon": "Finger",
-        "helix": "Helix",
-        "spirob": "SpiRob"
-    }
-    return mapping.get(r, r.capitalize())
+robot_name = {
+    "tendon": "Finger",
+    "helix": "Helix",
+    "spirob": "SpiRob"
+}
 
 
 def legend_above(ax, ncol=None):
@@ -387,7 +372,7 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
             x = x[mask]
             xd = xd[mask]
 
-            label = name_mapping(ctrl)
+            label = naming(ctrl, control_name)
             line, = ax.plot(x[:, i], x[:, j], linewidth=4, label=label)
 
             # add uniquely
@@ -529,8 +514,8 @@ def generate_report(root):
             if len(set_files) > 0:
                 s = summarize_set(set_files)
                 set_rows.append([
-                robot_naming(robot),
-                name_mapping(ctrl),
+                naming(robot, robot_name),
+                naming(ctrl, control_name),
                 "Set Point",
                 f"{s['final_mean']:.4f} ± {s['final_std']:.4f}",
                 f"{s['rtf_mean']:.2f} ± {s['rtf_std']:.2f}x",
@@ -542,8 +527,8 @@ def generate_report(root):
             if len(track_files) > 0:
                 t = summarize_tracking(track_files[0])
                 track_rows.append([
-                    robot_naming(robot),
-                    name_mapping(ctrl),
+                    naming(robot, robot_name),
+                    naming(ctrl, control_name),
                     "Trajectory Tracking",
                     f"{t['mse']:.5f}",
                     f"{t['rtf']:.2f}x",
