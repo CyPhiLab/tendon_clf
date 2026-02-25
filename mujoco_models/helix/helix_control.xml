@@ -1,6 +1,6 @@
 <mujoco model="helix_control">
     <compiler angle="radian" meshdir="meshes/" autolimits="true" />
-    <option integrator="implicitfast" timestep="0.005" gravity="0 0 0" cone="elliptic">
+    <option integrator="implicitfast" timestep="0.01" gravity="0 0 0" cone="elliptic">
     </option>
     <include file="helix_body.xml" />
     <include file="helix_actuators.xml" />
