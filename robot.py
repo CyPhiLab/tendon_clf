@@ -74,11 +74,11 @@ class Robot:
             # Control gains
             self.Kp, self.Kd = 500, 2 * np.sqrt(500)
             self.damping, self.stiffness = 0.2, 0.1
-            self.e = 0.8
+            self.e = 0.5
             # Passive force sign (helix uses +data.qfrc_passive)
             self.passive_sign = 1
             # Regularization coefficients for optimization
-            self.reg_qdd = 3.0
+            self.reg_qdd = 0.5
             self.reg_u = 0.5
             self.reg_dl = 1000
             # MPC-specific coefficients
