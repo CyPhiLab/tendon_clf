@@ -30,7 +30,7 @@ def circular_trajectory(t, model_name):
         h = L
     
     elif model_name == 'helix':
-        L = 0.435
+        L = 0.45
         h = 0.7
 
     elif model_name == 'spirob':
@@ -38,27 +38,48 @@ def circular_trajectory(t, model_name):
         h = L
 
     # Circle parameters
-    cx, cy, cz = 3*L/4 * np.cos(np.pi/4), 0, -3*L/4 * np.sin(np.pi/4) + h
-    r = L/4
+    # cx, cy, cz = 3*L/4 * np.cos(np.pi/4), 0, -3*L/4 * np.sin(np.pi/4) + h
+    # r = L/4
 
     # Angle
     omega = 0.25 * np.pi 
     theta = omega * t
 
+    a = L/3
+    b = L/8
+    phi = np.pi/4
+    x1 = a * np.cos(theta)
+    z1 = b * np.sin(theta) - (L-b)
+
     # Position
-    x = cx + r * np.cos(theta)  # Start at pos1
-    y = cy
-    z = cz + r * np.sin(theta)
+    x = x1 * np.cos(phi) - z1 * np.sin(phi)
+    y = 0.0
+    z = x1 * np.sin(phi) + z1 * np.cos(phi) + h
 
     # Velocity
-    xd = -r * omega * np.sin(theta)
+    xd = -a * omega * np.sin(theta) * np.cos(phi) - b * omega * np.cos(theta) * np.sin(phi)
     yd = 0.0
-    zd =  r * omega * np.cos(theta)
+    zd =  -a * omega * np.sin(theta) * np.sin(phi)+ b * omega * np.cos(theta) * np.cos(phi) 
 
     # Acceleration
-    xdd = -r * omega**2 * np.cos(theta)
+    xdd = -a * omega**2 * np.cos(theta) * np.cos(phi) + b * omega**2 * np.sin(theta) * np.sin(phi)
     ydd = 0.0
-    zdd = -r * omega**2 * np.sin(theta)
+    zdd = -a * omega**2 * np.cos(theta) * np.sin(phi) - b * omega**2 * np.sin(theta) * np.cos(phi)
+
+    # # Position
+    # x = cx + r * np.cos(theta)  # Start at pos1
+    # y = cy
+    # z = cz + r * np.sin(theta)
+
+    # # Velocity
+    # xd = -r * omega * np.sin(theta)
+    # yd = 0.0
+    # zd =  r * omega * np.cos(theta)
+
+    # # Acceleration
+    # xdd = -r * omega**2 * np.cos(theta)
+    # ydd = 0.0
+    # zdd = -r * omega**2 * np.sin(theta)
 
     pos = np.array([x, y, z])
     vel = np.array([xd, yd, zd])
