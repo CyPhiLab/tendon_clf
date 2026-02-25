@@ -12,7 +12,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run optimized tendon control simulation')
     parser.add_argument('--headless', action='store_true', help='Run simulation without GUI for maximum performance')
     parser.add_argument('--no-plots', action='store_true', help='Skip generating plots at the end')
-    parser.add_argument('--control', type=str, default='id_clf_qp', choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP'], help='Controller type to use')
+    parser.add_argument('--control', type=str, default='id_clf_qp', choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP', 'clf_qp'], help='Controller type to use')
     parser.add_argument('--robot', type=str, default='helix', choices=['helix', 'tendon','spirob'], help='Robot to simulate')
     parser.add_argument('--experiment', type=str, default='set', choices=['set', 'tracking'], help='Experiment name')
     parser.add_argument('--target_pos', type=str, default='pos4', choices=['pos1', 'pos2', 'pos3', 'pos4'], help='Target position for the end-effector')
@@ -26,9 +26,9 @@ if __name__ == "__main__":
         print(f"Experiment: {args.experiment}, Target: {args.target_pos if args.experiment == 'set' else 'trajectory'}")
     
     # Basic validation
-    if args.robot == 'spirob' and args.experiment == 'tracking':
-        print("Error: SpiRob robot only supports 'set' experiments, not 'tracking'")
-        sys.exit(1)
+    # if args.robot == 'spirob' and args.experiment == 'tracking':
+    #     print("Error: SpiRob robot only supports 'set' experiments, not 'tracking'")
+    #     sys.exit(1)
     
     # Record start time for performance measurement
     start_time = time.time()

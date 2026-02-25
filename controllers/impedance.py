@@ -1,5 +1,5 @@
 """Impedance controller implementations."""
-
+import time
 import numpy as np
 import cvxpy as cp
 from .base import BaseController, ControllerResult
@@ -92,6 +92,7 @@ class ImpedanceController(BaseController):
         Kp = robot.Kp
         Kd = robot.Kd
 
+        t_ctrl_start = time.time()
         Mx_inv = jac @ M_inv @ jac.T
         if abs(np.linalg.det(Mx_inv)) >= 1e-2:
             Mx = np.linalg.inv(Mx_inv)
@@ -105,6 +106,7 @@ class ImpedanceController(BaseController):
         lower_bounds = robot.lower_bounds
         upper_bounds = robot.upper_bounds
         u = robot.pinv_B @ tau
+        t_ctrl = time.time() - t_ctrl_start
         # u = np.clip(u, lower_bounds, upper_bounds)
         try:
             robot.apply_control_input(u)
@@ -114,7 +116,8 @@ class ImpedanceController(BaseController):
         
         return ControllerResult(
             task_error=np.linalg.norm(twist[:3]),
-            control_input=u.copy()
+            control_input=u.copy(),
+            t_ctrl=t_ctrl
         )
 
 
@@ -215,8 +218,9 @@ class ImpedanceQPController(BaseController):
             except:
                 pass  # If warm start fails, proceed without it
         try:
+            t_ctrl_start = time.time()
             prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
-
+            t_ctrl = time.time() - t_ctrl_start
             if u.value is not None:
                 robot.apply_control_input(u.value)
 
@@ -228,19 +232,22 @@ class ImpedanceQPController(BaseController):
                 return ControllerResult(
                     task_error=np.linalg.norm(twist[:3]),
                     control_input=u.value.copy(),
-                    previous_solution=current_solution
+                    previous_solution=current_solution,
+                    t_ctrl=t_ctrl
                 )
             else:
                 print(f"failed convergence - no solution\n")
                 return ControllerResult(
                     task_error=np.linalg.norm(twist[:3]),
                     control_input=np.zeros((nu, 1)),
-                    previous_solution=previous_solution
+                    previous_solution=previous_solution,
+                    t_ctrl=t_ctrl
                 )
         except Exception as e:
             print(f"failed convergence - exception: {e}\n")
             return ControllerResult(
                 task_error=np.linalg.norm(twist[:3]),
                 control_input=np.zeros((nu, 1)),
-                previous_solution=previous_solution
+                previous_solution=previous_solution,
+                t_ctrl=t_ctrl
             )

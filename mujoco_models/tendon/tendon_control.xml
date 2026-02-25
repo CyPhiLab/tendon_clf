@@ -1,6 +1,6 @@
 <mujoco model="4link_tendon_planar">
     <compiler angle="radian"/>
-    <option gravity="0 0 -9.81" integrator="implicitfast"/>
+    <option gravity="0 0 -9.81" integrator="implicitfast" timestep="0.005"/>
 
     <default>
         <joint type="hinge" axis="0 1 0" limited="true" range="-1.57 1.57" damping="0.01"/>

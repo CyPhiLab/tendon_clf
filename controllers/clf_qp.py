@@ -1,4 +1,4 @@
-"""ID-CLF-QP controller implementation."""
+"""CLF-QP controller implementation."""
 
 import time
 
@@ -7,66 +7,69 @@ import cvxpy as cp
 from .base import BaseController, ControllerResult
 
 
-class IDCLFQPController(BaseController):
+class CLFQPController(BaseController):
     """
-    Inverse Dynamics Control Lyapunov Function Quadratic Programming controller.
+    Control Lyapunov Function Quadratic Programming controller.
     
-    This controller combines inverse dynamics with Control Lyapunov Functions (CLF)
-    to ensure exponential convergence while respecting actuator constraints through
-    quadratic programming optimization.
+    This controller uses feedback linearization with Control Lyapunov Functions (CLF)
+    to achieve exponential convergence in task space while respecting actuator 
+    constraints through quadratic programming optimization.
     
     Mathematical Formulation:
     ========================
     
-    Task Space Dynamics:
-        ẍ = J(q)q̈ + J̇(q)q̇
+    Task Space Dynamics via Feedback Linearization:
+        ẍ = L₂fy + LgLfy·u
     
-    where x ∈ ℝⁿ is the task space position, q ∈ ℝᵐ is joint space.
+    where:
+        L₂fy = J̇q̇ - JM⁻¹(C + g + τₚ)  (drift term)
+        LgLfy = JM⁻¹B                    (control matrix)
     
     Control Lyapunov Function:
         η = [-e; ė - ẋd]  ∈ ℝ²ⁿ
         V(η) = ηᵀPₑη
     
-    where e = xd - x is the task error and Pe > 0.
+    where e = xd - x is task error, ė = ẋ - ẋd is velocity error, and Pₑ > 0.
     
-    CLF Constraint:
-        V̇(η) = ηᵀ(FᵀPₑ + PₑF)η + 2ηᵀPₑG(J(q)q̈ + J̇(q)q̇ - ẍd) ≤ -γV(η) + δ
+    CLF Derivative:
+        V̇(η) = ηᵀ(FᵀPₑ + PₑF)η + 2ηᵀPₑGμ
     
-    where F, G are system matrices, γ = 1/e > 0 is the convergence rate,
-    and δ ≥ 0 is a relaxation variable.
+    where F, G are CLF system matrices and μ is the achieved task acceleration.
     
     Optimization Problem:
-        minimize: ‖J(q)q̈ + J̇(q)q̇ - μd‖² + λq‖q̈‖² + λu‖u‖² + λδ‖δ‖²
-        subject to: V̇(η) ≤ -γV(η) + δ
-                   Mq̈ + C(q,q̇) + g(q) + τp = Bu  (inverse dynamics)
-                   umin ≤ u ≤ umax                   (actuator limits)
+        minimize: ‖V̇‖² + ‖μ - μd‖² + λδ‖δ‖² + λᵤ‖u‖₁
+        subject to: V̇ ≤ -γV + δ              (CLF constraint)
+                   LgLfy·u = -L₂fy + μ       (feedback linearization)
+                   umin ≤ u ≤ umax            (actuator limits)
     
-    where μd = ẍd + Kp*e + Kd*(ẋd - ẋ) is the desired task acceleration.
-    
+    where:
+        μd = ẍd + Kp·e + Kd·ė  (desired task acceleration with PD feedback)
+        γ = 1/(e·10)            (convergence rate)
+        δ ≥ 0                   (CLF relaxation variable)
+
     Parameters:
     -----------
     robot : Robot
         Robot instance providing physics interface and configuration
     target_vel : np.ndarray
-        Desired task space velocity ẋd
+        Desired task space velocity ẋd ∈ ℝⁿ
     target_acc : np.ndarray  
-        Desired task space acceleration ẍd
+        Desired task space acceleration ẍd ∈ ℝⁿ
     twist : np.ndarray
-        Current task space error e = xd - x
+        Current task space error e = xd - x ∈ ℝⁿ
     previous_solution : dict, optional
-        Warm start solution from previous timestep
+        Warm start solution from previous timestep containing 'u', 'dl'
         
     Returns:
     --------
     ControllerResult
-        Contains task error, control input, Lyapunov value, and solution cache
+        Contains:
+        - task_error: L2 norm of position error ‖e‖
+        - control_input: Computed control inputs u ∈ ℝᵐ  
+        - lyapunov_value: Current CLF value V(η)
+        - previous_solution: Solution cache for warm starting
+        - t_ctrl: Control computation time
         
-    References:
-    -----------
-    [1] Ames et al. "Control Lyapunov Function Based Quadratic Programs for Safety 
-        Critical Systems." IEEE TAC, 2017.
-    [2] Nguyen & Sreenath. "Exponential Control Barrier Functions for Enforcing High 
-        Relative-Degree Safety-Critical Constraints." ACC, 2016.
     """
     
     def __call__(self, robot, target_vel, target_acc, twist, previous_solution=None):
@@ -77,16 +80,9 @@ class IDCLFQPController(BaseController):
         
         # Get physics data on-demand
         M = robot.get_mass_matrix()
-        M_inv = robot.get_mass_matrix_inverse()
         jac = robot.get_jacobian()
         dJ_dt = robot.get_jacobian_derivative()
         dq = robot.get_joint_velocities()
-        h = robot.get_bias_forces() + robot.get_passive_forces()
-        
-        Mbar = robot.TinvT @ M @ robot.Tinv
-        hbar = robot.TinvT @ h
-        Bbar = robot.TinvT @ robot.B
-        
         
         # Use robot attributes directly for configuration
         F = robot.F
@@ -105,21 +101,20 @@ class IDCLFQPController(BaseController):
         # Generic optimization formulation (robot-agnostic)
         nu = robot.nu
         nq = robot.model.nq
-        u = cp.Variable(shape=(nu,))
-        qdd = cp.Variable(shape=(nq,))
-        dl = cp.Variable(shape=(1,))
-        su = cp.Variable(shape=(nq-nu,))
-        dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc)
-        # D = np.diag([robot.damping]*nq)
 
-        r_theta = Mbar @ robot.T @ qdd + hbar - Bbar @ u
-        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + robot.reg_qdd * cp.square(cp.norm(qdd))  
-                                + robot.reg_u * cp.square(cp.norm(u,1)) + robot.reg_dl * (cp.square(dl)) + 1.0*cp.square(cp.norm(su))) 
-        
+        u = cp.Variable(shape=(nu,))
+        mu = cp.Variable(shape=(robot.task_dim,))
+        dl = cp.Variable(shape=(1,))
+
+        M_inv = robot.get_mass_matrix_inverse()
+        L2fy = dJ_dt @ dq - jac @ M_inv @ (robot.get_bias_forces() + robot.get_passive_forces())
+        LgLfy = jac @ M_inv @ robot.B
+        dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ mu
+
+        objective = cp.Minimize(cp.square(dV) + cp.square(cp.norm(mu - mu_des)) + robot.reg_dl * cp.square(dl) + robot.reg_u*10 * cp.square(cp.norm(u,1)))
         # Vdot for our main CLF
-        constraints = [dV <= - 1/e * V + dl, 
-                       r_theta[:nu] == 0,
-                       r_theta[nu:] <= su]
+        constraints = [dV <= - 1/e/10 * V + dl, 
+                       LgLfy @ u == -L2fy + mu]
         constraints += robot.get_control_constraints(u)
 
         prob = cp.Problem(objective=objective, constraints=constraints)
@@ -128,9 +123,8 @@ class IDCLFQPController(BaseController):
         if previous_solution is not None:
             try:
                 u.value = previous_solution['u']
-                qdd.value = previous_solution['qdd'] 
+                # qdd.value = previous_solution['qdd'] 
                 dl.value = previous_solution['dl']
-                # print(np.linalg.norm(M @ qdd.value + robot.get_bias_forces() + robot.get_passive_forces() - robot.B @ u.value))
             except:
                 pass  # If warm start fails, proceed without it
         
@@ -144,9 +138,8 @@ class IDCLFQPController(BaseController):
                 
                 current_solution = {
                     'u': u.value.copy(),
-                    'qdd': qdd.value.copy(),
-                    'dl': dl.value.copy(),
-                    'su': su.value.copy()
+                    # 'qdd': qdd.value.copy(),
+                    'dl': dl.value.copy()
                 }
 
                 return ControllerResult(

@@ -14,6 +14,7 @@ class Robot:
         self.model.opt.gravity = (0, 0, -9.81)
         self._setup_robot_config()
         
+        
     def _load_model(self):
         """Load MuJoCo model from standard path convention"""
         model_path = Path("mujoco_models") / self.model_name / f"{self.model_name}_control.xml"
@@ -29,6 +30,9 @@ class Robot:
             self.B = np.array([[0.1, 0.0], [0.1, 0.0], [0.0, 0.1], [0.0, 0.1]])
             self.B_applied = np.array([[1, 0.0], [-1, 0.0], [0.0, 1], [0.0, -1]])
             self.pinv_B = np.linalg.pinv(self.B)
+            self.T, _ = self.complete_basis(self.B.T)
+            self.Tinv = np.linalg.inv(self.T)
+            self.TinvT = self.Tinv.T 
             # Control gains
             self.Kp = 500
             self.Kd = 2 * np.sqrt(self.Kp)
@@ -61,6 +65,9 @@ class Robot:
                     self.B[row_start:row_start+3, col_start:col_start+3] = np.eye(3)
             self.B_applied = self.B  # Use same matrix
             self.pinv_B = np.linalg.pinv(self.B)
+            self.T, _ = self.complete_basis(self.B.T)
+            self.Tinv = np.linalg.inv(self.T)
+            self.TinvT = self.Tinv.T 
             # Selection matrix
             self.sel = np.ones((self.nu,))
             self.sel[[2, 5, 8]] = 0.0
@@ -81,20 +88,25 @@ class Robot:
             # Control constraint bounds (incorporate selection logic)
             self.lower_bounds = self.control_limits[0] * self.sel
             self.upper_bounds = np.full((self.nu, ), self.control_limits[1])
+            # self.model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_CONTACT
             
         elif self.model_name == 'spirob':
             self.task_dim = 6
             self.control_limits = (-100.0, 0.0)
             self.nu = self.model.nu
             # Dynamic B matrix - computed at runtime
-            self.B = None
+            self.update_input_matrix()
+            self.T, _ = self.complete_basis(self.B.T)
+            self.Tinv = np.linalg.inv(self.T)
+            self.TinvT = self.Tinv.T 
+            # print("Initial B matrix for SpiRob:\n", np.round(self.B, 3))
             self.B_applied = np.eye(self.nu)  # Use same as B
-            self.pinv_B = None
+            # self.pinv_B = None
             self.sel = np.ones((self.nu, 1))
             # Control gains
             self.Kp, self.Kd = 1000.0, 2 * np.sqrt(1000.0)
             self.damping, self.stiffness = 0.01, 0.01
-            self.e = 0.01
+            self.e = 0.02
             # Passive force sign (spirob uses -data.qfrc_passive)
             self.passive_sign = -1
             # Regularization coefficients for optimization  
@@ -158,6 +170,31 @@ class Robot:
                 
             self.pinv_B = np.linalg.pinv(self.B)
         # For tendon/helix, B matrix is static and already computed
+
+    def complete_basis(self, B, tol=1e-10, return_full=True):
+        """
+        Given B in R^{m x n} with m < n, compute J in R^{(n-r) x n}
+        whose rows span the nullspace of B, where r = rank(B).
+
+        If B has full row rank (r = m), then stacking [B; J] gives an n x n
+        invertible matrix.
+        """
+        B = np.asarray(B, dtype=float)
+        if B.ndim != 2:
+            raise ValueError("B must be 2D")
+        m, n = B.shape
+        if m >= n:
+            raise ValueError("Require m < n for basis completion by stacking rows.")
+
+        U, s, Vt = np.linalg.svd(B, full_matrices=True)
+        r = np.sum(s > tol * (s[0] if s.size else 1.0))
+
+        N = Vt[r:, :]   # rows span nullspace(B)
+
+        if return_full:
+            T = np.vstack((B, N))
+            return T, N
+        return N
     
     def initialize_simulation_state(self):
         """Initialize robot-specific simulation state and model parameters."""
@@ -260,6 +297,11 @@ class Robot:
         M_inv = np.zeros((self.model.nv, self.model.nv))
         mujoco.mj_solveM(self.model, self.data, M_inv, np.eye(self.model.nv))
         return M_inv
+    
+    def get_site_position(self, site_name="ee"):
+        """Get current position of a site"""
+        site_id = self.model.site(site_name).id
+        return self.data.site(site_id).xpos.copy()
         
     def get_jacobian(self, site_name="ee"):
         """Compute and return end-effector Jacobian on-demand"""

@@ -1,5 +1,5 @@
 """MPC controller implementation."""
-
+import time
 import numpy as np
 import cvxpy as cp
 from scipy import linalg
@@ -101,7 +101,9 @@ class MPCController(BaseController):
             except:
                 pass  # If warm start fails, proceed without it    
         try:
+            t_ctrl_start = time.time()
             prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
+            t_ctrl = time.time() - t_ctrl_start
             if u_k.value is not None:
                 robot.apply_control_input(u_k.value[:, 0])
                 # Cache solution for next iteration
@@ -111,19 +113,22 @@ class MPCController(BaseController):
                 return ControllerResult(
                     task_error=np.linalg.norm(twist[:3]),
                     control_input=u_k.value[:, 0].copy(),
-                    previous_solution=current_solution
+                    previous_solution=current_solution,
+                    t_ctrl=t_ctrl
                 )
             else:
                 print(f"failed convergence - no solution\n")
                 return ControllerResult(
                     task_error=np.linalg.norm(twist[:3]),
                     control_input=np.zeros((nu,)),
-                    previous_solution=previous_solution
+                    previous_solution=previous_solution,
+                    t_ctrl=t_ctrl
                 )
         except Exception as e:
             print(f"failed convergence - exception: {e}\n")
             return ControllerResult(
                 task_error=np.linalg.norm(twist[:3]),
                 control_input=np.zeros((nu,)),
-                previous_solution=previous_solution
+                previous_solution=previous_solution,
+                t_ctrl=t_ctrl
             )

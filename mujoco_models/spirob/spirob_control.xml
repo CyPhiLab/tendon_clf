@@ -13,7 +13,7 @@
         <quality shadowsize="0"/>
 
     </visual>
-
+    <option gravity="0 0 -9.81" integrator="implicitfast" timestep="0.01"/>
 
     <!-- ================= VISUAL ================= -->
     <visual>

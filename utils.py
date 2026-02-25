@@ -8,7 +8,7 @@ import pandas as pd
 
 # Import controllers
 from controllers import (ControllerResult, IDCLFQPController, ImpedanceController, 
-                        ImpedanceQPController, MPCController)
+                        ImpedanceQPController, MPCController, CLFQPController)
 
 # Import Robot class
 from robot import Robot
@@ -146,7 +146,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
         'id_clf_qp': IDCLFQPController(),
         'impedance': ImpedanceController(),
         'impedance_QP': ImpedanceQPController(), 
-        'mpc': MPCController()
+        'mpc': MPCController(),
+        'clf_qp': CLFQPController()
     }
     controller = controller_map[control_scheme]
     
@@ -194,9 +195,9 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             target_vel, target_acc, twist = robot.compute_target_data(experiment, target)
             
             # Call controller directly 
-            t_ctrl_start = time.time()
+            # t_ctrl_start = time.time()
             result = controller(robot, target_vel, target_acc, twist, previous_solution)
-            t_ctrl = time.time() - t_ctrl_start
+            t_ctrl = result.t_ctrl if result.t_ctrl is not None else 0.0
             # Update previous_solution from result
             previous_solution = result.previous_solution
             

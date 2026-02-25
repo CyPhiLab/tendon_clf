@@ -14,89 +14,101 @@
     <geom pos="0 0 0.7" quat="0 -1 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_1"/>
     <geom pos="0 0 0.7" quat="0 -1 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate1"/>
     <body name="helix_sim_1_2" pos="0 0 0.68" quat="0.707107 0.707107 0 0">
+      <site name="safe_1" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
       <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
       <joint type="hinge" name="1" pos="0 0 0" axis="0 0 1" />
       <joint type="hinge" name="lat1" pos="0 0 0" axis="1 0 0" />
       <joint type="slide" limited="true" range="0 0.1" name="comp1" pos="0 0 0" axis="0 1 0" />
       <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_2"/>
       <body name="med_plate" pos="0 -0.02 0">
+        <site name="safe_2" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
         <inertial pos="4.62948e-07 -0.0259027 1.62246e-08" quat="0.499999 0.499999 0.500001 0.500001" mass="0.090246" diaginertia="0.000108352 6.56865e-05 6.56854e-05"/>
         <joint type="hinge" name="2" pos="0 0 0" axis="0 0 1" />
         <joint type="hinge" name="lat2" pos="0 0 0" axis="1 0 0" />
         <joint type="slide" limited="true" range="0 0.1" name="comp2" pos="0 0 0" axis="0 1 0" />
-        <!-- <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/> -->
+        <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/>
         <geom pos="0 0.0375 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_4"/>
         <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_3"/>
         <body name="helix_sim_1_2_2" pos="0 -0.0525 0" quat="1 0 0 0">
+          <site name="safe_3" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
           <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
           <joint type="hinge" name="3" pos="0 0 0" axis="0 0 1" />
           <joint type="hinge" name="lat3" pos="0 0 0" axis="1 0 0" />
           <joint type="slide" limited="true" range="0 0.1" name="comp3" pos="0 0 0" axis="0 1 0" />
           <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_2"/>
           <body name="med_plate_2" pos="0 -0.02 0" quat="1 0 0 0">
+            <site name="safe_4" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
             <inertial pos="4.62948e-07 -0.0259027 1.62246e-08" quat="0.499999 0.499999 0.500001 0.500001" mass="0.090246" diaginertia="0.000108352 6.56865e-05 6.56854e-05"/>
             <joint type="hinge" name="4" pos="0 0 0" axis="0 0 1" />
             <joint type="hinge" name="lat4" pos="0 0 0" axis="1 0 0" />
             <joint type="slide" limited="true" range="0 0.1" name="comp4" pos="0 0 0" axis="0 1 0" />
-            <!-- <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/> -->
+            <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/>
             <geom pos="0 0.0375 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_4"/>
             <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_3"/>
             <body name="helix_sim_1_2_3" pos="0 -0.0525 0" quat="1 0 0 0">
+              <site name="safe_5" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
               <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
               <joint type="hinge" name="5" pos="0 0 0" axis="0 0 1" />
               <joint type="hinge" name="lat5" pos="0 0 0" axis="1 0 0" />
               <joint type="slide" limited="true" range="0 0.1" name="comp5" pos="0 0 0" axis="0 1 0" />
               <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_2"/>
               <body name="med_plate_3" pos="0 -0.02 0">
+                <site name="safe_6" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
                 <inertial pos="4.62948e-07 -0.0259027 1.62246e-08" quat="0.499999 0.499999 0.500001 0.500001" mass="0.090246" diaginertia="0.000108352 6.56865e-05 6.56854e-05"/>
                 <joint type="hinge" name="6" pos="0 0 0" axis="0 0 1" />
                 <joint type="hinge" name="lat6" pos="0 0 0" axis="1 0 0" />
                 <joint type="slide" limited="true" range="0 0.1" name="comp6" pos="0 0 0" axis="0 1 0" />
-                <!-- <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/> -->
+                <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/>
                 <geom pos="0 0.0375 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_4"/>
                 <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_3"/>
                 <body name="helix_sim_1_2_4" pos="0 -0.0525 0">
+                  <site name="safe_7" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
                   <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
                   <joint type="hinge" name="7" pos="0 0 0" axis="0 0 1" />
                   <joint type="hinge" name="lat7" pos="0 0 0" axis="1 0 0" />
                   <joint type="slide" limited="true" range="0 0.1" name="comp7" pos="0 0 0" axis="0 1 0" />
                   <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_2"/>
                   <body name="med_plate_4" pos="0 -0.02 0">
+                    <site name="safe_8" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
                     <inertial pos="4.62948e-07 -0.0259027 1.62246e-08" quat="0.499999 0.499999 0.500001 0.500001" mass="0.090246" diaginertia="0.000108352 6.56865e-05 6.56854e-05"/>
                     <joint type="hinge" name="8" pos="0 0 0" axis="0 0 1" />
                     <joint type="hinge" name="lat8" pos="0 0 0" axis="1 0 0" />
                     <joint type="slide" limited="true" range="0 0.1" name="comp8" pos="0 0 0" axis="0 1 0" />
-                    <!-- <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/> -->
+                    <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/>
                     <geom pos="0 0.0375 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_4"/>
                     <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_3"/>
                     <body name="helix_sim_1_2_5" pos="0 -0.0525 0" quat="1 0 0 0">
+                      <site name="safe_9" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
                       <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
                       <joint type="hinge" name="9" pos="0 0 0" axis="0 0 1" />
                       <joint type="hinge" name="lat9" pos="0 0 0" axis="1 0 0" />
                       <joint type="slide" limited="true" range="0 0.1" name="comp9" pos="0 0 0" axis="0 1 0" />
                       <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_2"/>
                       <body name="med_plate_5" pos="0 -0.02 0" quat="1 0 0 0">
+                        <site name="safe_10" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
                         <inertial pos="4.62948e-07 -0.0259027 1.62246e-08" quat="0.499999 0.499999 0.500001 0.500001" mass="0.090246" diaginertia="0.000108352 6.56865e-05 6.56854e-05"/>
                         <joint type="hinge" name="10" pos="0 0 0" axis="0 0 1" />
                         <joint type="hinge" name="lat10" pos="0 0 0" axis="1 0 0" />
                         <joint type="slide" limited="true" range="0 0.1" name="comp10" pos="0 0 0" axis="0 1 0" />
-                        <!-- <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/> -->
+                        <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate2"/>
                         <geom pos="0 0.0375 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_4"/>
                         <geom pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_3"/>
                         <body name="helix_sim_1_2_6" pos="0 -0.0525 0" quat="1 0 0 0">
+                          <site name="safe_11" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
                           <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
                           <joint type="hinge" name="11" pos="0 0 0" axis="0 0 1" />
                           <joint type="hinge" name="lat11" pos="0 0 0" axis="1 0 0" />
                           <joint type="slide" limited="true" range="0 0.1" name="comp11" pos="0 0 0" axis="0 1 0" />
                           <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_2"/>
                           <body name="end_cap_2" pos="0 -0.02 0" quat="0 1 0 0">
+                            <site name="safe_12" rgba="0.682353 0.333333 0.737255 1" size="0.001" group="1"/>
                             <inertial pos="2.43618e-08 -0.0100007 -1.11881e-09" quat="0.707107 0 0 0.707107" mass="0.00971217" diaginertia="6.67843e-06 3.65105e-06 3.65105e-06"/>
                             <site name="ee_cog" pos="2.43618e-08 -0.0100007 -1.11881e-09"/>
                             <joint type="hinge" name="12" pos="0 0 0" axis="0 0 1" />
                             <joint type="hinge" name="lat12" pos="0 0 0" axis="1 0 0" />
                             <joint type="slide" limited="true" range="0 0.1" name="comp12" pos="0 0 0" axis="0 -1 0" />
                             <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.682353 0.333333 0.737255 1" mesh="helix_sim_1_1"/>
-                            <!-- <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate1"/> -->
+                            <geom pos="0 0.02 0" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.262745 0.282353 0.301961 1" mesh="plate1"/>
                             <body name="attachment" pos="0.0 0.04 0.0" quat="0 0 0 1">
                               <site name="ee" rgba="0.682353 0.333333 0.737255 1" size="0.01" group="1"/>
                             </body>
