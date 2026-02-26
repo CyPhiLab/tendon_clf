@@ -1,3 +1,5 @@
+from xml.parsers.expat import model
+
 import numpy as np
 import mujoco
 from pathlib import Path
@@ -255,6 +257,32 @@ class Robot:
         self.data.qpos[:] = qpos_backup
         
         return Jdot
+    def discrete_jacobian(self, x, u):
+        """
+        Use MuJoCo's mjd_transitionFD to compute A, B at (x,u).
+        This is 1st derivative wrt x, u of the discrete transition function x_{k+1}=f(x_k,u_k).
+        By default it uses the dimension 2*nv (position and velocity).
+        Adjust if your system dimension is different.
+        """
+        nq = self.model.nq
+        nv = self.model.nv
+
+        Nx = 2 * nv
+        Nu = self.model.nu
+        
+        # Set the state for this linearization point
+        self.data.qpos[:] = x[:nq]
+        self.data.qvel[:] = x[nq:nq+nv]
+        mujoco.mj_forward(self.model, self.data)
+        self.data.ctrl[:] = u
+        
+        # We now call mjd_transitionFD
+        A = np.zeros((Nx, Nx))
+        B = np.zeros((Nx, Nu))
+        eps = 1e-5
+        flg_centered = 1
+        mujoco.mjd_transitionFD(self.model, self.data, eps, flg_centered, A, B, None, None)
+        return A, B
     
     def get_coriolis_and_gravity(self):
         """Get Coriolis and gravity forces"""

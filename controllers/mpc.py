@@ -71,18 +71,18 @@ class MPCController(BaseController):
         constraints += [eta_k[:, 0:1] == eta_0]
 
         objective = 0
+        saved_state = [robot.data.qpos.copy(), robot.data.qvel.copy()]
+        # get discrete jacobian
         # Linear discrete dynamics rollout as constraints
         for k in range(N - 1):
             constraints += [eta_k[:, k+1:k+2] == eta_k[:, k:k+1] + dt * (F @ eta_k[:, k:k+1] + G @ mu[:, k:k+1])]
             constraints += [mu[:, k:k+1] == jac @ qdd_k[:, k:k+1] + dJ_dt @ dq.reshape(-1, 1) - target_acc.reshape(-1, 1)] 
             constraints += [robot.pinv_B @ (M @ qdd_k[:, k:k+1] + robot.get_bias_forces().reshape(-1, 1) 
                                        + robot.get_passive_forces().reshape(-1, 1)) == u_k[:, k:k+1]]
-            test = robot.pinv_B @ (M @ qdd_k[:, k:k+1] + robot.get_bias_forces().reshape(-1, 1) 
-                                       + robot.get_passive_forces().reshape(-1, 1))
             # Add robot-specific control constraints
             for constraint in robot.get_control_constraints(u_k[:, k:k+1]):
                 constraints += [constraint]
-                
+            # add linearized dynamics constraint
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
             mu_des_k = - Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
@@ -93,12 +93,16 @@ class MPCController(BaseController):
                                     + robot.reg_u * cp.sum_squares(u_k[:, k:k+1]) 
                                     + robot.reg_qdd * cp.sum_squares(qdd_k[:, k:k+1])
                                     )
+            # 
 
         # Terminal penalty (use eta_k at terminal, not eta_next)
         eta_N = eta_k[:, N-1:N]
         objective += robot.mpc_terminal_weight * cp.quad_form(eta_N, Pe)
         objective = cp.Minimize(objective)
-            
+        
+        robot.data.qpos[:] = saved_state[0]
+        robot.data.qvel[:] = saved_state[1]
+        
         prob = cp.Problem(objective, constraints)
         # Warm start with previous solution if available
         if previous_solution is not None:
