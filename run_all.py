@@ -10,7 +10,7 @@ from itertools import product
 from utils import *
 
 
-def run_single_experiment(robot, controller, experiment, target_pos=None):
+def run_single_experiment(robot, controller, experiment, target_pos=None, sim_duration=10.0):
     """Run a single experiment configuration."""
     
     print(f"Running: {robot} + {controller} + {experiment}" + (f" + {target_pos}" if target_pos else ""))
@@ -24,7 +24,8 @@ def run_single_experiment(robot, controller, experiment, target_pos=None):
         target_pos=target_pos,
         controller=None,
         experiment=experiment,
-        model_name=robot
+        model_name=robot,
+        sim_duration=sim_duration
     )
     
     # Add timing data
@@ -51,7 +52,7 @@ def main():
                        choices=['helix', 'tendon', 'spirob'],
                        help='Robots to test (default: all)')
     parser.add_argument('--controllers', nargs='+', default=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP'],
-                       choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP'],
+                       choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP', 'clf_qp'],
                        help='Controllers to test (default: all)')
     parser.add_argument('--experiments', nargs='+', default=['set', 'tracking'],
                        choices=['set', 'tracking'],
@@ -59,6 +60,7 @@ def main():
     parser.add_argument('--target_positions', nargs='+', default=['pos1', 'pos2', 'pos3', 'pos4'],
                        choices=['pos1', 'pos2', 'pos3', 'pos4'],
                        help='Target positions for set experiments (default: all)')
+    parser.add_argument('--sim_duration', type=float, default=10.0, help='Duration of simulations in seconds')
     args = parser.parse_args()
     
     total_start_time = time.time()
@@ -67,6 +69,7 @@ def main():
     
     # Count total experiments
     for robot, controller, experiment in product(args.robots, args.controllers, args.experiments):
+            
         if experiment == 'set':
             total_experiments += len(args.target_positions)
         else:  # tracking
@@ -76,22 +79,24 @@ def main():
     print(f"Robots: {args.robots}")
     print(f"Controllers: {args.controllers}")
     print(f"Experiments: {args.experiments}")
+    print(f"Simulation duration: {args.sim_duration}s")
     if 'set' in args.experiments:
         print(f"Target positions: {args.target_positions}")
     print("=" * 80)
     
     # Run all experiments
     for robot, controller, experiment in product(args.robots, args.controllers, args.experiments):
+
         try:
             if experiment == 'set':
                 # Run for each target position
                 for target_pos in args.target_positions:
-                    run_single_experiment(robot, controller, experiment, target_pos)
+                    run_single_experiment(robot, controller, experiment, target_pos, args.sim_duration)
                     completed_experiments += 1
                     print(f"Progress: {completed_experiments}/{total_experiments} ({100*completed_experiments/total_experiments:.1f}%)")
             else:  # tracking
                 # Single tracking experiment
-                run_single_experiment(robot, controller, experiment)
+                run_single_experiment(robot, controller, experiment, sim_duration=args.sim_duration)
                 completed_experiments += 1
                 print(f"Progress: {completed_experiments}/{total_experiments} ({100*completed_experiments/total_experiments:.1f}%)")
                 

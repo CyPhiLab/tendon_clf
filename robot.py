@@ -169,6 +169,10 @@ class Robot:
                 self.B[:, i] = data_temp.qfrc_actuator.copy()
                 
             self.pinv_B = np.linalg.pinv(self.B)
+            self.T, _ = self.complete_basis(self.B.T)
+            self.Tinv = np.linalg.inv(self.T)
+            self.TinvT = self.Tinv.T 
+            self.B_applied = self.B  # Use same as B
         # For tendon/helix, B matrix is static and already computed
 
     def complete_basis(self, B, tol=1e-10, return_full=True):

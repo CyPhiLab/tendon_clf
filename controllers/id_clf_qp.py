@@ -73,7 +73,7 @@ class IDCLFQPController(BaseController):
         """ID-CLF-QP controller using on-demand robot physics interface"""
         
         # Update input matrix for dynamic robots
-        robot.update_input_matrix()
+        # robot.update_input_matrix()
         
         # Get physics data on-demand
         M = robot.get_mass_matrix()
@@ -86,7 +86,6 @@ class IDCLFQPController(BaseController):
         Mbar = robot.TinvT @ M @ robot.Tinv
         hbar = robot.TinvT @ h
         Bbar = robot.TinvT @ robot.B
-        
         
         # Use robot attributes directly for configuration
         F = robot.F
@@ -129,7 +128,6 @@ class IDCLFQPController(BaseController):
                 u.value = previous_solution['u']
                 qdd.value = previous_solution['qdd'] 
                 dl.value = previous_solution['dl']
-                # print(np.linalg.norm(M @ qdd.value + robot.get_bias_forces() + robot.get_passive_forces() - robot.B @ u.value))
             except:
                 pass  # If warm start fails, proceed without it
         
