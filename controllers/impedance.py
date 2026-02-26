@@ -201,9 +201,14 @@ class ImpedanceQPController(BaseController):
         nq = robot.model.nq
         u = cp.Variable(shape=(nu, ))
         qdd = cp.Variable(shape=(nq, ))
+        N = np.eye(robot.model.nv) - np.linalg.pinv(jac) @ jac
+        qdd_null = N @ qdd
+        qdd_ref = -50 *N @ dq
 
-        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) + robot.reg_qdd * cp.square(cp.norm(qdd))  
-                                + robot.reg_u * cp.square(cp.norm(u))) 
+        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
+                                + robot.reg_qdd * cp.square(cp.norm(qdd))  
+                                + robot.reg_u * cp.square(cp.norm(u)) 
+                                + robot.reg_null * cp.square(cp.norm(qdd_null - qdd_ref)))
 
         constraints = [robot.pinv_B @ (M @ qdd + robot.get_bias_forces() + robot.get_passive_forces()) == u]
         constraints += robot.get_control_constraints(u)

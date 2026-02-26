@@ -34,7 +34,7 @@ def circular_trajectory(t, model_name):
         h = 0.7
 
     elif model_name == 'spirob':
-        L = 0.5
+        L = 0.45
         h = L
 
     # Circle parameters
@@ -46,7 +46,7 @@ def circular_trajectory(t, model_name):
     theta = omega * t
 
     a = L/3
-    b = L/8
+    b = L/6
     phi = np.pi/4
     x1 = a * np.cos(theta)
     z1 = b * np.sin(theta) - (L-b)
@@ -66,20 +66,6 @@ def circular_trajectory(t, model_name):
     ydd = 0.0
     zdd = -a * omega**2 * np.cos(theta) * np.sin(phi) - b * omega**2 * np.sin(theta) * np.cos(phi)
 
-    # # Position
-    # x = cx + r * np.cos(theta)  # Start at pos1
-    # y = cy
-    # z = cz + r * np.sin(theta)
-
-    # # Velocity
-    # xd = -r * omega * np.sin(theta)
-    # yd = 0.0
-    # zd =  r * omega * np.cos(theta)
-
-    # # Acceleration
-    # xdd = -r * omega**2 * np.cos(theta)
-    # ydd = 0.0
-    # zdd = -r * omega**2 * np.sin(theta)
 
     pos = np.array([x, y, z])
     vel = np.array([xd, yd, zd])
@@ -92,20 +78,25 @@ def set_target(target_pos, model_name):
         L = 0.24
         h = L
     elif model_name == 'helix':
-        L = 0.435
+        L = 0.45
         h = 0.7
     elif model_name == 'spirob':
         L = 0.48
         h = L
-    # Circle parameters
-    cx, cy, cz = 3*L/4 * np.cos(np.pi/4), 0, -3*L/4 * np.sin(np.pi/4) + h
-    r = L/4
+
+    # # Position
+    theta = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
+
+    a = L/3
+    b = L/8
+    phi = np.pi/4
+    x1 = a * np.cos(theta)
+    z1 = b * np.sin(theta) - (L-b)
 
     # Position
-    theta = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
-    x = cx + r * np.cos(theta)  # Start at pos1
-    y = cy
-    z = cz + r * np.sin(theta)
+    x = x1 * np.cos(phi) - z1 * np.sin(phi)
+    y = 0.0
+    z = x1 * np.sin(phi) + z1 * np.cos(phi) + h
 
     pos1 = np.array([x[0], y, z[0]])
     pos2 = np.array([x[1], y, z[1]])
@@ -275,6 +266,7 @@ def save_results(results, experiment, control_scheme, model_name, target_pos=Non
     xd_log = results.get('xd')
     wall_time = results.get('wall_time')
     sim_time_total = results.get('sim_time_total')
+    ctrl_time = results.get('ctrl_time')
 
     # ================================
     # Convert to numpy safely
@@ -347,6 +339,9 @@ def save_results(results, experiment, control_scheme, model_name, target_pos=Non
 
         if rtf is not None:
             f.write(f"# real_time_factor,{rtf:.6f}\n")
+
+        if ctrl_time is not None:
+            f.write(f"# control_time,{np.mean(ctrl_time):.6f}\n")
 
         f.write("# ==================================\n\n")
 

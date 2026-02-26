@@ -14,7 +14,7 @@ def run_single_experiment(robot, controller, experiment, target_pos=None, sim_du
     """Run a single experiment configuration."""
     
     print(f"Running: {robot} + {controller} + {experiment}" + (f" + {target_pos}" if target_pos else ""))
-    
+
     start_time = time.time()
     
     # Run simulation
@@ -32,8 +32,7 @@ def run_single_experiment(robot, controller, experiment, target_pos=None, sim_du
     end_time = time.time()
     results['wall_time'] = end_time - start_time
     results['sim_time_total'] = results['sim_time'][-1]
-    
-    # Save results
+
     csv_path = save_results(
         results=results,
         experiment=experiment,
@@ -41,7 +40,7 @@ def run_single_experiment(robot, controller, experiment, target_pos=None, sim_du
         model_name=robot,
         target_pos=target_pos
     )
-    
+
     print(f"  → Completed in {end_time - start_time:.2f}s, saved to {csv_path}")
     return results
 
@@ -55,26 +54,26 @@ def main():
                        choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP', 'clf_qp'],
                        help='Controllers to test (default: all)')
     parser.add_argument('--experiments', nargs='+', default=['set', 'tracking'],
-                       choices=['set', 'tracking'],
-                       help='Experiments to run (default: both)')
+                        choices=['set', 'tracking'],
+                        help='Experiments to run (default: both)')
     parser.add_argument('--target_positions', nargs='+', default=['pos1', 'pos2', 'pos3', 'pos4'],
                        choices=['pos1', 'pos2', 'pos3', 'pos4'],
                        help='Target positions for set experiments (default: all)')
     parser.add_argument('--sim_duration', type=float, default=10.0, help='Duration of simulations in seconds')
     args = parser.parse_args()
-    
+
     total_start_time = time.time()
     completed_experiments = 0
     total_experiments = 0
-    
-    # Count total experiments
+
+    valid_configs = []
     for robot, controller, experiment in product(args.robots, args.controllers, args.experiments):
             
         if experiment == 'set':
             total_experiments += len(args.target_positions)
-        else:  # tracking
+        else:
             total_experiments += 1
-    
+
     print(f"Starting comprehensive experiment suite: {total_experiments} total experiments")
     print(f"Robots: {args.robots}")
     print(f"Controllers: {args.controllers}")
@@ -89,7 +88,6 @@ def main():
 
         try:
             if experiment == 'set':
-                # Run for each target position
                 for target_pos in args.target_positions:
                     run_single_experiment(robot, controller, experiment, target_pos, args.sim_duration)
                     completed_experiments += 1
@@ -99,11 +97,11 @@ def main():
                 run_single_experiment(robot, controller, experiment, sim_duration=args.sim_duration)
                 completed_experiments += 1
                 print(f"Progress: {completed_experiments}/{total_experiments} ({100*completed_experiments/total_experiments:.1f}%)")
-                
+
         except Exception as e:
             print(f"ERROR in {robot} + {controller} + {experiment}: {e}")
-            completed_experiments += 1  # Count as completed to maintain progress
-    
+            completed_experiments += 1
+
     total_time = time.time() - total_start_time
     print("=" * 80)
     print(f"Experiment suite completed!")
@@ -114,3 +112,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

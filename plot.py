@@ -45,6 +45,7 @@ control_name = {
     "impedance": "IC",
     "impedance_pd": "IC-PD",
     "impedance_qp": "IC-QP",
+    "clf_qp": "CLF-QP"
 }
 
 robot_name = {
@@ -309,124 +310,282 @@ def clf_plot(robots, control, experiment):
 
     if experiment == "set":
         plt.xlim(0, 0.8)
-        plt.ylim(0, 2)
+        # plt.ylim(0, 3)
     else:
-        plt.xlim(0, 2)
+        plt.xlim(0, 4)
 
     legend_above(ax, ncol=None)
     finalize_figure(fig, ax)
     plt.show()
 
 
+# def plot_tracking_trajectory(robots, robot_list, plane, start_time):
+#     """
+#     Plot multiple robots in one figure with shared legend.
+#     Each robot becomes one subplot.
+#     """
+
+#     plane = plane.lower()
+#     idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
+#     if plane not in idx:
+#         raise ValueError("plane must be one of: 'xy', 'xz', 'yz'")
+
+#     i, j = idx[plane]
+#     axis_names = ["x", "y", "z"]
+
+#     n = len(robot_list)
+#     fig, axes = plt.subplots(n, 1, figsize=(6.5, 6.2*n), sharex=False, sharey=False)
+
+
+#     if n == 1:
+#         axes = [axes]
+
+#     legend_handles = []
+#     legend_labels = []
+
+#     # controller ordering
+#     ctrl_order = ["id_clf_qp", "impedance", "impedance_QP", "mpc"]
+
+#     for ax, robot in zip(axes, robot_list):
+
+#         controllers = robots[robot]
+#         plotted_ref = False
+
+#         items = list(controllers.items())
+#         items.sort(key=lambda kv: ctrl_order.index(kv[0]) if kv[0] in ctrl_order else 999)
+
+#         for ctrl, data in items:
+#             if "tracking" not in data:
+#                 continue
+
+#             tr = data["tracking"]
+#             if "x" not in tr or "xd" not in tr:
+#                 continue
+
+#             t = tr["time"]
+#             x = tr["x"]
+#             xd = tr["xd"]
+
+#             mask = t >= start_time
+#             if np.sum(mask) < 10:
+#                 continue
+
+#             x = x[mask]
+#             xd = xd[mask]
+
+#             label = naming(ctrl, control_name)
+#             line, = ax.plot(x[:, i], x[:, j], linewidth=4, label=label)
+
+#             # add uniquely
+#             if label not in legend_labels:
+#                 legend_handles.append(line)
+#                 legend_labels.append(label)
+
+#             # reference
+#             if not plotted_ref:
+#                 ref_line, = ax.plot(xd[:, i], xd[:, j], "k--", linewidth=4, label="Reference")
+#                 if "Reference" not in legend_labels:
+#                     legend_handles.append(ref_line)
+#                     legend_labels.append("Reference")
+#                 plotted_ref = True
+
+
+#         ax.set_xlabel(f"{axis_names[i]} (m)")
+#         ax.set_ylabel(f"{axis_names[j]} (m)")
+#         ax.set_title(naming(robot, robot_name))
+#         ax.axis("equal")
+#         ax.grid(True)
+
+
+#     # ---- reorder so Reference is last ----
+#     ordered = sorted(
+#         zip(legend_handles, legend_labels),
+#         key=lambda hl: (hl[1] == "Reference", hl[1])
+#     )
+#     legend_handles, legend_labels = zip(*ordered)
+
+#     fig.legend(
+#         legend_handles,
+#         legend_labels,
+#         loc="upper center",
+#         bbox_to_anchor=(0.5, 1.0),
+#         ncol=3,              
+#         frameon=True,
+#         columnspacing=1.6,
+#         handlelength=2.4,
+#         handletextpad=0.6,
+#         borderpad=0.4
+#     )
+
+#     # -------- subplot labels (a), (b) --------
+#     labels = ["(a)", "(b)", "(c)", "(d)"]
+#     for ax, lab in zip(axes, labels):
+#         ax.text(
+#             0.5, -0.30, lab,
+#             transform=ax.transAxes,
+#             ha="center", va="center",
+#             fontsize=20
+#         )
+
+#     plt.tight_layout(rect=[0, 0, 1, 0.92])
+#     plt.show()
+
+
+
 def plot_tracking_trajectory(robots, robot_list, plane, start_time):
-    """
-    Plot multiple robots in one figure with shared legend.
-    Each robot becomes one subplot.
-    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
 
     plane = plane.lower()
     idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
-    if plane not in idx:
-        raise ValueError("plane must be one of: 'xy', 'xz', 'yz'")
-
     i, j = idx[plane]
-    axis_names = ["x", "y", "z"]
 
-    n = len(robot_list)
-    fig, axes = plt.subplots(n, 1, figsize=(6.5, 6.2*n), sharex=False, sharey=False)
+    ctrl_order = ["id_clf_qp", "impedance", "mpc", "impedance_QP", "clf_qp"]
 
+    controller_colors = {
+        "id_clf_qp": "#1f77b4",
+        "impedance": "#ff7f0e",
+        "mpc": "#d62728",
+        "impedance_QP": "#2ca02c",
+        "clf_qp": "#9467bd"
+    }
 
-    if n == 1:
+    fig, axes = plt.subplots(
+        nrows=len(robot_list),
+        ncols=1,
+        figsize=(8, 7 * len(robot_list))
+    )
+
+    if len(robot_list) == 1:
         axes = [axes]
 
     legend_handles = []
     legend_labels = []
 
-    # controller ordering
-    ctrl_order = ["id_clf_qp", "impedance", "impedance_QP", "mpc"]
-
     for ax, robot in zip(axes, robot_list):
 
-        controllers = robots[robot]
-        plotted_ref = False
+        # ---- Collect active controllers ----
+        active_ctrls = [
+            c for c in ctrl_order
+            if c in robots[robot] and "tracking" in robots[robot][c]
+        ]
 
-        items = list(controllers.items())
-        items.sort(key=lambda kv: ctrl_order.index(kv[0]) if kv[0] in ctrl_order else 999)
+        n = len(active_ctrls)
 
-        for ctrl, data in items:
-            if "tracking" not in data:
-                continue
+        # ---- Compute normalization ----
+        x_all, y_all = [], []
 
-            tr = data["tracking"]
-            if "x" not in tr or "xd" not in tr:
-                continue
+        for ctrl in active_ctrls:
+            tr = robots[robot][ctrl]["tracking"]
+            mask = tr["time"] >= start_time
+            x = tr["x"][mask]
+            xd = tr["xd"][mask]
+            x_all.append(x[:, i])
+            y_all.append(x[:, j])
+            x_all.append(xd[:, i])
+            y_all.append(xd[:, j])
 
-            t = tr["time"]
-            x = tr["x"]
-            xd = tr["xd"]
+        x_min = min(np.min(v) for v in x_all)
+        x_max = max(np.max(v) for v in x_all)
+        y_min = min(np.min(v) for v in y_all)
+        y_max = max(np.max(v) for v in y_all)
 
-            mask = t >= start_time
-            if np.sum(mask) < 10:
-                continue
+        cx = 0.5 * (x_min + x_max)
+        cy = 0.5 * (y_min + y_max)
 
-            x = x[mask]
-            xd = xd[mask]
+        span = max(x_max - x_min, y_max - y_min)
+        scale = span * 0.6
+        tile_spacing = scale * 1.4
+
+        # ---- Smart layout arrangement ----
+        if n >= 4:
+            top_count = n // 2 + n % 2
+            bottom_count = n - top_count
+        else:
+            top_count = n
+            bottom_count = 0
+
+        positions = {}
+
+        # Top row
+        for k in range(top_count):
+            x_pos = (k - (top_count - 1) / 2) * tile_spacing
+            y_pos = tile_spacing
+            positions[active_ctrls[k]] = (x_pos, y_pos)
+
+        # Bottom row
+        for k in range(bottom_count):
+            x_pos = (k - (bottom_count - 1) / 2) * tile_spacing
+            y_pos = -tile_spacing
+            positions[active_ctrls[top_count + k]] = (x_pos, y_pos)
+
+        # ---- Plot ----
+        for ctrl in active_ctrls:
+
+            tr = robots[robot][ctrl]["tracking"]
+            mask = tr["time"] >= start_time
+            x = tr["x"][mask]
+            xd = tr["xd"][mask]
+
+            dx, dy = positions[ctrl]
+
+            x_norm = x[:, i] - cx
+            y_norm = x[:, j] - cy
+            xd_norm = xd[:, i] - cx
+            yd_norm = xd[:, j] - cy
+
+            color = controller_colors[ctrl]
+
+            line, = ax.plot(
+                x_norm + dx,
+                y_norm + dy,
+                color=color,
+                linewidth=2.5
+            )
+
+            ax.plot(
+                xd_norm + dx,
+                yd_norm + dy,
+                color="black",
+                linestyle="--",
+                linewidth=3
+            )
 
             label = naming(ctrl, control_name)
-            line, = ax.plot(x[:, i], x[:, j], linewidth=4, label=label)
-
-            # add uniquely
             if label not in legend_labels:
                 legend_handles.append(line)
                 legend_labels.append(label)
 
-            # reference
-            if not plotted_ref:
-                ref_line, = ax.plot(xd[:, i], xd[:, j], "k--", linewidth=4, label="Reference")
-                if "Reference" not in legend_labels:
-                    legend_handles.append(ref_line)
-                    legend_labels.append("Reference")
-                plotted_ref = True
+        ax.set_aspect("equal")
+        ax.grid(True, linestyle="--", alpha=0.35)
 
+        # ---- tighter crop ----
+        lim = tile_spacing * 2   # was 2 → tighter
+        ax.set_xlim(-lim, lim)
+        ax.set_ylim(-lim, lim)
 
-        ax.set_xlabel(f"{axis_names[i]} (m)")
-        ax.set_ylabel(f"{axis_names[j]} (m)")
-        ax.set_title(naming(robot, robot_name))
-        ax.axis("equal")
-        ax.grid(True)
+        # ---- keep ticks but remove labels ----
+        ax.set_xlabel("")
+        ax.set_ylabel("")
 
+        ax.set_title(naming(robot, robot_name), fontsize=16, pad=8)
 
-    # ---- reorder so Reference is last ----
-    ordered = sorted(
-        zip(legend_handles, legend_labels),
-        key=lambda hl: (hl[1] == "Reference", hl[1])
-    )
-    legend_handles, legend_labels = zip(*ordered)
+    # Legend
+    ref_line = plt.Line2D([0], [0], color="black", linestyle="--", linewidth=3)
+    legend_handles.append(ref_line)
+    legend_labels.append("Reference")
 
     fig.legend(
         legend_handles,
         legend_labels,
         loc="upper center",
-        bbox_to_anchor=(0.5, 1.0),
-        ncol=3,              
-        frameon=True,
-        columnspacing=1.6,
-        handlelength=2.4,
-        handletextpad=0.6,
-        borderpad=0.4
+        bbox_to_anchor=(0.5, 0.98),
+        ncol=3,
+        frameon=True
     )
 
-    # -------- subplot labels (a), (b) --------
-    labels = ["(a)", "(b)", "(c)", "(d)"]
-    for ax, lab in zip(axes, labels):
-        ax.text(
-            0.5, -0.30, lab,
-            transform=ax.transAxes,
-            ha="center", va="center",
-            fontsize=20
-        )
-
-    plt.tight_layout(rect=[0, 0, 1, 0.92])
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
     plt.show()
 
 # Reports
@@ -559,14 +718,14 @@ def generate_report(root):
 if __name__ == "__main__":
     robots = load_results("results")
 
-    # Lyapunov plotting
-    clf_plot(robots, control="id_clf_qp", experiment="set")
-    clf_plot(robots, control="id_clf_qp", experiment="tracking")
+    # # Lyapunov plotting
+    # clf_plot(robots, control="id_clf_qp", experiment="set")
+    # clf_plot(robots, control="id_clf_qp", experiment="tracking")
 
     # Trajectory circles
     plot_tracking_trajectory(
     robots,
-    robot_list=["tendon", "helix", "spirob"],
+    robot_list=["tendon", "helix"],
     plane="xz",
     start_time=8.0
 )
