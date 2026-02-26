@@ -83,15 +83,9 @@ def set_target(target_pos, model_name):
     elif model_name == 'spirob':
         L = 0.48
         h = L
-    # # Circle parameters
-    # cx, cy, cz = 3*L/4 * np.cos(np.pi/4), 0, -3*L/4 * np.sin(np.pi/4) + h
-    # r = L/4
 
     # # Position
     theta = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
-    # x = cx + r * np.cos(theta)  # Start at pos1
-    # y = cy
-    # z = cz + r * np.sin(theta)
 
     a = L/3
     b = L/8

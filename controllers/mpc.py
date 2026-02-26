@@ -34,6 +34,8 @@ class MPCController(BaseController):
         jac = robot.get_jacobian()
         dJ_dt = robot.get_jacobian_derivative()
         dq = robot.get_joint_velocities()
+        null = np.eye(robot.model.nv) - np.linalg.pinv(jac) @ jac
+
         
         Pe = robot.Pe
         e = robot.e
@@ -62,6 +64,7 @@ class MPCController(BaseController):
         mu   = cp.Variable((m, N))      # mu[:,k] = mu_k
         u_k  = cp.Variable((nu, N))     # control inputs over horizon
         eta_k = cp.Variable((2*m, N))    # eta_k[:,k] = eta at step k
+        qdd_ref = -50 *null @ dq
 
         # Initial condition constraint
         constraints = []
@@ -88,7 +91,8 @@ class MPCController(BaseController):
             objective += (gamma**k) * (robot.mpc_task_weight * cp.sum_squares(mu_k1 - mu_des_k) 
                                        + cp.sum_squares(eta_k1 - eta_target) 
                                     + robot.reg_u * cp.sum_squares(u_k[:, k:k+1]) 
-                                    + robot.reg_qdd * cp.sum_squares(qdd_k[:, k:k+1]))
+                                    + robot.reg_qdd * cp.sum_squares(qdd_k[:, k:k+1])
+                                    )
 
         # Terminal penalty (use eta_k at terminal, not eta_next)
         eta_N = eta_k[:, N-1:N]

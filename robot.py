@@ -41,8 +41,8 @@ class Robot:
             # Passive force sign (tendon uses -data.qfrc_passive)
             self.passive_sign = -1
             # Regularization coefficients for optimization
-            self.reg_qdd = 0.1
-            self.reg_u = 0.1
+            self.reg_qdd = 0.2
+            self.reg_u = 0.2
             self.reg_null = 0.1
             self.reg_dl = 1000
             # MPC-specific coefficients
@@ -79,7 +79,7 @@ class Robot:
             # Passive force sign (helix uses +data.qfrc_passive)
             self.passive_sign = 1
             # Regularization coefficients for optimization
-            self.reg_qdd = 0.1
+            self.reg_qdd = 0.2
             self.reg_u = 0.2
             self.reg_null = 0.1
             self.reg_dl = 100
