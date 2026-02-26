@@ -51,7 +51,7 @@ def main():
     parser.add_argument('--robots', nargs='+', default=['helix', 'tendon', 'spirob'], 
                        choices=['helix', 'tendon', 'spirob'],
                        help='Robots to test (default: all)')
-    parser.add_argument('--controllers', nargs='+', default=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP'],
+    parser.add_argument('--controllers', nargs='+', default=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP', 'clf_qp'],
                        choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP', 'clf_qp'],
                        help='Controllers to test (default: all)')
     parser.add_argument('--experiments', nargs='+', default=['set', 'tracking'],
