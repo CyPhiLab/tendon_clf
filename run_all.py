@@ -68,7 +68,13 @@ def main():
 
     valid_configs = []
     for robot, controller, experiment in product(args.robots, args.controllers, args.experiments):
-            
+        if robot == 'helix' and controller == 'clf_qp':
+            continue
+        if robot == 'spirob' and experiment == 'set' and controller == 'impedance':
+            continue
+        if robot == 'spirob' and experiment == 'tracking':
+            continue
+        valid_configs.append((robot, controller, experiment))   
         if experiment == 'set':
             total_experiments += len(args.target_positions)
         else:
