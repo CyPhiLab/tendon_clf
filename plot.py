@@ -114,9 +114,9 @@ def load_single_csv(path):
     return t, sim_time, V, error, u, x, xd
 
 # Experiment processing
-def read_rtf(path):
+def read_control_time(path):
     """
-    Extract real_time_factor from commented header of CSV.
+    Extract control_time from commented header of CSV.
     Returns NaN if not present.
     """
     try:
@@ -124,8 +124,8 @@ def read_rtf(path):
             for line in f:
                 if not line.startswith("#"):
                     break
-                if "real_time_factor" in line:
-                    # line format: # real_time_factor,0.771987
+                if "control_time" in line:
+                    # line format: # control_time,0.771987
                     return float(line.strip().split(",")[1])
     except Exception:
         pass
@@ -431,11 +431,11 @@ def clf_plot(robots, control, experiment):
 #     plt.show()
 
 
-
 def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
     import numpy as np
     import matplotlib.pyplot as plt
+
 
     plane = plane.lower()
     idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
@@ -454,7 +454,7 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
     fig, axes = plt.subplots(
         nrows=len(robot_list),
         ncols=1,
-        figsize=(8, 7 * len(robot_list))
+        figsize=(8, 6 * len(robot_list))
     )
 
     if len(robot_list) == 1:
@@ -465,40 +465,51 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
     for ax, robot in zip(axes, robot_list):
 
-        # ---- Collect active controllers ----
+        # ---- Active controllers ----
         active_ctrls = [
             c for c in ctrl_order
             if c in robots[robot] and "tracking" in robots[robot][c]
         ]
 
         n = len(active_ctrls)
+        if n == 0:
+            continue
 
-        # ---- Compute normalization ----
+        # ---- Collect global bounds ----
         x_all, y_all = [], []
 
         for ctrl in active_ctrls:
             tr = robots[robot][ctrl]["tracking"]
             mask = tr["time"] >= start_time
+
             x = tr["x"][mask]
             xd = tr["xd"][mask]
-            x_all.append(x[:, i])
-            y_all.append(x[:, j])
-            x_all.append(xd[:, i])
-            y_all.append(xd[:, j])
 
-        x_min = min(np.min(v) for v in x_all)
-        x_max = max(np.max(v) for v in x_all)
-        y_min = min(np.min(v) for v in y_all)
-        y_max = max(np.max(v) for v in y_all)
+            x_all.extend([x[:, i], xd[:, i]])
+            y_all.extend([x[:, j], xd[:, j]])
+
+        x_min, x_max = min(np.min(v) for v in x_all), max(np.max(v) for v in x_all)
+        y_min, y_max = min(np.min(v) for v in y_all), max(np.max(v) for v in y_all)
 
         cx = 0.5 * (x_min + x_max)
         cy = 0.5 * (y_min + y_max)
 
         span = max(x_max - x_min, y_max - y_min)
-        scale = span * 0.6
-        tile_spacing = scale * 1.4
 
-        # ---- Smart layout arrangement ----
+        # Default scale
+        base_scale = span * 1.25
+
+        # Robot-specific tightening
+        if robot == "tendon":        # (a) Finger
+            base_scale *= 0.95 
+            horizontal_spacing = base_scale * 0.75
+            vertical_spacing   = base_scale * 0.4     # tighten layout
+        elif robot == "helix":       # (b)
+            base_scale *= 1.0  
+            horizontal_spacing = base_scale * 1.0
+            vertical_spacing   = base_scale * 0.45      # leave unchanged
+
+        # ---- Layout (2 rows max) ----
         if n >= 4:
             top_count = n // 2 + n % 2
             bottom_count = n - top_count
@@ -510,28 +521,29 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
         # Top row
         for k in range(top_count):
-            x_pos = (k - (top_count - 1) / 2) * tile_spacing
-            y_pos = tile_spacing
+            x_pos = (k - (top_count - 1) / 2) * horizontal_spacing
+            y_pos = vertical_spacing
             positions[active_ctrls[k]] = (x_pos, y_pos)
 
         # Bottom row
         for k in range(bottom_count):
-            x_pos = (k - (bottom_count - 1) / 2) * tile_spacing
-            y_pos = -tile_spacing
+            x_pos = (k - (bottom_count - 1) / 2) * horizontal_spacing
+            y_pos = -vertical_spacing
             positions[active_ctrls[top_count + k]] = (x_pos, y_pos)
 
-        # ---- Plot ----
+        # ---- Plot trajectories ----
         for ctrl in active_ctrls:
 
             tr = robots[robot][ctrl]["tracking"]
             mask = tr["time"] >= start_time
+
             x = tr["x"][mask]
             xd = tr["xd"][mask]
 
             dx, dy = positions[ctrl]
 
-            x_norm = x[:, i] - cx
-            y_norm = x[:, j] - cy
+            x_norm  = x[:, i]  - cx
+            y_norm  = x[:, j]  - cy
             xd_norm = xd[:, i] - cx
             yd_norm = xd[:, j] - cy
 
@@ -541,7 +553,7 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
                 x_norm + dx,
                 y_norm + dy,
                 color=color,
-                linewidth=2.5
+                linewidth=5.5
             )
 
             ax.plot(
@@ -557,21 +569,60 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
                 legend_handles.append(line)
                 legend_labels.append(label)
 
+        # ---- Styling ----
         ax.set_aspect("equal")
         ax.grid(True, linestyle="--", alpha=0.35)
 
-        # ---- tighter crop ----
-        lim = tile_spacing * 2   # was 2 → tighter
-        ax.set_xlim(-lim, lim)
-        ax.set_ylim(-lim, lim)
+        # ---- Auto-tight bounds per robot ----
+        x_plot_all = []
+        y_plot_all = []
 
-        # ---- keep ticks but remove labels ----
+        for ctrl in active_ctrls:
+            tr = robots[robot][ctrl]["tracking"]
+            mask = tr["time"] >= start_time
+
+            x = tr["x"][mask]
+            xd = tr["xd"][mask]
+
+            dx, dy = positions[ctrl]
+
+            x_plot_all.extend([
+                x[:, i] - cx + dx,
+                xd[:, i] - cx + dx
+            ])
+            y_plot_all.extend([
+                x[:, j] - cy + dy,
+                xd[:, j] - cy + dy
+            ])
+
+            label_char = chr(ord('a') + robot_list.index(robot))
+
+            ax.text(
+                0.96, 0.1,                 # top-right corner
+                f"({label_char})",
+                transform=ax.transAxes,
+                fontsize=24,
+                # fontweight="bold",
+                ha="right",
+                va="top"
+            )
+
+        x_min = min(np.min(v) for v in x_plot_all)
+        x_max = max(np.max(v) for v in x_plot_all)
+        y_min = min(np.min(v) for v in y_plot_all)
+        y_max = max(np.max(v) for v in y_plot_all)
+
+        margin_x = 0.05 * (x_max - x_min)
+        margin_y = 0.05 * (y_max - y_min)
+
+        ax.set_xlim(x_min - margin_x, x_max + margin_x)
+        ax.set_ylim(y_min - margin_y, y_max + margin_y)
+
         ax.set_xlabel("")
         ax.set_ylabel("")
+        ax.tick_params(labelbottom=False, labelleft=False)
 
-        ax.set_title(naming(robot, robot_name), fontsize=16, pad=8)
-
-    # Legend
+    # ---- Legend ----
     ref_line = plt.Line2D([0], [0], color="black", linestyle="--", linewidth=3)
     legend_handles.append(ref_line)
     legend_labels.append("Reference")
@@ -585,12 +636,8 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
         frameon=True
     )
 
-    plt.tight_layout(rect=[0, 0, 1, 0.94])
+    plt.tight_layout(rect=[0, 0, 1, 0.92])
     plt.show()
-
-# Reports
-def compute_rtf(df):
-    return df["sim_time"].iloc[-1] / df["time"].iloc[-1]
 
 
 def max_control_input(df):
@@ -612,7 +659,7 @@ def mse_error(df):
 def summarize_set(files):
     finals: List[float] = []
     max_inputs: List[float] = []
-    rtfs: List[float] = []
+    ctrl_time: List[float] = []
 
     for f in files:
         df = pd.read_csv(f, comment="#")
@@ -620,29 +667,29 @@ def summarize_set(files):
         finals.append(final_error(df))
         max_inputs.append(max_control_input(df))
 
-        rtf = read_rtf(f)
-        if not np.isnan(rtf):
-            rtfs.append(rtf)
+        control_time = read_control_time(f)
+        if not np.isnan(control_time):
+            ctrl_time.append(control_time)
 
     return {
         "final_mean": float(np.mean(finals)),
         "final_std":  float(np.std(finals)),
         "max_input":  float(np.max(max_inputs)),
-        "rtf_mean": float(np.mean(rtfs)) if len(rtfs) > 0 else float("nan"),
-        "rtf_std":  float(np.std(rtfs))  if len(rtfs) > 0 else float("nan"),
+        "control_time_mean": float(np.mean(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
+        "control_time_std":  float(np.std(ctrl_time))  if len(ctrl_time) > 0 else float("nan"),
     }
 
 
 def summarize_tracking(file):
     df = pd.read_csv(file, comment="#")
 
-    rtf = read_rtf(file)
-    if np.isnan(rtf):  # fallback safety
-        rtf = compute_rtf(df)
+    control_time = read_control_time(file)
+    if np.isnan(control_time):  # fallback safety
+        control_time = read_control_time(file)
 
     return {
         "mse": mse_error(df),
-        "rtf": rtf,
+        "control_time": control_time,
         "max_input": max_control_input(df)
     }
 
@@ -677,7 +724,7 @@ def generate_report(root):
                 naming(ctrl, control_name),
                 "Set Point",
                 f"{s['final_mean']:.4f} ± {s['final_std']:.4f}",
-                f"{s['rtf_mean']:.2f} ± {s['rtf_std']:.2f}x",
+                f"{s['control_time_mean']:.6f}",
                 f"{s['max_input']:.3f}",
                 control_limits.get(robot, "")
             ])
@@ -690,7 +737,7 @@ def generate_report(root):
                     naming(ctrl, control_name),
                     "Trajectory Tracking",
                     f"{t['mse']:.5f}",
-                    f"{t['rtf']:.2f}x",
+                    f"{t['control_time']:.2f}x",
                     f"{t['max_input']:.3f}",
                     control_limits.get(robot, "")
                 ])

@@ -1,15 +1,15 @@
 Robot,Controller,Experiment,Mean Final Error ± std,% Real-time,Max Control Input,Control Limit
-Helix,ID-CLF-QP,Set Point,0.0129 ± 0.0068,0.81 ± 0.08x,25.002,-25 ≤ u ≤ 25
-Helix,IC,Set Point,0.0395 ± 0.0183,18.08 ± 0.55x,7.331,-25 ≤ u ≤ 25
-Helix,IC-QP,Set Point,0.0127 ± 0.0065,0.91 ± 0.05x,25.000,-25 ≤ u ≤ 25
-Helix,MPC,Set Point,0.0841 ± 0.1266,0.14 ± 0.00x,25.000,-25 ≤ u ≤ 25
-SpiRob,CLF-QP,Set Point,0.1485 ± 0.1823,1.50 ± 0.19x,107.776,u ≤ 0
-SpiRob,ID-CLF-QP,Set Point,0.0624 ± 0.0410,1.03 ± 0.03x,4.592,u ≤ 0
-SpiRob,IC,Set Point,0.3388 ± 0.0821,8.37 ± 0.03x,1.602,u ≤ 0
-SpiRob,IC-QP,Set Point,0.0608 ± 0.0391,1.19 ± 0.04x,18.742,u ≤ 0
-SpiRob,MPC,Set Point,0.0708 ± 0.0491,0.16 ± 0.01x,17.604,u ≤ 0
-Finger,CLF-QP,Set Point,0.0054 ± 0.0093,0.95 ± 0.02x,1.026,-1 ≤ u ≤ 1
-Finger,ID-CLF-QP,Set Point,0.0008 ± 0.0009,0.70 ± 0.10x,18.095,-1 ≤ u ≤ 1
-Finger,IC,Set Point,0.0008 ± 0.0014,40.68 ± 0.23x,3.431,-1 ≤ u ≤ 1
-Finger,IC-QP,Set Point,0.0033 ± 0.0016,0.90 ± 0.03x,0.460,-1 ≤ u ≤ 1
-Finger,MPC,Set Point,0.0014 ± 0.0008,0.11 ± 0.00x,0.698,-1 ≤ u ≤ 1
+Helix,ID-CLF-QP,Set Point,0.0129 ± 0.0068,0.007925,25.002,-25 ≤ u ≤ 25
+Helix,IC,Set Point,0.0395 ± 0.0183,0.000205,7.331,-25 ≤ u ≤ 25
+Helix,IC-QP,Set Point,0.0127 ± 0.0065,0.007223,25.000,-25 ≤ u ≤ 25
+Helix,MPC,Set Point,0.0841 ± 0.1266,0.045810,25.000,-25 ≤ u ≤ 25
+SpiRob,CLF-QP,Set Point,0.1485 ± 0.1823,0.005193,107.776,u ≤ 0
+SpiRob,ID-CLF-QP,Set Point,0.0624 ± 0.0410,0.007894,4.592,u ≤ 0
+SpiRob,IC,Set Point,0.3388 ± 0.0821,nan,1.602,u ≤ 0
+SpiRob,IC-QP,Set Point,0.0608 ± 0.0391,0.006973,18.742,u ≤ 0
+SpiRob,MPC,Set Point,0.0708 ± 0.0491,0.052913,17.604,u ≤ 0
+Finger,CLF-QP,Set Point,0.0054 ± 0.0093,0.004658,1.026,-1 ≤ u ≤ 1
+Finger,ID-CLF-QP,Set Point,0.0008 ± 0.0009,0.006393,18.095,-1 ≤ u ≤ 1
+Finger,IC,Set Point,0.0008 ± 0.0014,0.000068,3.431,-1 ≤ u ≤ 1
+Finger,IC-QP,Set Point,0.0033 ± 0.0016,0.004866,0.460,-1 ≤ u ≤ 1
+Finger,MPC,Set Point,0.0014 ± 0.0008,0.036441,0.698,-1 ≤ u ≤ 1
