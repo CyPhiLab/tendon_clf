@@ -36,14 +36,12 @@ def naming(name, mapping):
     if n in mapping:
         return mapping[n]
 
-    # fallback: Capitalize words but don't scream case
     return "-".join(word.capitalize() for word in n.split("_"))
 
 control_name = {
     "id_clf_qp": "ID-CLF-QP",
     "mpc": "MPC",
     "impedance": "IC",
-    "impedance_pd": "IC-PD",
     "impedance_qp": "IC-QP",
     "clf_qp": "CLF-QP"
 }
@@ -57,7 +55,7 @@ robot_name = {
 
 def legend_above(ax, ncol=None):
     """
-    Legend above plot, but always put 'Reference' last.
+    Legend above plot.
     """
     handles, labels = ax.get_legend_handles_labels()
 
@@ -129,7 +127,6 @@ def read_control_time(path):
                     return float(line.strip().split(",")[1])
     except Exception:
         pass
-
     return float("nan")
 
 def set_experiment(files):
@@ -242,7 +239,6 @@ def clf_plot(robots, control, experiment):
 
     fig, ax = plt.subplots(figsize=(8, 5))
     plotted_any = False
-
     items = []
 
     for robot, controllers in robots.items():
@@ -252,7 +248,6 @@ def clf_plot(robots, control, experiment):
                 continue
 
             exp_data = data[experiment]
-
             # key depends on experiment type
             if experiment == "set":
                 if "V_mean" not in exp_data:
@@ -265,7 +260,6 @@ def clf_plot(robots, control, experiment):
 
             if control is not None and ctrl != control:
                 continue
-
             items.append((robot, ctrl, exp_data))
 
     robot_order = ["tendon", "helix", "spirob"]
@@ -317,119 +311,6 @@ def clf_plot(robots, control, experiment):
     legend_above(ax, ncol=None)
     finalize_figure(fig, ax)
     plt.show()
-
-
-# def plot_tracking_trajectory(robots, robot_list, plane, start_time):
-#     """
-#     Plot multiple robots in one figure with shared legend.
-#     Each robot becomes one subplot.
-#     """
-
-#     plane = plane.lower()
-#     idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
-#     if plane not in idx:
-#         raise ValueError("plane must be one of: 'xy', 'xz', 'yz'")
-
-#     i, j = idx[plane]
-#     axis_names = ["x", "y", "z"]
-
-#     n = len(robot_list)
-#     fig, axes = plt.subplots(n, 1, figsize=(6.5, 6.2*n), sharex=False, sharey=False)
-
-
-#     if n == 1:
-#         axes = [axes]
-
-#     legend_handles = []
-#     legend_labels = []
-
-#     # controller ordering
-#     ctrl_order = ["id_clf_qp", "impedance", "impedance_QP", "mpc"]
-
-#     for ax, robot in zip(axes, robot_list):
-
-#         controllers = robots[robot]
-#         plotted_ref = False
-
-#         items = list(controllers.items())
-#         items.sort(key=lambda kv: ctrl_order.index(kv[0]) if kv[0] in ctrl_order else 999)
-
-#         for ctrl, data in items:
-#             if "tracking" not in data:
-#                 continue
-
-#             tr = data["tracking"]
-#             if "x" not in tr or "xd" not in tr:
-#                 continue
-
-#             t = tr["time"]
-#             x = tr["x"]
-#             xd = tr["xd"]
-
-#             mask = t >= start_time
-#             if np.sum(mask) < 10:
-#                 continue
-
-#             x = x[mask]
-#             xd = xd[mask]
-
-#             label = naming(ctrl, control_name)
-#             line, = ax.plot(x[:, i], x[:, j], linewidth=4, label=label)
-
-#             # add uniquely
-#             if label not in legend_labels:
-#                 legend_handles.append(line)
-#                 legend_labels.append(label)
-
-#             # reference
-#             if not plotted_ref:
-#                 ref_line, = ax.plot(xd[:, i], xd[:, j], "k--", linewidth=4, label="Reference")
-#                 if "Reference" not in legend_labels:
-#                     legend_handles.append(ref_line)
-#                     legend_labels.append("Reference")
-#                 plotted_ref = True
-
-
-#         ax.set_xlabel(f"{axis_names[i]} (m)")
-#         ax.set_ylabel(f"{axis_names[j]} (m)")
-#         ax.set_title(naming(robot, robot_name))
-#         ax.axis("equal")
-#         ax.grid(True)
-
-
-#     # ---- reorder so Reference is last ----
-#     ordered = sorted(
-#         zip(legend_handles, legend_labels),
-#         key=lambda hl: (hl[1] == "Reference", hl[1])
-#     )
-#     legend_handles, legend_labels = zip(*ordered)
-
-#     fig.legend(
-#         legend_handles,
-#         legend_labels,
-#         loc="upper center",
-#         bbox_to_anchor=(0.5, 1.0),
-#         ncol=3,              
-#         frameon=True,
-#         columnspacing=1.6,
-#         handlelength=2.4,
-#         handletextpad=0.6,
-#         borderpad=0.4
-#     )
-
-#     # -------- subplot labels (a), (b) --------
-#     labels = ["(a)", "(b)", "(c)", "(d)"]
-#     for ax, lab in zip(axes, labels):
-#         ax.text(
-#             0.5, -0.30, lab,
-#             transform=ax.transAxes,
-#             ha="center", va="center",
-#             fontsize=20
-#         )
-
-#     plt.tight_layout(rect=[0, 0, 1, 0.92])
-#     plt.show()
-
 
 def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
@@ -641,10 +522,10 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
 
 def max_control_input(df):
-    u_cols = [c for c in df.columns if c.startswith("u")]
-    if len(u_cols) == 0:
+    u = [c for c in df.columns if c.startswith("u")]
+    if len(u) == 0:
         return float("nan")
-    return float(np.abs(df[u_cols].to_numpy()).max())
+    return float(np.abs(df[u].to_numpy()).max())
 
 
 def final_error(df):
@@ -653,18 +534,18 @@ def final_error(df):
 
 def mse_error(df):
     e = df["task_error"].to_numpy()
-    return float(np.mean(e**2))
+    return float(np.mean(np.sqrt(np.sum(e**2))))
 
 
 def summarize_set(files):
-    finals: List[float] = []
-    max_inputs: List[float] = []
-    ctrl_time: List[float] = []
+    error = []
+    max_inputs  = []
+    ctrl_time = []
 
     for f in files:
         df = pd.read_csv(f, comment="#")
 
-        finals.append(final_error(df))
+        error.append(final_error(df))
         max_inputs.append(max_control_input(df))
 
         control_time = read_control_time(f)
@@ -672,8 +553,8 @@ def summarize_set(files):
             ctrl_time.append(control_time)
 
     return {
-        "final_mean": float(np.mean(finals)),
-        "final_std":  float(np.std(finals)),
+        "final_mean": float(np.mean(error)),
+        "final_std":  float(np.std(error)),
         "max_input":  float(np.max(max_inputs)),
         "control_time_mean": float(np.mean(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
         "control_time_std":  float(np.std(ctrl_time))  if len(ctrl_time) > 0 else float("nan"),
@@ -684,8 +565,6 @@ def summarize_tracking(file):
     df = pd.read_csv(file, comment="#")
 
     control_time = read_control_time(file)
-    if np.isnan(control_time):  # fallback safety
-        control_time = read_control_time(file)
 
     return {
         "mse": mse_error(df),
@@ -724,7 +603,7 @@ def generate_report(root):
                 naming(ctrl, control_name),
                 "Set Point",
                 f"{s['final_mean']:.4f} ± {s['final_std']:.4f}",
-                f"{s['control_time_mean']:.6f}",
+                f"{s['control_time_mean']:.6f} ± {s['control_time_std']:.6f}",
                 f"{s['max_input']:.3f}",
                 control_limits.get(robot, "")
             ])
@@ -737,21 +616,21 @@ def generate_report(root):
                     naming(ctrl, control_name),
                     "Trajectory Tracking",
                     f"{t['mse']:.5f}",
-                    f"{t['control_time']:.2f}x",
+                    f"{t['control_time']:.6f}x",
                     f"{t['max_input']:.3f}",
                     control_limits.get(robot, "")
                 ])
 
     set_df = pd.DataFrame(set_rows, columns=[
     "Robot", "Controller", "Experiment",
-    "Mean Final Error ± std", "% Real-time", "Max Control Input", "Control Limit"
+    "Mean Final Error ± std", "Control Time ± std", "Max Control Input", "Control Limit"
     ])
 
 
 
     track_df = pd.DataFrame(track_rows, columns=[
         "Robot", "Controller", "Experiment",
-        "MSE", "% Real-time", "Max Input", "Control Limit"
+        "MSE", "Control Time", "Max Input", "Control Limit"
     ])
 
     set_df.to_csv("set_report.csv", index=False)

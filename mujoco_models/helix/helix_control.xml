@@ -8,14 +8,14 @@
     <worldbody>
         <camera name="ortho_side"
         mode="fixed"
-        pos="0.19 35.0 0.6"
+        pos="0.19 10.0 0.49"
         xyaxes="-1 0 0   0 0 1"
-        fovy="1.5"/>
+        fovy="3.25"/>
         <body name="target" pos="0.0 0 0.05" quat="0 1 0 0" mocap="true">
         <!-- <geom type="box" size=".05 .05 .05" contype="0" conaffinity="0" rgba=".6 .3 .3 .5"/> -->
         <site type="sphere" size="0.015" rgba="1 0.2 0.2 0.9" group="2"/>
         </body>
-        <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+        <!-- <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/> -->
     </worldbody>
 
     <visual>
@@ -39,8 +39,8 @@
     <asset>
         <texture type="skybox"
                 builtin="gradient"
-                rgb1="0 0 0"
-                rgb2="0 0 0"
+                rgb1="1 1 1"
+                rgb2="1 1 1"
                 width="512"
                 height="512"/>
 

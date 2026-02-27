@@ -24,36 +24,6 @@
   <worldbody>
 
 
-    <!-- <body name="cube_body" mocap="true" pos="0.2 0.0 0.3"> -->
-    <!-- <body name="cube_body" mocap="true" pos="0.1 0.0 0.3">
-    <geom name="cube"
-          type="box"
-          size="0.03 0.06 0.03"
-          rgba="0.8 0.2 0.2 1"
-          contype="1"
-          conaffinity="1"
-          friction="1 0.5 0.1"/>
-    </body> -->
-
-
-    <!-- Sliding cube -->
-    <!-- <body name="cube_body" pos="0.1 0.0 0.4"> -->
-
-    <!-- This makes it a fully dynamic rigid body -->
-    <!-- <freejoint name="cube_free"/>
-
-    <geom name="cube"
-          type="box"
-          size="0.03 0.03 0.03"
-          rgba="0.8 0.2 0.2 1"
-          friction="1.2 0.01 0.0005"
-          density="800"
-          contype="1"
-          conaffinity="1"/>
-    </body> -->
-
-
-
     <!-- Link segment_1__configuration_default -->
     <body name="segment_1__configuration_default" pos="0 0 0.5" euler="0 -1.5708 0" childclass="my-SpiRob">
       <inertial pos="-0.023719 1.84225e-08 1.05571e-08" mass="0.052215" fullinertia="1.47577e-05 1.26546e-05 1.26546e-05 -1.09343e-11 1.25193e-11 -2.59551e-12"/>
@@ -639,33 +609,33 @@
     <mesh file="segment_23__configuration_default.stl"/>
     <mesh file="segment_5_1__configuration_default.stl"/>
     <mesh file="segment_7__configuration_default.stl"/>
-    <material name="segment_1__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_2__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_3__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_4__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_5_2__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_5_1__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_6__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_7__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_8__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_9__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_10__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segmentt_11_1__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_11_2__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_12__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_13__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_14__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_15__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_16__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_17__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_18__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_19__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_20__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_21__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_22__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_23__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_24__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
-    <material name="segment_25__configuration_default_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="segment_1__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_2__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_3__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_4__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_5_2__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_5_1__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_6__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_7__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_8__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_9__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_10__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segmentt_11_1__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_11_2__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_12__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_13__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_14__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_15__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_16__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_17__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_18__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_19__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_20__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_21__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_22__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_23__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_24__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
+    <material name="segment_25__configuration_default_material" rgba="0.015686 0.811765 0.929412 1"/>
   </asset>
   <!-- <actuator>
     <position class="my-SpiRob" name="x_1" joint="x_1" ctrlrange="-0.59 0.59"/>

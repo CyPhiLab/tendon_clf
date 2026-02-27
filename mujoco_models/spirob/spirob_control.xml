@@ -34,12 +34,11 @@
 
     <!-- ================= BACKGROUND ================= -->
     <asset>
-
         <!-- solid dark background -->
         <texture type="skybox"
                 builtin="gradient"
-                rgb1="0 0 0"
-                rgb2="0 0 0"
+                rgb1="1 1 1"
+                rgb2="1 1 1"
                 width="512"
                 height="512"/>
 
@@ -56,8 +55,10 @@
                   texuniform="true"
                   texrepeat="6 6"
                   reflectance="0"/>
-
     </asset>
+
+
+
 
 
     <!-- ================= WORLD ================= -->
@@ -84,9 +85,9 @@
         <camera name="ortho_side"
             mode="fixed"
             orthographic="true"
-            pos="0.1 -1 0.3"
+            pos="0.2 -1 0.3"
             xyaxes="1 0 0  0 0 1"
-            fovy="1.0"/>
+            fovy="0.6"/>
 
     </worldbody>
 
