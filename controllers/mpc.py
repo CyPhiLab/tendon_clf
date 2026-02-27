@@ -52,9 +52,6 @@ class MPCController(BaseController):
         gamma = 0.95
         dt = 0.005
 
-        # Since eta is already an error-state [-twist; J qdot], the goal is eta -> 0
-        eta_target = np.zeros((2*m, 1))
-
         # Use original constraint formulation
 
         # Generic MPC formulation (robot-agnostic)
@@ -86,10 +83,10 @@ class MPCController(BaseController):
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
             mu_des_k = - Kp * eta_k[0:m, k:k+1] - Kd * eta_k[m:2*m, k:k+1]
-            test = eta_k1 - eta_target
+            test = eta_k1
             
             objective += (gamma**k) * (robot.mpc_task_weight * cp.sum_squares(mu_k1 - mu_des_k) 
-                                       + cp.sum_squares(eta_k1 - eta_target) 
+                                       + cp.sum_squares(eta_k1) 
                                     + robot.reg_u * cp.sum_squares(u_k[:, k:k+1]) 
                                     + robot.reg_qdd * cp.sum_squares(qdd_k[:, k:k+1])
                                     )
