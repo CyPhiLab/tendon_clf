@@ -3,8 +3,8 @@ import time
 import numpy as np
 import cvxpy as cp
 from scipy import linalg
+from scipy.optimize import minimize
 from .base import BaseController, ControllerResult
-
 
 class MPCController(BaseController):
     """
@@ -61,7 +61,6 @@ class MPCController(BaseController):
         mu   = cp.Variable((m, N))      # mu[:,k] = mu_k
         u_k  = cp.Variable((nu, N))     # control inputs over horizon
         eta_k = cp.Variable((2*m, N))    # eta_k[:,k] = eta at step k
-        qdd_ref = -50 *null @ dq
 
         # Initial condition constraint
         constraints = []
@@ -139,3 +138,4 @@ class MPCController(BaseController):
                 previous_solution=previous_solution,
                 t_ctrl=t_ctrl
             )
+

@@ -5,6 +5,7 @@ from .id_clf_qp import IDCLFQPController
 from .impedance import ImpedanceController, ImpedanceQPController
 from .mpc import MPCController
 from .clf_qp import CLFQPController
+from .osc import OSCController
 
 __all__ = [
     'ControllerResult', 
@@ -13,5 +14,6 @@ __all__ = [
     'ImpedanceController', 
     'ImpedanceQPController', 
     'MPCController',
-    'CLFQPController'
+    'CLFQPController',
+    'OSCController'
 ]

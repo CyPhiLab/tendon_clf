@@ -8,7 +8,7 @@ import pandas as pd
 
 # Import controllers
 from controllers import (ControllerResult, IDCLFQPController, ImpedanceController, 
-                        ImpedanceQPController, MPCController, CLFQPController)
+                        ImpedanceQPController, MPCController, CLFQPController, OSCController)
 
 # Import Robot class
 from robot import Robot
@@ -148,8 +148,6 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['xd'][log_idx] = target["pos"]
 
 
-
-
 def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0):
     """Run physics simulation with specified controller and robot."""
     
@@ -161,7 +159,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
         'impedance': ImpedanceController(),
         'impedance_QP': ImpedanceQPController(), 
         'mpc': MPCController(),
-        'clf_qp': CLFQPController()
+        'clf_qp': CLFQPController(),
+        'osc': OSCController()
     }
     controller = controller_map[control_scheme]
     

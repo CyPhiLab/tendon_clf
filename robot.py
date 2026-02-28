@@ -257,6 +257,7 @@ class Robot:
         self.data.qpos[:] = qpos_backup
         
         return Jdot
+    
     def discrete_jacobian(self, x, u):
         """
         Use MuJoCo's mjd_transitionFD to compute A, B at (x,u).
@@ -401,3 +402,4 @@ class Robot:
     def apply_control_input(self, u):
         """Apply control input to robot actuators"""
         self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)
+
