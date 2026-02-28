@@ -1,13 +1,16 @@
 Robot,Controller,Experiment,MSE,Control Time,Max Input,Control Limit
-Helix,ID-CLF-QP,Trajectory Tracking,0.89635,0.007074x,25.000,-25 ≤ u ≤ 25
+Helix,ID-CLF-QP,Trajectory Tracking,0.87320,0.008822x,25.001,-25 ≤ u ≤ 25
 Helix,IC,Trajectory Tracking,1.36214,0.000198x,7.591,-25 ≤ u ≤ 25
 Helix,IC-QP,Trajectory Tracking,0.89506,0.006981x,25.000,-25 ≤ u ≤ 25
 Helix,MPC,Trajectory Tracking,0.84113,0.049180x,25.000,-25 ≤ u ≤ 25
+Helix,OSC,Trajectory Tracking,1.20077,0.000263x,7.061,-25 ≤ u ≤ 25
 SpiRob,IC,Trajectory Tracking,5.56070,nanx,1.862,u ≤ 0
 SpiRob,IC-QP,Trajectory Tracking,1.49248,nanx,20.375,u ≤ 0
 SpiRob,MPC,Trajectory Tracking,1.32123,nanx,25.894,u ≤ 0
+SpiRob,OSC,Trajectory Tracking,4.95386,0.000352x,0.000,u ≤ 0
 Finger,CLF-QP,Trajectory Tracking,0.48612,0.004596x,1.005,-1 ≤ u ≤ 1
 Finger,ID-CLF-QP,Trajectory Tracking,0.16404,0.005421x,1.000,-1 ≤ u ≤ 1
 Finger,IC,Trajectory Tracking,0.24047,0.000066x,1.417,-1 ≤ u ≤ 1
 Finger,IC-QP,Trajectory Tracking,0.80816,0.005088x,0.357,-1 ≤ u ≤ 1
 Finger,MPC,Trajectory Tracking,0.81336,0.039025x,0.379,-1 ≤ u ≤ 1
+Finger,OSC,Trajectory Tracking,0.23606,0.000082x,1.000,-1 ≤ u ≤ 1

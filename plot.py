@@ -43,7 +43,8 @@ control_name = {
     "mpc": "MPC",
     "impedance": "IC",
     "impedance_qp": "IC-QP",
-    "clf_qp": "CLF-QP"
+    "clf_qp": "CLF-QP",
+    "osc": "OSC"
 }
 
 robot_name = {
