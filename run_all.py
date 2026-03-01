@@ -50,8 +50,8 @@ def main():
     parser.add_argument('--robots', nargs='+', default=['helix', 'tendon', 'spirob'], 
                        choices=['helix', 'tendon', 'spirob'],
                        help='Robots to test (default: all)')
-    parser.add_argument('--controllers', nargs='+', default=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP', 'clf_qp'],
-                       choices=['id_clf_qp', 'impedance', 'mpc', 'impedance_QP', 'clf_qp'],
+    parser.add_argument('--controllers', nargs='+', default=['id_clf_qp', 'impedance', 'osc', 'impedance_QP', 'clf_qp','uosc'],
+                       choices=['id_clf_qp', 'impedance', 'osc', 'impedance_QP', 'clf_qp','uosc'],
                        help='Controllers to test (default: all)')
     parser.add_argument('--experiments', nargs='+', default=['set', 'tracking'],
                         choices=['set', 'tracking'],
@@ -67,14 +67,21 @@ def main():
     total_experiments = 0
 
     valid_configs = []
+
     for robot, controller, experiment in product(args.robots, args.controllers, args.experiments):
+
+        # ---- Filtering Rules ----
         if robot == 'helix' and controller == 'clf_qp':
             continue
-        if robot == 'spirob' and experiment == 'set' and controller == 'impedance':
+
+        if robot == 'spirob' and experiment == 'set' and controller in ['impedance', 'osc', 'uosc']:
             continue
+
         if robot == 'spirob' and experiment == 'tracking':
             continue
-        valid_configs.append((robot, controller, experiment))   
+
+        valid_configs.append((robot, controller, experiment))
+
         if experiment == 'set':
             total_experiments += len(args.target_positions)
         else:
@@ -90,7 +97,7 @@ def main():
     print("=" * 80)
     
     # Run all experiments
-    for robot, controller, experiment in product(args.robots, args.controllers, args.experiments):
+    for robot, controller, experiment in valid_configs:
 
         try:
             if experiment == 'set':

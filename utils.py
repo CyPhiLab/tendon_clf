@@ -8,7 +8,7 @@ import pandas as pd
 
 # Import controllers
 from controllers import (ControllerResult, IDCLFQPController, ImpedanceController, 
-                        ImpedanceQPController, MPCController, CLFQPController, OSCController)
+                        ImpedanceQPController, MPCController, CLFQPController, OSCController, UOSCController)
 
 # Import Robot class
 from robot import Robot
@@ -160,7 +160,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
         'impedance_QP': ImpedanceQPController(), 
         'mpc': MPCController(),
         'clf_qp': CLFQPController(),
-        'osc': OSCController()
+        'osc': OSCController(),
+        'uosc': UOSCController()
     }
     controller = controller_map[control_scheme]
     

@@ -34,13 +34,10 @@ class OSCController(BaseController):
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
         Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
         f = Mx @ ydd + Cy
-        sigma = np.linalg.pinv(jac @ M_inv @ jac.T) @ (jac @ M_inv @ jac.T @ f)
-        lower_bounds = robot.lower_bounds
-        upper_bounds = robot.upper_bounds
+        sigma = np.linalg.pinv(jac @ M_inv @ jac.T, rcond=1e-8) @ (jac @ M_inv @ jac.T @ f)
         tau = jac.T @ sigma + g + robot.get_passive_forces().flatten()
         u = robot.pinv_B @ tau
         t_ctrl = time.time() - t_ctrl_start
-        u = np.clip(u, lower_bounds, upper_bounds)
         try:
             robot.apply_control_input(u)
         except:

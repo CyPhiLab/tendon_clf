@@ -44,7 +44,8 @@ control_name = {
     "impedance": "IC",
     "impedance_qp": "IC-QP",
     "clf_qp": "CLF-QP",
-    "osc": "OSC"
+    "osc": "EOSC",
+    "uosc": "UIC"
 }
 
 robot_name = {
@@ -323,14 +324,15 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
     idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
     i, j = idx[plane]
 
-    ctrl_order = ["id_clf_qp", "impedance", "mpc", "impedance_QP", "clf_qp"]
+    ctrl_order = ["id_clf_qp", "clf_qp", "impedance", "uosc", "osc", "impedance_QP", ]
 
     controller_colors = {
         "id_clf_qp": "#1f77b4",
         "impedance": "#ff7f0e",
-        "mpc": "#d62728",
+        "osc": "#d62728",
         "impedance_QP": "#2ca02c",
-        "clf_qp": "#9467bd"
+        "clf_qp": "#9467bd",
+        "uosc": "#8c564b"
     }
 
     fig, axes = plt.subplots(
@@ -535,7 +537,7 @@ def final_error(df):
 
 def mse_error(df):
     e = df["task_error"].to_numpy()
-    return float(np.mean(np.sqrt(np.sum(e**2))))
+    return float(np.mean(e**2))
 
 
 def summarize_set(files):
@@ -547,7 +549,6 @@ def summarize_set(files):
         df = pd.read_csv(f, comment="#")
 
         error.append(final_error(df))
-        max_inputs.append(max_control_input(df))
 
         control_time = read_control_time(f)
         if not np.isnan(control_time):
@@ -556,35 +557,37 @@ def summarize_set(files):
     return {
         "final_mean": float(np.mean(error)),
         "final_std":  float(np.std(error)),
-        "max_input":  float(np.max(max_inputs)),
         "control_time_mean": float(np.mean(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
         "control_time_std":  float(np.std(ctrl_time))  if len(ctrl_time) > 0 else float("nan"),
     }
 
 
-def summarize_tracking(file):
-    df = pd.read_csv(file, comment="#")
+def summarize_tracking(files):
+    mse = []
+    ctrl_time = []
 
-    control_time = read_control_time(file)
+    for f in files:
+        df = pd.read_csv(f, comment="#")
+
+        mse.append(mse_error(df))
+
+        control_time = read_control_time(f)
+        if not np.isnan(control_time):
+            ctrl_time.append(control_time)
 
     return {
-        "mse": mse_error(df),
-        "control_time": control_time,
-        "max_input": max_control_input(df)
+        "mse_mean": float(np.mean(mse)),
+        "mse_std":  float(np.std(mse)),
+        "control_time_mean": float(np.mean(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
+        "control_time_std":  float(np.std(ctrl_time))  if len(ctrl_time) > 0 else float("nan"),
     }
 
-control_limits = {
-    "tendon": "-1 ≤ u ≤ 1",
-    "helix": "-25 ≤ u ≤ 25",
-    "spirob": "u ≤ 0"
-}
+def generate_combined_report(root):
 
+    rows = []
+    robots = ["tendon", "helix", "spirob"]
 
-def generate_report(root):
-    set_rows = []
-    track_rows = []
-
-    for robot in sorted(os.listdir(root)):
+    for robot in robots:
         robot_path = os.path.join(root, robot)
         if not os.path.isdir(robot_path):
             continue
@@ -597,50 +600,106 @@ def generate_report(root):
             set_files = sorted(glob.glob(os.path.join(ctrl_path, "set_*.csv")))
             track_files = sorted(glob.glob(os.path.join(ctrl_path, "tracking*.csv")))
 
+            # ---------------- SET POINT ----------------
             if len(set_files) > 0:
                 s = summarize_set(set_files)
-                set_rows.append([
+
+                final_error_str = f"{s['final_mean']:.4f} ± {s['final_std']:.4f}"
+                sp_act_str = (
+                    f"{s['control_time_mean']:.2f} ± {s['control_time_std']:.2f}"
+                    if not np.isnan(s['control_time_mean']) else "-"
+                )
+            else:
+                final_error_str = "-"
+                sp_act_str = "-"
+
+            # ---------------- TRACKING ----------------
+            if len(track_files) > 0:
+                t = summarize_tracking(track_files)
+
+                mse_str = f"{t['mse_mean']:.5f}"
+                tt_act_str = (
+                    f"{t['control_time_mean']:.2f} ± {t['control_time_std']:.2f}"
+                    if not np.isnan(t['control_time_mean']) else "-"
+                )
+            else:
+                mse_str = "-"
+                tt_act_str = "-"
+
+            rows.append([
                 naming(robot, robot_name),
                 naming(ctrl, control_name),
-                "Set Point",
-                f"{s['final_mean']:.4f} ± {s['final_std']:.4f}",
-                f"{s['control_time_mean']:.6f} ± {s['control_time_std']:.6f}",
-                f"{s['max_input']:.3f}",
-                control_limits.get(robot, "")
+                final_error_str,
+                sp_act_str,
+                mse_str,
+                tt_act_str
             ])
 
-
-            if len(track_files) > 0:
-                t = summarize_tracking(track_files[0])
-                track_rows.append([
-                    naming(robot, robot_name),
-                    naming(ctrl, control_name),
-                    "Trajectory Tracking",
-                    f"{t['mse']:.5f}",
-                    f"{t['control_time']:.6f}x",
-                    f"{t['max_input']:.3f}",
-                    control_limits.get(robot, "")
-                ])
-
-    set_df = pd.DataFrame(set_rows, columns=[
-    "Robot", "Controller", "Experiment",
-    "Mean Final Error ± std", "Control Time ± std", "Max Control Input", "Control Limit"
+    df = pd.DataFrame(rows, columns=[
+        "Robot",
+        "Controller",
+        "Final Error (SP) (m)",
+        "SP–ACT (s)",
+        "TT–MSE",
+        "TT–ACT (s)"
     ])
 
+    df.to_csv("combined_benchmark.csv", index=False)
 
+    print("\nGenerated: combined_benchmark.csv")
 
-    track_df = pd.DataFrame(track_rows, columns=[
-        "Robot", "Controller", "Experiment",
-        "MSE", "Control Time", "Max Input", "Control Limit"
-    ])
+def csv_to_latex_table(csv_file, output_tex="combined_table.tex"):
+    df = pd.read_csv(csv_file)
 
-    set_df.to_csv("set_report.csv", index=False)
-    track_df.to_csv("tracking_report.csv", index=False)
+    # Replace ± with LaTeX \pm
+    df = df.replace("±", r"$\pm$", regex=False)
+    # Replace "-" with proper LaTeX dash
+    df = df.replace("-", "--")
 
-    print("\nGenerated:")
-    print("  set_report.csv")
-    print("  tracking_report.csv")
+    # Start building LaTeX string
+    latex = []
+    latex.append(r"\begin{table*}[t]")
+    latex.append(r"\centering")
+    latex.append(r"\caption{Combined benchmark comparison for set point (SP) and trajectory tracking (TT) across three robot platforms.}")
+    latex.append(r"\label{tab:combined_benchmark}")
+    latex.append(r"\resizebox{\textwidth}{!}{%")
+    latex.append(r"\begin{tabular}{|c|c|c|c|c|c|}")
+    latex.append(r"\hline")
+    latex.append(r"\textbf{Robot} & \textbf{Controller} & "
+                 r"\textbf{Final Error (SP) (m)} & "
+                 r"\textbf{SP--ACT (s)} & "
+                 r"\textbf{TT--MSE ($\mathbf{m^2}$)} & "
+                 r"\textbf{TT--ACT (s)} \\")
+    latex.append(r"\hline")
 
+    current_robot = None
+
+    for _, row in df.iterrows():
+        robot = row["Robot"]
+
+        # Add extra horizontal line between robot groups
+        if current_robot is not None and robot != current_robot:
+            latex.append(r"\hline")
+
+        latex.append(
+            f"{robot} & {row['Controller']} & "
+            f"{row['Final Error (SP) (m)']} & "
+            f"{row['SP–ACT (s)']} & "
+            f"{row['TT–MSE']} & "
+            f"{row['TT–ACT (s)']} \\\\"
+        )
+
+        current_robot = robot
+
+    latex.append(r"\hline")
+    latex.append(r"\end{tabular}}")
+    latex.append(r"\end{table*}")
+
+    # Write to file
+    with open(output_tex, "w") as f:
+        f.write("\n".join(latex))
+
+    print(f"LaTeX table saved to {output_tex}")
 
 if __name__ == "__main__":
     robots = load_results("results")
@@ -650,12 +709,13 @@ if __name__ == "__main__":
     # clf_plot(robots, control="id_clf_qp", experiment="tracking")
 
     # Trajectory circles
-    plot_tracking_trajectory(
-    robots,
-    robot_list=["tendon", "helix"],
-    plane="xz",
-    start_time=8.0
-)
+#     plot_tracking_trajectory(
+#     robots,
+#     robot_list=["tendon", "helix"],
+#     plane="xz",
+#     start_time=8.0
+# )
 
     # Reports
-    generate_report("results")
+    generate_combined_report("results")
+    csv_to_latex_table("combined_benchmark.csv", "combined_table.tex")

@@ -1,0 +1,31 @@
+\begin{table*}[t]
+\centering
+\caption{Combined benchmark comparison for set point (SP) and trajectory tracking (TT) across three robot platforms.}
+\label{tab:combined_benchmark}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\textbf{Robot} & \textbf{Controller} & \textbf{Final Error (SP) (m)} & \textbf{SP--ACT (s)} & \textbf{TT--MSE ($\mathbf{m^2}$)} & \textbf{TT--ACT (s)} \\
+\hline
+Finger & CLF-QP & 0.0054 ± 0.0093 & 0.00 ± 0.00 & 0.00031 & 0.00 ± 0.00 \\
+Finger & ID-CLF-QP & 0.0008 ± 0.0009 & 0.01 ± 0.00 & 0.00006 & 0.01 ± 0.00 \\
+Finger & IC & 0.0008 ± 0.0014 & 0.00 ± 0.00 & 0.00014 & 0.00 ± 0.00 \\
+Finger & IC-QP & 0.0033 ± 0.0016 & 0.00 ± 0.00 & 0.00149 & 0.00 ± 0.00 \\
+Finger & EOSC & 0.0008 ± 0.0014 & 0.00 ± 0.00 & 0.00014 & 0.00 ± 0.00 \\
+Finger & UIC & 0.0022 ± 0.0039 & 0.00 ± 0.00 & 0.00013 & 0.00 ± 0.00 \\
+\hline
+Helix & CLF-QP & -- & -- & 47514.54075 & 0.01 ± 0.00 \\
+Helix & ID-CLF-QP & 0.0270 ± 0.0235 & 0.01 ± 0.00 & 0.00297 & 0.01 ± 0.00 \\
+Helix & IC & 0.0460 ± 0.0180 & 0.00 ± 0.00 & 0.00583 & 0.00 ± 0.00 \\
+Helix & IC-QP & 0.0271 ± 0.0236 & 0.01 ± 0.00 & 0.00296 & 0.01 ± 0.00 \\
+Helix & EOSC & 0.0460 ± 0.0180 & 0.00 ± 0.00 & 0.00583 & 0.00 ± 0.00 \\
+Helix & UIC & 0.0427 ± 0.0179 & 0.00 ± 0.00 & 0.00585 & 0.00 ± 0.00 \\
+\hline
+SpiRob & CLF-QP & 0.1485 ± 0.1823 & 0.01 ± 0.00 & -- & -- \\
+SpiRob & ID-CLF-QP & 0.0624 ± 0.0413 & 0.01 ± 0.00 & -- & -- \\
+SpiRob & IC & 0.3786 ± 0.0903 & 0.00 ± 0.00 & 0.15384 & -- \\
+SpiRob & IC-QP & 0.0608 ± 0.0391 & 0.01 ± 0.00 & 0.01108 & -- \\
+SpiRob & EOSC & 0.1906 ± 0.0000 & 0.00 ± 0.00 & 0.12209 & 0.00 ± 0.00 \\
+\hline
+\end{tabular}}
+\end{table*}

@@ -1,8 +1,8 @@
 # ===== Simulation Performance =====
-# wall_clock_time,11.090105
+# wall_clock_time,10.973873
 # physics_time,10.005000
-# real_time_factor,0.902156
-# control_time,0.004884
+# real_time_factor,0.911711
+# control_time,0.004801
 # ==================================
 
 time,sim_time,task_error,u0,u1

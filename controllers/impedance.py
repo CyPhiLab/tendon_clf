@@ -103,11 +103,8 @@ class ImpedanceController(BaseController):
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
         Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
         tau = jac.T @ (Mx @ ydd + Cy) + g + robot.get_passive_forces().flatten()
-        lower_bounds = robot.lower_bounds
-        upper_bounds = robot.upper_bounds
         u = robot.pinv_B @ tau
         t_ctrl = time.time() - t_ctrl_start
-        # u = np.clip(u, lower_bounds, upper_bounds)
         try:
             robot.apply_control_input(u)
         except:
@@ -120,6 +117,51 @@ class ImpedanceController(BaseController):
             t_ctrl=t_ctrl
         )
 
+class UOSCController(BaseController):
+    
+    def __call__(self, robot, target_vel, target_acc, twist, previous_solution=None):
+        """Impedance controller using on-demand robot physics interface"""
+        
+        # Update input matrix for dynamic robots
+        robot.update_input_matrix()
+
+        # Get physics data on-demand
+        M_inv = robot.get_mass_matrix_inverse()
+        jac = robot.get_jacobian()
+        dJ_dt = robot.get_jacobian_derivative()
+        dq = robot.get_joint_velocities()
+        
+        # Impedance control using robot attributes
+        Kp = robot.Kp
+        Kd = robot.Kd
+
+        t_ctrl_start = time.time()
+        Mx_inv = jac @ M_inv @ jac.T
+        if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+            Mx = np.linalg.inv(Mx_inv)
+        else:
+            Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+        Jbar = M_inv @ jac.T @ Mx
+        C, g = robot.get_coriolis_and_gravity()
+        ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
+        Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
+        I = np.eye(robot.model.nv)
+        N = I - np.linalg.pinv(jac) @ jac
+        Bp = robot.B @ robot.pinv_B
+        tau = (I - N @ np.linalg.pinv((I - Bp) @ N, rcond=1e-8)) @ (jac.T @ (Mx@ydd + Cy)) + g + robot.get_passive_forces().flatten()
+        u = robot.pinv_B @ tau
+        t_ctrl = time.time() - t_ctrl_start
+        try:
+            robot.apply_control_input(u)
+        except:
+            print(f"failed convergence\n")
+            pass
+        
+        return ControllerResult(
+            task_error=np.linalg.norm(twist[:3]),
+            control_input=u.copy(),
+            t_ctrl=t_ctrl
+        )
 
 class ImpedanceQPController(BaseController):
     """
@@ -203,12 +245,13 @@ class ImpedanceQPController(BaseController):
         qdd = cp.Variable(shape=(nq, ))
         N = np.eye(robot.model.nv) - np.linalg.pinv(jac) @ jac
         qdd_null = N @ qdd
-        qdd_ref = -50 *N @ dq
+        qdd_ref = -50 * N @ dq
 
         objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
                                 + robot.reg_qdd * cp.square(cp.norm(qdd))  
                                 + robot.reg_u * cp.square(cp.norm(u)) 
-                                + robot.reg_null * cp.square(cp.norm(qdd_null - qdd_ref)))
+                                + robot.reg_null * cp.square(cp.norm(qdd_null - qdd_ref))
+                                )
 
         constraints = [robot.pinv_B @ (M @ qdd + robot.get_bias_forces() + robot.get_passive_forces()) == u]
         constraints += robot.get_control_constraints(u)
@@ -227,7 +270,7 @@ class ImpedanceQPController(BaseController):
             prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
             t_ctrl = time.time() - t_ctrl_start
             if u.value is not None:
-                robot.apply_control_input(u.value)
+                robot.data.ctrl[:] = np.clip(u.value, robot.lower_bounds, robot.upper_bounds)
 
                 current_solution = {
                     'u': u.value.copy(),

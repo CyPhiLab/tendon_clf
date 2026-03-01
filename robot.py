@@ -76,7 +76,7 @@ class Robot:
             self.sel[[2, 5, 8]] = 0.0
             # Control gains
             self.Kp, self.Kd = 500, 2 * np.sqrt(500)
-            self.damping, self.stiffness = 0.2, 0.1
+            self.damping, self.stiffness = 0.2, 0.2
             self.e = 0.05
             # Passive force sign (helix uses +data.qfrc_passive)
             self.passive_sign = 1
@@ -84,7 +84,7 @@ class Robot:
             self.reg_qdd = 0.2
             self.reg_u = 0.2
             self.reg_null = 0.1
-            self.reg_dl = 100
+            self.reg_dl = 1000
             # MPC-specific coefficients
             self.mpc_task_weight = 1.0
             self.mpc_null_weight = 0.0
@@ -108,9 +108,9 @@ class Robot:
             # self.pinv_B = None
             self.sel = np.ones((self.nu, 1))
             # Control gains
-            self.Kp, self.Kd = 1000.0, 2 * np.sqrt(1000.0)
+            self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
             self.damping, self.stiffness = 0.015, 0.01
-            self.e = 0.05
+            self.e = 0.04
 
             # Passive force sign (spirob uses -data.qfrc_passive)
             self.passive_sign = -1
@@ -402,4 +402,6 @@ class Robot:
     def apply_control_input(self, u):
         """Apply control input to robot actuators"""
         self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)
+        # self.data.ctrl[:] = self.B_applied @ u
+
 
