@@ -554,6 +554,7 @@
                                                       <site group="3" name="150" pos="0.000479543 0.00126022 0.000727586" quat="0.5 -0.5 -0.5 0.5"/>
                                                       <body name="attachment" pos="0.007 0.0 0.0" quat="0 0 0 1">
                                                         <site name="ee" rgba="1 0 0 1" size="0.001" group="1"/>
+                                                        <site name="safe_1" rgba="1 0 0 1" size="0.001" group="1"/>
                                                       </body>
                                                     </body>
                                                   </body>

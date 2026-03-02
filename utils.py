@@ -148,10 +148,14 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['xd'][log_idx] = target["pos"]
 
 
-def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0):
+def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, enable_cbf=False, cbf_alpha=100.0):
     """Run physics simulation with specified controller and robot."""
     
     robot = Robot(model_name)
+    
+    # Configure CBF settings
+    robot.enable_cbf = enable_cbf
+    robot.cbf_alpha = cbf_alpha
     
     # Create controller instance based on control_scheme
     controller_map = {

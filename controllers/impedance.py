@@ -212,6 +212,11 @@ class ImpedanceQPController(BaseController):
 
         constraints = [robot.pinv_B @ (M @ qdd + robot.get_bias_forces() + robot.get_passive_forces()) == u]
         constraints += robot.get_control_constraints(u)
+        
+        # Add workspace CBF constraints if enabled
+        if getattr(robot, 'enable_cbf', False):
+            cbf_constraints = self.generate_workspace_cbf_constraints(robot, qdd)
+            constraints.extend(cbf_constraints)
 
         prob = cp.Problem(objective=objective, constraints=constraints)
         

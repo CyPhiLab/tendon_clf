@@ -18,12 +18,16 @@ if __name__ == "__main__":
     parser.add_argument('--target_pos', type=str, default='pos4', choices=['pos1', 'pos2', 'pos3', 'pos4'], help='Target position for the end-effector')
     parser.add_argument('--sim_duration', type=float, default=10.0, help='Duration of the simulation in seconds')
     parser.add_argument('--verbose', action='store_true', help='Print detailed system information')
+    parser.add_argument('--enable_cbf', action='store_true', help='Enable workspace Control Barrier Functions')
+    parser.add_argument('--cbf_alpha', type=float, default=100.0, help='CBF convergence parameter')
     args = parser.parse_args()
     
     # Print system info if requested
     if args.verbose:
         print(f"Running: {args.robot} robot with {args.control} controller")
         print(f"Experiment: {args.experiment}, Target: {args.target_pos if args.experiment == 'set' else 'trajectory'}")
+        if args.enable_cbf:
+            print(f"CBF enabled with alpha={args.cbf_alpha}")
     
     # Basic validation
     # if args.robot == 'spirob' and args.experiment == 'tracking':
@@ -40,7 +44,9 @@ if __name__ == "__main__":
                             controller=None,  # Controller logic now in Robot class
                             experiment=args.experiment, 
                             model_name=args.robot,
-                            sim_duration=args.sim_duration)
+                            sim_duration=args.sim_duration,
+                            enable_cbf=args.enable_cbf,
+                            cbf_alpha=args.cbf_alpha)
     
     # Record end time and add runtime data to results
     end_time = time.time()

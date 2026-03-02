@@ -10,11 +10,11 @@ from itertools import product
 from utils import *
 
 
-def run_single_experiment(robot, controller, experiment, target_pos=None, sim_duration=10.0):
+def run_single_experiment(robot, controller, experiment, target_pos=None, sim_duration=10.0, enable_cbf=False, cbf_alpha=100.0):
     """Run a single experiment configuration."""
     
     print(f"Running: {robot} + {controller} + {experiment}" + (f" + {target_pos}" if target_pos else ""))
-
+    
     start_time = time.time()
     
     # Run simulation
@@ -25,7 +25,9 @@ def run_single_experiment(robot, controller, experiment, target_pos=None, sim_du
         controller=None,
         experiment=experiment,
         model_name=robot,
-        sim_duration=sim_duration
+        sim_duration=sim_duration,
+        enable_cbf=enable_cbf,
+        cbf_alpha=cbf_alpha
     )
     
     # Add timing data
@@ -60,6 +62,8 @@ def main():
                        choices=['pos1', 'pos2', 'pos3', 'pos4'],
                        help='Target positions for set experiments (default: all)')
     parser.add_argument('--sim_duration', type=float, default=10.0, help='Duration of simulations in seconds')
+    parser.add_argument('--enable_cbf', action='store_true', help='Enable workspace Control Barrier Functions')
+    parser.add_argument('--cbf_alpha', type=float, default=100.0, help='CBF convergence parameter')
     args = parser.parse_args()
 
     total_start_time = time.time()
@@ -95,12 +99,12 @@ def main():
         try:
             if experiment == 'set':
                 for target_pos in args.target_positions:
-                    run_single_experiment(robot, controller, experiment, target_pos, args.sim_duration)
+                    run_single_experiment(robot, controller, experiment, target_pos, args.sim_duration, args.enable_cbf, args.cbf_alpha)
                     completed_experiments += 1
                     print(f"Progress: {completed_experiments}/{total_experiments} ({100*completed_experiments/total_experiments:.1f}%)")
             else:  # tracking
                 # Single tracking experiment
-                run_single_experiment(robot, controller, experiment, sim_duration=args.sim_duration)
+                run_single_experiment(robot, controller, experiment, sim_duration=args.sim_duration, enable_cbf=args.enable_cbf, cbf_alpha=args.cbf_alpha)
                 completed_experiments += 1
                 print(f"Progress: {completed_experiments}/{total_experiments} ({100*completed_experiments/total_experiments:.1f}%)")
 

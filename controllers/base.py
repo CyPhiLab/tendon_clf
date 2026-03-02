@@ -29,3 +29,33 @@ class BaseController(ABC):
         c_dot = dJ @ dq + J @ ddq
         cbf = c_dot + 2 * alpha * J @ dq + alpha**2 * c
         return cbf
+        
+    def generate_workspace_cbf_constraints(self, robot, qdd_var, workspace_bounds=None, alpha=100.0):
+        """Generate workspace CBF constraints for QP optimization
+        
+        Args:
+            robot: Robot instance
+            qdd_var: Joint acceleration variable from QP
+            workspace_bounds: Workspace limits dict (uses robot default if None)
+            alpha: CBF parameter
+            
+        Returns:
+            list of constraint expressions for QP
+        """
+        if workspace_bounds is None:
+            workspace_bounds = getattr(robot, 'workspace_bounds', None)
+            if workspace_bounds is None:
+                return []  # No workspace constraints defined
+                
+        cbf_data = robot.get_workspace_cbf_data(workspace_bounds, alpha)
+        constraints = []
+        dq = robot.get_joint_velocities()
+        
+        for data in cbf_data:
+            c, J, dJ = data['c'], data['J'], data['dJ']
+            # CBF constraint: c_dot + 2*alpha*J*dq + alpha^2*c >= 0
+            c_dot = dJ @ dq + J @ qdd_var
+            cbf_constraint = c_dot + 2 * alpha * J @ dq + alpha**2 * c >= 0
+            constraints.append(cbf_constraint)
+            print(f"    → Added CBF constraint: c={c:.3f}")
+        return constraints

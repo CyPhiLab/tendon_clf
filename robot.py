@@ -1,5 +1,3 @@
-from xml.parsers.expat import model
-
 import numpy as np
 import mujoco
 from pathlib import Path
@@ -55,6 +53,13 @@ class Robot:
             self.lower_bounds = np.full((self.nu, ), self.control_limits[0])
             self.upper_bounds = np.full((self.nu, ), self.control_limits[1])
             
+            # Default workspace bounds for CBF (tendon specific)  
+            self.workspace_bounds = {
+                'x_min': -0.3, 'x_max': 0.1,
+                'y_min': -0.3, 'y_max': 0.3,
+                'z_min': 0.05, 'z_max': 0.8
+            }
+            
         elif self.model_name == 'helix':
             self.task_dim = 6
             self.control_limits = (-25.0, 25.0)
@@ -77,14 +82,14 @@ class Robot:
             # Control gains
             self.Kp, self.Kd = 500, 2 * np.sqrt(500)
             self.damping, self.stiffness = 0.2, 0.1
-            self.e = 0.05
+            self.e = 0.9
             # Passive force sign (helix uses +data.qfrc_passive)
             self.passive_sign = 1
             # Regularization coefficients for optimization
-            self.reg_qdd = 0.2
-            self.reg_u = 0.2
-            self.reg_null = 0.1
-            self.reg_dl = 100
+            self.reg_qdd = 10.0
+            self.reg_u = 1.0
+            self.reg_null = 10.0
+            self.reg_dl = 1000
             # MPC-specific coefficients
             self.mpc_task_weight = 1.0
             self.mpc_null_weight = 0.0
@@ -92,6 +97,13 @@ class Robot:
             # Control constraint bounds (incorporate selection logic)
             self.lower_bounds = self.control_limits[0] * self.sel
             self.upper_bounds = np.full((self.nu, ), self.control_limits[1])
+            
+            # Default workspace bounds for CBF (helix specific)
+            self.workspace_bounds = {
+                'x_min': -0.1, 'x_max': 0.2,
+                'y_min': -0.1, 'y_max': 0.0, 
+                'z_min': -100, 'z_max': 0.4
+            }
             # self.model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_CONTACT
             
         elif self.model_name == 'spirob':
@@ -129,8 +141,19 @@ class Robot:
             self.lower_bounds = np.full((self.nu,), self.control_limits[0])
             self.upper_bounds = np.full((self.nu,), self.control_limits[1])
             
+            # Default workspace bounds for CBF (spirob specific)
+            self.workspace_bounds = {
+                'x_min': -0.4, 'x_max': 0.2,
+                'y_min': -0.4, 'y_max': 0.4,
+                'z_min': 0.0, 'z_max': 0.3 
+            }
+            
         # Compute Control Lyapunov Function matrices
         self._setup_clf_matrices()
+        
+        # CBF configuration (disabled by default)
+        self.enable_cbf = False
+        self.cbf_alpha = 100.0  # CBF convergence parameter
         
     def _setup_clf_matrices(self):
         """Pre-compute invariant matrices for control"""
@@ -360,6 +383,62 @@ class Robot:
     def get_bias_forces(self):
         """Get bias forces (Coriolis + gravity)"""
         return self.data.qfrc_bias.copy()
+        
+    def get_safe_sites(self):
+        """Get all sites named 'safe_n' for CBF constraints"""
+        safe_sites = []
+        for i in range(self.model.nsite):
+            site_name = self.model.site(i).name
+            if site_name and site_name.startswith('safe_'):
+                try:
+                    # Verify it follows safe_n pattern
+                    int(site_name.split('_')[1])
+                    safe_sites.append(site_name)
+                except (IndexError, ValueError):
+                    continue
+        return sorted(safe_sites, key=lambda x: int(x.split('_')[1]))
+        
+    def get_workspace_cbf_data(self, workspace_bounds, alpha=100.0):
+        """Compute workspace CBF constraints for all safe sites
+        
+        Args:
+            workspace_bounds: dict with 'x_min', 'x_max', 'y_min', 'y_max', 'z_min', 'z_max'
+            alpha: CBF parameter for exponential convergence
+            
+        Returns:
+            list of dicts containing {c, J, dJ} for each active constraint
+        """
+        safe_sites = self.get_safe_sites()
+        cbf_constraints = []
+        dq = self.get_joint_velocities()
+        
+        for site_name in safe_sites[-1:]:  # Only consider the last few safe sites for workspace constraints
+            print(f"Evaluating workspace CBF for site: {site_name}")
+            pos = self.get_site_position(site_name)
+            jac = self.get_jacobian(site_name)  # Only position part (3x nv)
+            jac_dot = self.get_jacobian_derivative(site_name)
+            
+            # Check each workspace boundary
+            bounds = [
+                # (pos[0] - workspace_bounds['x_min'], jac[0, :], jac_dot[0, :]),  # x_min constraint
+                (workspace_bounds['x_max'] - pos[0], -jac[0, :], -jac_dot[0, :]), # x_max constraint  
+                # (pos[1] - workspace_bounds['y_min'], jac[1, :], jac_dot[1, :]),  # y_min constraint
+                # (workspace_bounds['y_max'] - pos[1], -jac[1, :], -jac_dot[1, :]), # y_max constraint
+                # (pos[2] - workspace_bounds['z_min'], jac[2, :], jac_dot[2, :]),  # z_min constraint
+                # (workspace_bounds['z_max'] - pos[2], -jac[2, :], -jac_dot[2, :])  # z_max constraint
+            ]
+            print(f"  Position: {pos}")
+            
+            for c, J, dJ in bounds:
+                if c < 0.5:  # Only add constraints that might become active
+                    cbf_constraints.append({
+                        'c': c,
+                        'J': J,
+                        'dJ': dJ,
+                        'site': site_name
+                    })
+                    
+        return cbf_constraints
         
     def compute_target_data(self, experiment, target):
         """Compute target position, velocities and task error"""

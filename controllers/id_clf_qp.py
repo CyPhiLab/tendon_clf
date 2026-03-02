@@ -125,6 +125,11 @@ class IDCLFQPController(BaseController):
         constraints = [dV <= - 1/e * V + dl, 
                        r_theta[:nu] == 0]
         constraints += robot.get_control_constraints(u)
+        
+        # Add workspace CBF constraints if enabled
+        if getattr(robot, 'enable_cbf', False):
+            cbf_constraints = self.generate_workspace_cbf_constraints(robot, qdd)
+            constraints.extend(cbf_constraints)
 
         prob = cp.Problem(objective=objective, constraints=constraints)
         

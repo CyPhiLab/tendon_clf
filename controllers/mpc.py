@@ -78,6 +78,11 @@ class MPCController(BaseController):
             # Add robot-specific control constraints
             for constraint in robot.get_control_constraints(u_k[:, k:k+1]):
                 constraints += [constraint]
+                
+            # Add workspace CBF constraints if enabled
+            if getattr(robot, 'enable_cbf', False):
+                cbf_constraints = self.generate_workspace_cbf_constraints(robot, qdd_k[:, k:k+1])
+                constraints.extend(cbf_constraints)
             # add linearized dynamics constraint
             eta_k1 = eta_k[:, k+1:k+2]
             mu_k1  = mu[:, k:k+1]
