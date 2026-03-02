@@ -16,7 +16,8 @@ class Robot:
         self.model.opt.gravity = (0, 0, -9.81)
         self.control_scheme = control_scheme
         self._setup_robot_config()
-
+        self.site_id = self.model.site('ee').id
+        self.S = self.compute_S(site_id=self.site_id, qbar=self.data.qpos.copy())
         
         
     def _load_model(self):
@@ -103,7 +104,7 @@ class Robot:
             # Passive force sign (helix uses +data.qfrc_passive)
             self.passive_sign = 1
             # Regularization coefficients for optimization
-            self.reg_qdd = 0.2
+            self.reg_qdd = 0.1
             self.reg_u = 0.2
             self.reg_null = 0.1
             self.reg_dl = 1000
@@ -130,8 +131,8 @@ class Robot:
             # self.pinv_B = None
             self.sel = np.ones((self.nu, 1))
             # Control gains
-            if self.control_scheme == 'impedance.QP':
-                self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
+            if self.control_scheme == 'impedance_QP':
+                self.Kp, self.Kd = 2000.0, 2 * np.sqrt(2000.0)
             else:
                 self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
             self.damping, self.stiffness = 0.15, 0.1
@@ -434,4 +435,29 @@ class Robot:
         else:
             self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)
 
+    
+    def compute_S(self, site_id, qbar=None):
 
+        model = self.model
+
+        # Create temporary data object )
+        data_temp = mujoco.MjData(model)
+
+        # Choose reference posture
+        if qbar is None:
+            qbar = self.data.qpos.copy()
+
+        # Set temporary state
+        data_temp.qpos[:] = qbar
+        data_temp.qvel[:] = 0.0
+        mujoco.mj_forward(model, data_temp)
+
+        # Compute Jacobian at qbar
+        jac = np.zeros((6, model.nv))
+        mujoco.mj_jacSite(model, data_temp, jac[:3], jac[3:], site_id)
+
+        # Use position part only
+        jac = jac[:3, :] 
+        S = jac.T.copy()
+
+        return S
