@@ -17,10 +17,17 @@ from robot import Robot
 # Configure MuJoCo to use the EGL rendering backend (requires GPU)
 os.environ["MUJOCO_GL"] = "egl"
 
+def get_omega(omega_str):
+    omg = {
+        'omg1': 0.1 * np.pi,
+        'omg2': 0.2 * np.pi,
+        'omg3': 0.3 * np.pi,
+        'omg4': 0.4 * np.pi,
+        'omg5': 0.5 * np.pi
+    }
+    return omg[omega_str]
 
-
-
-def circular_trajectory(t, model_name):
+def circular_trajectory(t, model_name, omega):
     """
     Circular trajectory through the 4 given points.
     One full revolution in time T.
@@ -37,19 +44,17 @@ def circular_trajectory(t, model_name):
         L = 0.45
         h = L
 
-    # Circle parameters
-    # cx, cy, cz = 3*L/4 * np.cos(np.pi/4), 0, -3*L/4 * np.sin(np.pi/4) + h
-    # r = L/4
-
     # Angle
-    omega = 0.25 * np.pi 
     theta = omega * t
 
     a = L/3
     b = L/6
     phi = np.pi/4
     x1 = a * np.cos(theta)
-    z1 = b * np.sin(theta) - (L-b)
+    if model_name == 'spirob':
+        z1 = b * np.sin(theta) - (3*L/4-b)
+    else:
+        z1 = b * np.sin(theta) - (L-b)
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi)
@@ -71,7 +76,7 @@ def circular_trajectory(t, model_name):
     vel = np.array([xd, yd, zd])
     acc = np.array([xdd, ydd, zdd])
 
-    return omega,{"pos": pos, "vel": vel, "acc": acc}
+    return {"pos": pos, "vel": vel, "acc": acc}
 
 def set_target(target_pos, model_name):
     if model_name == 'tendon':
@@ -88,10 +93,13 @@ def set_target(target_pos, model_name):
     theta = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
 
     a = L/3
-    b = L/8
+    b = L/6
     phi = np.pi/4
     x1 = a * np.cos(theta)
-    z1 = b * np.sin(theta) - (L-b)
+    if model_name == 'spirob':
+        z1 = b * np.sin(theta) - (3*L/4-b)
+    else:
+        z1 = b * np.sin(theta) - (L-b)
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi)
@@ -111,7 +119,6 @@ def set_target(target_pos, model_name):
     }
 
     return targets[target_pos]
-
 
 def _create_log_arrays(num_steps, control_scheme, experiment, nu):
     """Pre-allocate logging arrays based on what we actually need"""
@@ -148,10 +155,11 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['xd'][log_idx] = target["pos"]
 
 
-def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0):
+def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1'):
     """Run physics simulation with specified controller and robot."""
     
-    robot = Robot(model_name)
+    robot = Robot(model_name, control_scheme)
+    
     
     # Create controller instance based on control_scheme
     controller_map = {
@@ -173,6 +181,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
 
     # Pre-allocate logging arrays for better performance
     dt = robot.model.opt.timestep
+    if experiment == 'tracking':
+        sim_duration = 4 * np.pi / get_omega(omega)
     max_steps = int(sim_duration / dt) + 100  # Add buffer
     log_frequency = 5  # Log every 5 steps
     max_log_steps = max_steps // log_frequency + 1
@@ -198,7 +208,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
                 
             # Get target based on experiment type
             if experiment == 'tracking':
-                omega, target = circular_trajectory(t, model_name)
+                w = get_omega(omega)
+                target = circular_trajectory(t, model_name, w)
             else:  # experiment == 'set'
                 target = set_target(target_pos, model_name)
             
@@ -224,7 +235,9 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
                 log_idx += 1
 
             # Terminate after fixed duration (10 seconds)
-            if t >= sim_duration:
+            if experiment == 'tracking' and t >= 4*np.pi/w:
+                break
+            elif experiment == 'set' and t >= sim_duration:
                 break
             
             step_count += 1
@@ -253,7 +266,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
 
     return actual_logs
 
-def save_results(results, experiment, control_scheme, model_name, target_pos=None):
+def save_results(results, experiment, control_scheme, model_name, target_pos=None, omega=None):
     """Save simulation results to CSV file."""
     
     # Extract data from results dictionary
@@ -314,7 +327,7 @@ def save_results(results, experiment, control_scheme, model_name, target_pos=Non
     if experiment == "set":
         csv_path = f"{out_dir}/{experiment}_{control_scheme}_{target_pos}.csv"
     else:
-        csv_path = f"{out_dir}/{experiment}_{control_scheme}.csv"
+        csv_path = f"{out_dir}/{experiment}_{control_scheme}_{omega}.csv"
 
     # ================================
     # Compute performance metrics
