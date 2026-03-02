@@ -154,7 +154,6 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['x'][log_idx] = data.site("ee").xpos
         logs['xd'][log_idx] = target["pos"]
 
-
 def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1'):
     """Run physics simulation with specified controller and robot."""
     

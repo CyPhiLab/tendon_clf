@@ -531,7 +531,7 @@ def get_robot_parameters(robot_name_dict):
             rows.append(row)
 
     df = pd.DataFrame(rows)
-    df.to_csv("controller_parameter_table.csv", index=False)
+    df.to_csv("table/controller_parameter_table.csv", index=False)
 
 def generate_combined_report(root):
     rows = []
@@ -576,11 +576,11 @@ def generate_combined_report(root):
         "TT–MSE ($cm^2$)"
     ])
 
-    df.to_csv("combined_benchmark.csv", index=False)
+    df.to_csv("table/combined_benchmark.csv", index=False)
     print("\nGenerated: combined_benchmark.csv")
 
 
-def csv_to_latex_table(csv_file, output_tex="combined_table.tex"):
+def csv_to_latex_table(csv_file, output_tex="table/combined_table.tex"):
     df = pd.read_csv(csv_file)
     df = df.replace("±", r"$\pm$", regex=False)
     df = df.replace("-", "--")
@@ -665,6 +665,6 @@ if __name__ == "__main__":
     )
 
     generate_combined_report("results")
-    csv_to_latex_table("combined_benchmark.csv", output_tex="combined_table.tex")
+    csv_to_latex_table("table/combined_benchmark.csv", output_tex="table/combined_table.tex")
 
     get_robot_parameters(robot_name)

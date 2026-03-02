@@ -90,7 +90,7 @@ def main():
         if robot == "helix" and controller == "clf_qp":
             continue
 
-        if robot == "spirob" and experiment == "set" and controller in [
+        if robot == "spirob" and controller in [
             "impedance",
             "osc",
             "uosc",
@@ -98,8 +98,6 @@ def main():
         ]:
             continue
 
-        if robot == "spirob" and experiment == "tracking":
-            continue
 
         valid_configs.append((robot, controller, experiment))
 

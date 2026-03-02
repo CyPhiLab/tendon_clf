@@ -7,6 +7,7 @@ from .base import BaseController, ControllerResult
 
 class OSCController(BaseController):
     
+    
     def __call__(self, robot, target_vel, target_acc, twist, previous_solution=None):
         """OSC controller using on-demand robot physics interface"""
         
@@ -34,7 +35,7 @@ class OSCController(BaseController):
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
         Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
         f = Mx @ ydd + Cy 
-        S = jac.T
+        S = robot.S
         sigma = np.linalg.pinv(jac @ M_inv @ S, rcond=1e-8) @ (jac @ M_inv @ jac.T @ f)
         tau = S @ sigma + g + robot.get_passive_forces().flatten()
         u = robot.pinv_B @ tau
@@ -45,8 +46,3 @@ class OSCController(BaseController):
             print(f"failed convergence\n")
             pass
         
-        return ControllerResult(
-            task_error=np.linalg.norm(twist[:3]),
-            control_input=u.copy(),
-            t_ctrl=t_ctrl
-        )
