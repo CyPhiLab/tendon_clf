@@ -95,11 +95,11 @@ def set_target(target_pos, model_name):
     a = L/3
     b = L/6
     phi = np.pi/4
-    x1 = a * np.cos(theta)
+    x1 = a * np.cos(theta) - 0.1
     if model_name == 'spirob':
-        z1 = b * np.sin(theta) - (3*L/4-b)
+        z1 = b * np.sin(theta) - (3*L/4-b) 
     else:
-        z1 = b * np.sin(theta) - (L-b)
+        z1 = b * np.sin(theta) - (L-b) + 0.05
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi) 
