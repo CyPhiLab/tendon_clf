@@ -35,14 +35,20 @@ class OSCController(BaseController):
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
         Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
         f = Mx @ ydd + Cy 
-        S = robot.S
+        # S = robot.S
+        S = jac.T
         sigma = np.linalg.pinv(jac @ M_inv @ S, rcond=1e-8) @ (jac @ M_inv @ jac.T @ f)
-        tau = S @ sigma + g + robot.get_passive_forces().flatten()
+        # tau = S @ sigma + g + robot.get_passive_forces().flatten()
+        tau = S @ sigma + S @ np.linalg.pinv(jac @ M_inv @ S, rcond=1e-8) @ jac @ M_inv @ (g + robot.get_passive_forces().flatten())
         u = robot.pinv_B @ tau
         t_ctrl = time.time() - t_ctrl_start
         try:
             robot.apply_control_input(u)
         except:
             print(f"failed convergence\n")
-            pass
-        
+
+        return ControllerResult(
+            task_error=np.linalg.norm(twist[:3]),
+            control_input=u.copy(),
+            t_ctrl=t_ctrl
+        )
