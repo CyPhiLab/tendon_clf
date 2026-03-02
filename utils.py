@@ -50,11 +50,11 @@ def circular_trajectory(t, model_name, omega):
     a = L/3
     b = L/6
     phi = np.pi/4
-    x1 = a * np.cos(theta)
+    x1 = a * np.cos(theta) - 0.1
     if model_name == 'spirob':
         z1 = b * np.sin(theta) - (3*L/4-b)
     else:
-        z1 = b * np.sin(theta) - (L-b)
+        z1 = b * np.sin(theta) - (L-b) + 0.05
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi)
@@ -102,7 +102,7 @@ def set_target(target_pos, model_name):
         z1 = b * np.sin(theta) - (L-b)
 
     # Position
-    x = x1 * np.cos(phi) - z1 * np.sin(phi)
+    x = x1 * np.cos(phi) - z1 * np.sin(phi) 
     y = 0.0
     z = x1 * np.sin(phi) + z1 * np.cos(phi) + h
 
@@ -158,6 +158,7 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
 def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1'):
     """Run physics simulation with specified controller and robot."""
     
+    # print(f"Simulating {model_name} with {control_scheme}")
     robot = Robot(model_name, control_scheme)
     
     
