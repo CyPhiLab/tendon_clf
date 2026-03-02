@@ -73,7 +73,7 @@ class IDCLFQPController(BaseController):
         """ID-CLF-QP controller using on-demand robot physics interface"""
         
         # Update input matrix for dynamic robots
-        # robot.update_input_matrix()
+        robot.update_input_matrix()
         
         # Get physics data on-demand
         M = robot.get_mass_matrix()
@@ -107,9 +107,7 @@ class IDCLFQPController(BaseController):
         u = cp.Variable(shape=(nu,))
         qdd = cp.Variable(shape=(nq,))
         dl = cp.Variable(shape=(1,))
-        # su = cp.Variable(shape=(nq-nu,))
         dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc)
-        # D = np.diag([robot.damping]*nq)
         N = np.eye(robot.model.nv) - np.linalg.pinv(jac) @ jac
         qdd_null = N @ qdd
         qdd_ref = -50 *N @ dq

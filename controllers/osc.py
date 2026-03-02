@@ -1,4 +1,4 @@
-"""Impedance controller implementations."""
+"""OSC controller implementations."""
 import time
 import numpy as np
 import cvxpy as cp
@@ -8,7 +8,7 @@ from .base import BaseController, ControllerResult
 class OSCController(BaseController):
     
     def __call__(self, robot, target_vel, target_acc, twist, previous_solution=None):
-        """Impedance controller using on-demand robot physics interface"""
+        """OSC controller using on-demand robot physics interface"""
         
         # Update input matrix for dynamic robots
         robot.update_input_matrix()
@@ -33,9 +33,10 @@ class OSCController(BaseController):
         C, g = robot.get_coriolis_and_gravity()
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
         Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
-        f = Mx @ ydd + Cy
-        sigma = np.linalg.pinv(jac @ M_inv @ jac.T, rcond=1e-8) @ (jac @ M_inv @ jac.T @ f)
-        tau = jac.T @ sigma + g + robot.get_passive_forces().flatten()
+        f = Mx @ ydd + Cy 
+        S = jac.T
+        sigma = np.linalg.pinv(jac @ M_inv @ S, rcond=1e-8) @ (jac @ M_inv @ jac.T @ f)
+        tau = S @ sigma + g + robot.get_passive_forces().flatten()
         u = robot.pinv_B @ tau
         t_ctrl = time.time() - t_ctrl_start
         try:

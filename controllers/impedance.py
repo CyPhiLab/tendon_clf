@@ -223,7 +223,7 @@ class ImpedanceQPController(BaseController):
     def __call__(self, robot, target_vel, target_acc, twist, previous_solution=None):
         """Impedance QP controller using Robot class"""
         
-        # Update input matrix for dynamic robots
+        # # Update input matrix for dynamic robots
         robot.update_input_matrix()
         
         # Get physics data on-demand
@@ -231,6 +231,11 @@ class ImpedanceQPController(BaseController):
         jac = robot.get_jacobian()
         dJ_dt = robot.get_jacobian_derivative()
         dq = robot.get_joint_velocities()
+        h = robot.get_bias_forces() + robot.get_passive_forces()
+        
+        Mbar = robot.TinvT @ M @ robot.Tinv
+        hbar = robot.TinvT @ h
+        Bbar = robot.TinvT @ robot.B
         
         Kp = robot.Kp
         Kd = robot.Kd
@@ -247,13 +252,14 @@ class ImpedanceQPController(BaseController):
         qdd_null = N @ qdd
         qdd_ref = -50 * N @ dq
 
+        r_theta = Mbar @ robot.T @ qdd + hbar - Bbar @ u
         objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
                                 + robot.reg_qdd * cp.square(cp.norm(qdd))  
                                 + robot.reg_u * cp.square(cp.norm(u)) 
                                 + robot.reg_null * cp.square(cp.norm(qdd_null - qdd_ref))
                                 )
 
-        constraints = [robot.pinv_B @ (M @ qdd + robot.get_bias_forces() + robot.get_passive_forces()) == u]
+        constraints = [r_theta[:nu] == 0]
         constraints += robot.get_control_constraints(u)
 
         prob = cp.Problem(objective=objective, constraints=constraints)
@@ -270,7 +276,7 @@ class ImpedanceQPController(BaseController):
             prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
             t_ctrl = time.time() - t_ctrl_start
             if u.value is not None:
-                robot.data.ctrl[:] = np.clip(u.value, robot.lower_bounds, robot.upper_bounds)
+                robot.apply_control_input(u.value)
 
                 current_solution = {
                     'u': u.value.copy(),
@@ -299,3 +305,4 @@ class ImpedanceQPController(BaseController):
                 previous_solution=previous_solution,
                 t_ctrl=t_ctrl
             )
+        

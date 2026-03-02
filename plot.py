@@ -6,14 +6,13 @@ from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pandas import plotting
+from robot import Robot
 
-# Define font style
 
 plt.rcParams.update({
     "font.family": "serif",
     "font.serif": ["Times New Roman"],
-    "mathtext.fontset": "stix",   # math matches Times
+    "mathtext.fontset": "stix",
     "font.size": 20,
     "axes.titlesize": 20,
     "axes.labelsize": 20,
@@ -23,29 +22,22 @@ plt.rcParams.update({
 })
 
 
-# Naming utilities
 def naming(name, mapping):
-    """
-    Convert internal name to paper-friendly legend label.
-    """
     if name is None:
         return ""
-
     n = name.lower().strip()
-
     if n in mapping:
         return mapping[n]
-
     return "-".join(word.capitalize() for word in n.split("_"))
 
+
 control_name = {
-    "id_clf_qp": "ID-CLF-QP",
-    "mpc": "MPC",
-    "impedance": "IC",
-    "impedance_qp": "IC-QP",
     "clf_qp": "CLF-QP",
+    "id_clf_qp": "ID-CLF-QP",
+    "impedance": "IC",
+    "uosc": "UIC",
     "osc": "EOSC",
-    "uosc": "UIC"
+    "impedance_qp": "IC-QP"
 }
 
 robot_name = {
@@ -54,24 +46,12 @@ robot_name = {
     "spirob": "SpiRob"
 }
 
-
 def legend_above(ax, ncol=None):
-    """
-    Legend above plot.
-    """
     handles, labels = ax.get_legend_handles_labels()
-
-    # move Reference to the end
-    ordered = sorted(
-        zip(handles, labels),
-        key=lambda hl: (hl[1] == "Reference", hl[1])
-    )
-
+    ordered = sorted(zip(handles, labels), key=lambda hl: (hl[1] == "Reference", hl[1]))
     handles, labels = zip(*ordered)
-
     if ncol is None:
         ncol = len(labels)
-
     ax.legend(
         handles, labels,
         loc="lower center",
@@ -82,17 +62,12 @@ def legend_above(ax, ncol=None):
     )
 
 
-
 def finalize_figure(fig, ax):
-    """
-    Ensure there is room for the outside legend.
-    """
     fig.tight_layout()
     fig.subplots_adjust(top=0.82)
 
-# CSV parsing
+
 def parse_vec_series(series):
-    """Parse strings like '[0.1, 0, 0.2]' into (N,3) numpy array."""
     return np.vstack(series.apply(ast.literal_eval).to_numpy())
 
 
@@ -113,30 +88,30 @@ def load_single_csv(path):
 
     return t, sim_time, V, error, u, x, xd
 
-# Experiment processing
+
 def read_control_time(path):
-    """
-    Extract control_time from commented header of CSV.
-    Returns NaN if not present.
-    """
     try:
         with open(path, "r") as f:
             for line in f:
                 if not line.startswith("#"):
                     break
                 if "control_time" in line:
-                    # line format: # control_time,0.771987
                     return float(line.strip().split(",")[1])
     except Exception:
         pass
     return float("nan")
 
-def set_experiment(files):
-    """
-    Aggregate multiple SET runs into mean/std on a common time grid.
-    - Always produces err_mean/std
-    - Produces V_mean/std only if ALL runs contain lyapunov_V
-    """
+
+def pick_tracking_file(files: List[str], omega_tag: str = "omg2") -> Optional[str]:
+    if len(files) == 0:
+        return None
+    for f in files:
+        if omega_tag in os.path.basename(f).lower():
+            return f
+    return files[0]
+
+
+def aggregate_experiment(files: List[str]) -> Dict[str, Any]:
     time_list: List[np.ndarray] = []
     err_list: List[np.ndarray] = []
     V_list: List[np.ndarray] = []
@@ -144,49 +119,44 @@ def set_experiment(files):
     has_V_all = True
 
     for f in files:
-        print("SET:", f)
-        t, _, V, e, _, _, _ = load_single_csv(f)
-        time_list.append(t)
-        err_list.append(e if e is not None else np.zeros_like(t))
+        t, sim_time, V, e, _, _, _ = load_single_csv(f)
+        time_axis = sim_time if sim_time is not None else t
+
+        time_list.append(time_axis)
+        err_list.append(e if e is not None else np.zeros_like(time_axis))
 
         if V is None:
             has_V_all = False
         else:
             V_list.append(V)
 
-    # common time grid
     t_min = max(t[0] for t in time_list)
     t_max = min(t[-1] for t in time_list)
     N = max(len(t) for t in time_list)
     t_grid = np.linspace(t_min, t_max, N)
 
     err_interp = [np.interp(t_grid, t, e) for t, e in zip(time_list, err_list)]
+
     result: Dict[str, Any] = {
         "time": t_grid,
         "err_mean": np.mean(err_interp, axis=0),
-        "err_std":  np.std(err_interp, axis=0),
+        "err_std": np.std(err_interp, axis=0),
     }
 
     if has_V_all and len(V_list) == len(files):
         V_interp = []
         for t, V in zip(time_list, V_list):
-            V0 = V[0] if (V is not None and len(V) > 0 and V[0] != 0) else 1.0
+            V0 = V[0] if (len(V) > 0 and V[0] != 0) else 1.0
             V_interp.append(np.interp(t_grid, t, V / V0))
         result["V_mean"] = np.mean(V_interp, axis=0)
-        result["V_std"]  = np.std(V_interp, axis=0)
+        result["V_std"] = np.std(V_interp, axis=0)
 
     return result
 
 
-def tracking_experiment(file):
-    """
-    Single tracking run (no averaging)
-    """
-    print("TRACK:", file)
+def tracking_trajectory_single(file: str) -> Dict[str, Any]:
     t, sim_time, V, e, _, x, xd = load_single_csv(file)
-
     time_axis = sim_time if sim_time is not None else t
-
     out: Dict[str, Any] = {"time": time_axis, "error": e}
     if V is not None:
         V0 = V[0] if (len(V) > 0 and V[0] != 0) else 1.0
@@ -197,12 +167,7 @@ def tracking_experiment(file):
     return out
 
 
-def load_results(root):
-    """
-    Structure:
-      robots[robot][ctrl]["set"]      -> aggregated dict
-      robots[robot][ctrl]["tracking"] -> single-run dict
-    """
+def load_results(root: str, traj_omega_tag: str = "omg2") -> Dict[str, Dict[str, Dict[str, Any]]]:
     robots: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
     if not os.path.isdir(root):
@@ -229,75 +194,51 @@ def load_results(root):
             robots[robot][ctrl] = {}
 
             if len(set_files) > 0:
-                robots[robot][ctrl]["set"] = set_experiment(set_files)
+                robots[robot][ctrl]["set"] = aggregate_experiment(set_files)
 
             if len(track_files) > 0:
-                robots[robot][ctrl]["tracking"] = tracking_experiment(track_files[0])
+                robots[robot][ctrl]["tracking"] = aggregate_experiment(track_files)
+
+                chosen = pick_tracking_file(track_files, omega_tag=traj_omega_tag)
+                if chosen is not None:
+                    tr = tracking_trajectory_single(chosen)
+                    if "x" in tr and "xd" in tr:
+                        robots[robot][ctrl]["tracking_traj"] = tr
 
     return robots
 
-# Plotting
-def clf_plot(robots, control, experiment):
 
+def clf_plot(robots, control, experiment):
     fig, ax = plt.subplots(figsize=(8, 5))
     plotted_any = False
     items = []
 
     for robot, controllers in robots.items():
         for ctrl, data in controllers.items():
-
             if experiment not in data:
                 continue
-
-            exp_data = data[experiment]
-            # key depends on experiment type
-            if experiment == "set":
-                if "V_mean" not in exp_data:
-                    continue
-            elif experiment == "tracking":
-                if "V" not in exp_data:
-                    continue
-            else:
-                raise ValueError("experiment must be 'set' or 'tracking'")
-
             if control is not None and ctrl != control:
+                continue
+            exp_data = data[experiment]
+            if "V_mean" not in exp_data:
                 continue
             items.append((robot, ctrl, exp_data))
 
     robot_order = ["tendon", "helix", "spirob"]
-
-    items.sort(
-        key=lambda x: robot_order.index(x[0]) if x[0] in robot_order else 999
-    )
+    items.sort(key=lambda x: robot_order.index(x[0]) if x[0] in robot_order else 999)
 
     for robot, ctrl, exp_data in items:
+        t = exp_data["time"]
+        V = exp_data["V_mean"]
+        S = exp_data["V_std"]
 
-        if experiment == "set":
-            t = exp_data["time"]
-            V = exp_data["V_mean"]
-            S = exp_data["V_std"]
-
-            line, = ax.plot(t, V, linewidth=4,
-                            label=naming(robot, robot_name), zorder=3)
-
-            ax.fill_between(t, V - S, V + S,
-                            color=line.get_color(),
-                            alpha=0.25,
-                            linewidth=0,
-                            zorder=2)
-
-        else:  # tracking
-            t = exp_data["time"]
-            V = exp_data["V"]
-
-            ax.plot(t, V, linewidth=4,
-                    label=naming(robot, robot_name))
+        line, = ax.plot(t, V, linewidth=4, label=naming(robot, robot_name), zorder=3)
+        ax.fill_between(t, V - S, V + S, color=line.get_color(), alpha=0.25, linewidth=0, zorder=2)
 
         plotted_any = True
 
     if not plotted_any:
         plt.close(fig)
-        print(f"No {experiment.upper()} CLF curves found to plot.")
         return
 
     ax.set_xlabel("Time (s)")
@@ -306,7 +247,6 @@ def clf_plot(robots, control, experiment):
 
     if experiment == "set":
         plt.xlim(0, 0.8)
-        # plt.ylim(0, 3)
     else:
         plt.xlim(0, 4)
 
@@ -314,17 +254,13 @@ def clf_plot(robots, control, experiment):
     finalize_figure(fig, ax)
     plt.show()
 
+
 def plot_tracking_trajectory(robots, robot_list, plane, start_time):
-
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-
     plane = plane.lower()
     idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
     i, j = idx[plane]
 
-    ctrl_order = ["id_clf_qp", "clf_qp", "impedance", "uosc", "osc", "impedance_QP", ]
+    ctrl_order = ["clf_qp", "id_clf_qp", "impedance", "uosc", "osc", "impedance_QP"]
 
     controller_colors = {
         "id_clf_qp": "#1f77b4",
@@ -348,22 +284,22 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
     legend_labels = []
 
     for ax, robot in zip(axes, robot_list):
+        if robot not in robots:
+            continue
 
-        # ---- Active controllers ----
         active_ctrls = [
             c for c in ctrl_order
-            if c in robots[robot] and "tracking" in robots[robot][c]
+            if c in robots[robot] and "tracking_traj" in robots[robot][c]
         ]
 
         n = len(active_ctrls)
         if n == 0:
             continue
 
-        # ---- Collect global bounds ----
         x_all, y_all = [], []
 
         for ctrl in active_ctrls:
-            tr = robots[robot][ctrl]["tracking"]
+            tr = robots[robot][ctrl]["tracking_traj"]
             mask = tr["time"] >= start_time
 
             x = tr["x"][mask]
@@ -377,23 +313,22 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
         cx = 0.5 * (x_min + x_max)
         cy = 0.5 * (y_min + y_max)
-
         span = max(x_max - x_min, y_max - y_min)
 
-        # Default scale
         base_scale = span * 1.25
 
-        # Robot-specific tightening
-        if robot == "tendon":        # (a) Finger
-            base_scale *= 0.95 
+        if robot == "tendon":
+            base_scale *= 0.95
             horizontal_spacing = base_scale * 0.75
-            vertical_spacing   = base_scale * 0.4     # tighten layout
-        elif robot == "helix":       # (b)
-            base_scale *= 1.0  
+            vertical_spacing = base_scale * 0.4
+        elif robot == "helix":
+            base_scale *= 1.0
             horizontal_spacing = base_scale * 1.0
-            vertical_spacing   = base_scale * 0.45      # leave unchanged
+            vertical_spacing = base_scale * 0.45
+        else:
+            horizontal_spacing = base_scale * 1.0
+            vertical_spacing = base_scale * 0.45
 
-        # ---- Layout (2 rows max) ----
         if n >= 4:
             top_count = n // 2 + n % 2
             bottom_count = n - top_count
@@ -403,22 +338,18 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
         positions = {}
 
-        # Top row
         for k in range(top_count):
             x_pos = (k - (top_count - 1) / 2) * horizontal_spacing
             y_pos = vertical_spacing
             positions[active_ctrls[k]] = (x_pos, y_pos)
 
-        # Bottom row
         for k in range(bottom_count):
             x_pos = (k - (bottom_count - 1) / 2) * horizontal_spacing
             y_pos = -vertical_spacing
             positions[active_ctrls[top_count + k]] = (x_pos, y_pos)
 
-        # ---- Plot trajectories ----
         for ctrl in active_ctrls:
-
-            tr = robots[robot][ctrl]["tracking"]
+            tr = robots[robot][ctrl]["tracking_traj"]
             mask = tr["time"] >= start_time
 
             x = tr["x"][mask]
@@ -426,8 +357,8 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
             dx, dy = positions[ctrl]
 
-            x_norm  = x[:, i]  - cx
-            y_norm  = x[:, j]  - cy
+            x_norm = x[:, i] - cx
+            y_norm = x[:, j] - cy
             xd_norm = xd[:, i] - cx
             yd_norm = xd[:, j] - cy
 
@@ -453,16 +384,14 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
                 legend_handles.append(line)
                 legend_labels.append(label)
 
-        # ---- Styling ----
         ax.set_aspect("equal")
         ax.grid(True, linestyle="--", alpha=0.35)
 
-        # ---- Auto-tight bounds per robot ----
         x_plot_all = []
         y_plot_all = []
 
         for ctrl in active_ctrls:
-            tr = robots[robot][ctrl]["tracking"]
+            tr = robots[robot][ctrl]["tracking_traj"]
             mask = tr["time"] >= start_time
 
             x = tr["x"][mask]
@@ -470,26 +399,11 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
             dx, dy = positions[ctrl]
 
-            x_plot_all.extend([
-                x[:, i] - cx + dx,
-                xd[:, i] - cx + dx
-            ])
-            y_plot_all.extend([
-                x[:, j] - cy + dy,
-                xd[:, j] - cy + dy
-            ])
+            x_plot_all.extend([x[:, i] - cx + dx, xd[:, i] - cx + dx])
+            y_plot_all.extend([x[:, j] - cy + dy, xd[:, j] - cy + dy])
 
-            label_char = chr(ord('a') + robot_list.index(robot))
-
-            ax.text(
-                0.96, 0.1,                 # top-right corner
-                f"({label_char})",
-                transform=ax.transAxes,
-                fontsize=24,
-                # fontweight="bold",
-                ha="right",
-                va="top"
-            )
+        label_char = chr(ord('a') + robot_list.index(robot))
+        ax.text(0.96, 0.15, f"({label_char})", transform=ax.transAxes, fontsize=20, ha="right", va="top")
 
         x_min = min(np.min(v) for v in x_plot_all)
         x_max = max(np.max(v) for v in x_plot_all)
@@ -506,7 +420,6 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
         ax.set_ylabel("")
         ax.tick_params(labelbottom=False, labelleft=False)
 
-    # ---- Legend ----
     ref_line = plt.Line2D([0], [0], color="black", linestyle="--", linewidth=3)
     legend_handles.append(ref_line)
     legend_labels.append("Reference")
@@ -515,20 +428,13 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
         legend_handles,
         legend_labels,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.98),
-        ncol=3,
+        bbox_to_anchor=(0.5, 1),
+        ncol=4,
         frameon=True
     )
 
     plt.tight_layout(rect=[0, 0, 1, 0.92])
     plt.show()
-
-
-def max_control_input(df):
-    u = [c for c in df.columns if c.startswith("u")]
-    if len(u) == 0:
-        return float("nan")
-    return float(np.abs(df[u].to_numpy()).max())
 
 
 def final_error(df):
@@ -537,17 +443,15 @@ def final_error(df):
 
 def mse_error(df):
     e = df["task_error"].to_numpy()
-    return float(np.mean(e**2))
+    return float(np.mean(e ** 2))
 
 
 def summarize_set(files):
     error = []
-    max_inputs  = []
     ctrl_time = []
 
     for f in files:
         df = pd.read_csv(f, comment="#")
-
         error.append(final_error(df))
 
         control_time = read_control_time(f)
@@ -555,10 +459,10 @@ def summarize_set(files):
             ctrl_time.append(control_time)
 
     return {
-        "final_mean": float(np.mean(error)),
-        "final_std":  float(np.std(error)),
+        "final_mean": float(np.mean(error) * 1e2),
+        "final_std": float(np.std(error) * 1e2),
         "control_time_mean": float(np.mean(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
-        "control_time_std":  float(np.std(ctrl_time))  if len(ctrl_time) > 0 else float("nan"),
+        "control_time_std": float(np.std(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
     }
 
 
@@ -568,7 +472,6 @@ def summarize_tracking(files):
 
     for f in files:
         df = pd.read_csv(f, comment="#")
-
         mse.append(mse_error(df))
 
         control_time = read_control_time(f)
@@ -576,14 +479,61 @@ def summarize_tracking(files):
             ctrl_time.append(control_time)
 
     return {
-        "mse_mean": float(np.mean(mse)),
-        "mse_std":  float(np.std(mse)),
+        "mse_mean": float(np.mean(mse) * 1e4),
+        "mse_std": float(np.std(mse) * 1e4),
         "control_time_mean": float(np.mean(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
-        "control_time_std":  float(np.std(ctrl_time))  if len(ctrl_time) > 0 else float("nan"),
+        "control_time_std": float(np.std(ctrl_time)) if len(ctrl_time) > 0 else float("nan"),
     }
 
-def generate_combined_report(root):
+def get_robot_parameters(robot_name_dict):
 
+    rows = []
+
+    for robot_key in robot_name_dict.keys():
+        for ctrl_key in control_name.keys():
+
+            try:
+                r = Robot(model_name=robot_key,
+                          control_scheme=ctrl_key)
+
+                # ---- w1 logic ----
+                if ctrl_key in ["clf_qp", "impedance_qp", "id_clf_qp"]:
+                    w1_value = 1
+                else:
+                    w1_value = "--"
+
+                row = {
+                    "Robot": naming(robot_key, robot_name),
+                    "Controller": naming(ctrl_key, control_name),
+
+                    "Kp": getattr(r, "Kp", "--"),
+                    "epsilon": getattr(r, "e", "--"),
+                    "w1": w1_value,
+                    "w2": getattr(r, "reg_qdd", "--"),
+                    "w3": getattr(r, "reg_u", "--"),
+                    "w4": getattr(r, "reg_null", "--"),
+                    "rho": getattr(r, "reg_dl", "--"),
+                }
+
+            except Exception:
+                row = {
+                    "Robot": naming(robot_key, robot_name),
+                    "Controller": naming(ctrl_key, control_name),
+                    "Kp": "--",
+                    "epsilon": "--",
+                    "w1": "--",
+                    "w2": "--",
+                    "w3": "--",
+                    "w4": "--",
+                    "rho": "--",
+                }
+
+            rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df.to_csv("controller_parameter_table.csv", index=False)
+
+def generate_combined_report(root):
     rows = []
     robots = ["tendon", "helix", "spirob"]
 
@@ -600,122 +550,121 @@ def generate_combined_report(root):
             set_files = sorted(glob.glob(os.path.join(ctrl_path, "set_*.csv")))
             track_files = sorted(glob.glob(os.path.join(ctrl_path, "tracking*.csv")))
 
-            # ---------------- SET POINT ----------------
             if len(set_files) > 0:
                 s = summarize_set(set_files)
-
-                final_error_str = f"{s['final_mean']:.4f} ± {s['final_std']:.4f}"
-                sp_act_str = (
-                    f"{s['control_time_mean']:.2f} ± {s['control_time_std']:.2f}"
-                    if not np.isnan(s['control_time_mean']) else "-"
-                )
+                final_error_str = f"{s['final_mean']:.2f} ± {s['final_std']:.2f}"
             else:
                 final_error_str = "-"
-                sp_act_str = "-"
 
-            # ---------------- TRACKING ----------------
             if len(track_files) > 0:
                 t = summarize_tracking(track_files)
-
-                mse_str = f"{t['mse_mean']:.5f}"
-                tt_act_str = (
-                    f"{t['control_time_mean']:.2f} ± {t['control_time_std']:.2f}"
-                    if not np.isnan(t['control_time_mean']) else "-"
-                )
+                mse_str = f"{t['mse_mean']:.2f} ± {t['mse_std']:.2f}"
             else:
                 mse_str = "-"
-                tt_act_str = "-"
 
             rows.append([
                 naming(robot, robot_name),
                 naming(ctrl, control_name),
                 final_error_str,
-                sp_act_str,
-                mse_str,
-                tt_act_str
+                mse_str
             ])
 
     df = pd.DataFrame(rows, columns=[
         "Robot",
         "Controller",
-        "Final Error (SP) (m)",
-        "SP–ACT (s)",
-        "TT–MSE",
-        "TT–ACT (s)"
+        "Final Error (SP) (cm)",
+        "TT–MSE ($cm^2$)"
     ])
 
     df.to_csv("combined_benchmark.csv", index=False)
-
     print("\nGenerated: combined_benchmark.csv")
+
 
 def csv_to_latex_table(csv_file, output_tex="combined_table.tex"):
     df = pd.read_csv(csv_file)
-
-    # Replace ± with LaTeX \pm
     df = df.replace("±", r"$\pm$", regex=False)
-    # Replace "-" with proper LaTeX dash
     df = df.replace("-", "--")
 
-    # Start building LaTeX string
+    controllers = [
+        "CLF-QP",
+        "ID-CLF-QP",
+        "IC",
+        "UIC",
+        "EOSC",
+        "IC-QP"
+    ]
+
     latex = []
-    latex.append(r"\begin{table*}[t]")
+    latex.append(r"\begin{table}[t]")
     latex.append(r"\centering")
     latex.append(r"\caption{Combined benchmark comparison for set point (SP) and trajectory tracking (TT) across three robot platforms.}")
     latex.append(r"\label{tab:combined_benchmark}")
-    latex.append(r"\resizebox{\textwidth}{!}{%")
-    latex.append(r"\begin{tabular}{|c|c|c|c|c|c|}")
+    latex.append(r"\resizebox{0.5\textwidth}{!}{%")
+    latex.append(r"\begin{tabular}{|c|c|c|c|}")
     latex.append(r"\hline")
     latex.append(r"\textbf{Robot} & \textbf{Controller} & "
-                 r"\textbf{Final Error (SP) (m)} & "
-                 r"\textbf{SP--ACT (s)} & "
-                 r"\textbf{TT--MSE ($\mathbf{m^2}$)} & "
-                 r"\textbf{TT--ACT (s)} \\")
+                 r"\textbf{Final Error (SP) (cm)} & "
+                 r"\textbf{TT--MSE ($\mathbf{cm^2}$)} \\")
     latex.append(r"\hline")
 
-    current_robot = None
+    robots_unique = df["Robot"].unique()
 
-    for _, row in df.iterrows():
-        robot = row["Robot"]
+    for robot in robots_unique:
+        robot_df = df[df["Robot"] == robot]
+        first_row = True
 
-        # Add extra horizontal line between robot groups
-        if current_robot is not None and robot != current_robot:
-            latex.append(r"\hline")
+        for ctrl in controllers:
+            row_data = robot_df[robot_df["Controller"] == ctrl]
 
-        latex.append(
-            f"{robot} & {row['Controller']} & "
-            f"{row['Final Error (SP) (m)']} & "
-            f"{row['SP–ACT (s)']} & "
-            f"{row['TT–MSE']} & "
-            f"{row['TT–ACT (s)']} \\\\"
-        )
+            if not row_data.empty:
+                row = row_data.iloc[0]
+                final_error = row["Final Error (SP) (cm)"]
+                tt_mse = row["TT–MSE ($cm^2$)"]
+            else:
+                final_error = "Failed Convergence"
+                tt_mse = "Failed Convergence"
 
-        current_robot = robot
+            if ctrl == "ID-CLF-QP":
+                ctrl_str = rf"\textbf{{{ctrl}}}"
+                final_error = rf"\textbf{{{final_error}}}"
+                tt_mse = rf"\textbf{{{tt_mse}}}"
+            else:
+                ctrl_str = ctrl
 
-    latex.append(r"\hline")
+            if robot.lower() == "spirob":
+                tt_mse = "--"
+
+            if first_row:
+                latex.append(rf"\multirow{{6}}{{*}}{{{robot}}} & {ctrl_str} & {final_error} & {tt_mse} \\")
+                first_row = False
+            else:
+                latex.append(rf"& {ctrl_str} & {final_error} & {tt_mse} \\")
+
+        latex.append(r"\hline")
+
     latex.append(r"\end{tabular}}")
     latex.append(r"\end{table*}")
 
-    # Write to file
     with open(output_tex, "w") as f:
         f.write("\n".join(latex))
 
     print(f"LaTeX table saved to {output_tex}")
 
+
 if __name__ == "__main__":
-    robots = load_results("results")
+    robots = load_results("results", traj_omega_tag="omg2")
 
-    # # Lyapunov plotting
-    # clf_plot(robots, control="id_clf_qp", experiment="set")
-    # clf_plot(robots, control="id_clf_qp", experiment="tracking")
+    clf_plot(robots, control="id_clf_qp", experiment="set")
+    clf_plot(robots, control="id_clf_qp", experiment="tracking")
 
-    # Trajectory circles
-#     plot_tracking_trajectory(
-#     robots,
-#     robot_list=["tendon", "helix"],
-#     plane="xz",
-#     start_time=8.0
-# )
+    plot_tracking_trajectory(
+        robots,
+        robot_list=["tendon", "helix"],
+        plane="xz",
+        start_time=8.0
+    )
 
-    # Reports
     generate_combined_report("results")
-    csv_to_latex_table("combined_benchmark.csv", "combined_table.tex")
+    csv_to_latex_table("combined_benchmark.csv", output_tex="combined_table.tex")
+
+    get_robot_parameters(robot_name)

@@ -13,7 +13,7 @@
         <quality shadowsize="0"/>
 
     </visual>
-    <option gravity="0 0 -9.81" integrator="implicitfast" timestep="0.01"/>
+    <!-- <option gravity="0 0 -9.81" integrator="implicitfast" timestep="0.01"/> -->
 
     <!-- ================= VISUAL ================= -->
     <visual>
@@ -37,8 +37,8 @@
         <!-- solid dark background -->
         <texture type="skybox"
                 builtin="gradient"
-                rgb1="1 1 1"
-                rgb2="1 1 1"
+                rgb1="0 0 0"
+                rgb2="0 0 0"
                 width="512"
                 height="512"/>
 

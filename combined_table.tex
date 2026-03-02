@@ -1,31 +1,32 @@
-\begin{table*}[t]
+\begin{table}[t]
 \centering
 \caption{Combined benchmark comparison for set point (SP) and trajectory tracking (TT) across three robot platforms.}
 \label{tab:combined_benchmark}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{|c|c|c|c|c|c|}
+\resizebox{0.5\textwidth}{!}{%
+\begin{tabular}{|c|c|c|c|}
 \hline
-\textbf{Robot} & \textbf{Controller} & \textbf{Final Error (SP) (m)} & \textbf{SP--ACT (s)} & \textbf{TT--MSE ($\mathbf{m^2}$)} & \textbf{TT--ACT (s)} \\
+\textbf{Robot} & \textbf{Controller} & \textbf{Final Error (SP) (cm)} & \textbf{TT--MSE ($\mathbf{cm^2}$)} \\
 \hline
-Finger & CLF-QP & 0.0054 ± 0.0093 & 0.00 ± 0.00 & 0.00031 & 0.00 ± 0.00 \\
-Finger & ID-CLF-QP & 0.0008 ± 0.0009 & 0.01 ± 0.00 & 0.00006 & 0.01 ± 0.00 \\
-Finger & IC & 0.0008 ± 0.0014 & 0.00 ± 0.00 & 0.00014 & 0.00 ± 0.00 \\
-Finger & IC-QP & 0.0033 ± 0.0016 & 0.00 ± 0.00 & 0.00149 & 0.00 ± 0.00 \\
-Finger & EOSC & 0.0008 ± 0.0014 & 0.00 ± 0.00 & 0.00014 & 0.00 ± 0.00 \\
-Finger & UIC & 0.0022 ± 0.0039 & 0.00 ± 0.00 & 0.00013 & 0.00 ± 0.00 \\
+\multirow{6}{*}{Finger} & CLF-QP & 0.75 ± 1.05 & 6.36 ± 1.40 \\
+& \textbf{ID-CLF-QP} & \textbf{0.08 ± 0.09} & \textbf{0.51 ± 0.24} \\
+& IC & 0.08 ± 0.14 & 1.20 ± 0.68 \\
+& UIC & 0.22 ± 0.39 & 1.00 ± 0.51 \\
+& EOSC & 0.08 ± 0.14 & 1.26 ± 0.73 \\
+& IC-QP & 0.07 ± 0.12 & 1.26 ± 0.71 \\
 \hline
-Helix & CLF-QP & -- & -- & 47514.54075 & 0.01 ± 0.00 \\
-Helix & ID-CLF-QP & 0.0270 ± 0.0235 & 0.01 ± 0.00 & 0.00297 & 0.01 ± 0.00 \\
-Helix & IC & 0.0460 ± 0.0180 & 0.00 ± 0.00 & 0.00583 & 0.00 ± 0.00 \\
-Helix & IC-QP & 0.0271 ± 0.0236 & 0.01 ± 0.00 & 0.00296 & 0.01 ± 0.00 \\
-Helix & EOSC & 0.0460 ± 0.0180 & 0.00 ± 0.00 & 0.00583 & 0.00 ± 0.00 \\
-Helix & UIC & 0.0427 ± 0.0179 & 0.00 ± 0.00 & 0.00585 & 0.00 ± 0.00 \\
+\multirow{6}{*}{Helix} & CLF-QP & Failed Convergence & Failed Convergence \\
+& \textbf{ID-CLF-QP} & \textbf{2.45 ± 1.21} & \textbf{25.54 ± 9.65} \\
+& IC & 2.66 ± 1.40 & 21.89 ± 6.08 \\
+& UIC & 3.39 ± 2.12 & 31.70 ± 7.48 \\
+& EOSC & 2.66 ± 1.40 & 21.89 ± 6.08 \\
+& IC-QP & 2.45 ± 1.21 & 25.51 ± 9.63 \\
 \hline
-SpiRob & CLF-QP & 0.1485 ± 0.1823 & 0.01 ± 0.00 & -- & -- \\
-SpiRob & ID-CLF-QP & 0.0624 ± 0.0413 & 0.01 ± 0.00 & -- & -- \\
-SpiRob & IC & 0.3786 ± 0.0903 & 0.00 ± 0.00 & 0.15384 & -- \\
-SpiRob & IC-QP & 0.0608 ± 0.0391 & 0.01 ± 0.00 & 0.01108 & -- \\
-SpiRob & EOSC & 0.1906 ± 0.0000 & 0.00 ± 0.00 & 0.12209 & 0.00 ± 0.00 \\
+\multirow{6}{*}{SpiRob} & CLF-QP & Failed Convergence & -- \\
+& \textbf{ID-CLF-QP} & \textbf{3.50 ± 3.71} & -- \\
+& IC & Failed Convergence & -- \\
+& UIC & Failed Convergence & -- \\
+& EOSC & -- & -- \\
+& IC-QP & 10.94 ± 7.26 & -- \\
 \hline
 \end{tabular}}
 \end{table*}

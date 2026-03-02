@@ -9,12 +9,14 @@ from scipy import linalg
 class Robot:
     """Unified robot class that encapsulates robot-specific configurations and MuJoCo model"""
     
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, control_scheme: str):
         self.model_name = model_name
         self.model = self._load_model()
         self.data = mujoco.MjData(self.model)
         self.model.opt.gravity = (0, 0, -9.81)
+        self.control_scheme = control_scheme
         self._setup_robot_config()
+
         
         
     def _load_model(self):
@@ -36,16 +38,31 @@ class Robot:
             self.Tinv = np.linalg.inv(self.T)
             self.TinvT = self.Tinv.T 
             # Control gains
-            self.Kp = 500
-            self.Kd = 2 * np.sqrt(self.Kp)
             self.damping, self.stiffness = 0.02, 0.01
-            self.e = 0.03
+            if self.control_scheme == 'impedance_QP':
+                self.Kp = 1500
+            else:
+                self.Kp = 500
+            self.Kd = 2 * np.sqrt(self.Kp)
+            if self.control_scheme == 'clf_qp':
+                self.e = 0.05
+            else:
+                self.e = 0.03
+                
             # Passive force sign (tendon uses -data.qfrc_passive)
             self.passive_sign = -1
             # Regularization coefficients for optimization
-            self.reg_qdd = 0.2
-            self.reg_u = 0.2
-            self.reg_null = 0.1
+            if self.control_scheme == 'impedance_QP':
+                self.reg_qdd = 0.02
+                self.reg_null = 0.0
+            else:
+                self.reg_qdd = 0.2
+                self.reg_null = 0.1
+            if self.control_scheme == 'clf_qp':
+                self.reg_u = 0.5
+            else:
+                self.reg_u = 0.2
+
             self.reg_dl = 1000
             # MPC-specific coefficients
             self.mpc_task_weight = 1.0
@@ -76,6 +93,11 @@ class Robot:
             self.sel[[2, 5, 8]] = 0.0
             # Control gains
             self.Kp, self.Kd = 500, 2 * np.sqrt(500)
+            if self.control_scheme == 'osc' or self.control_scheme == 'impedance':
+                self.Kp, self.Kd = 2000, 2 * np.sqrt(2000)
+            elif self.control_scheme == 'uosc':
+                self.Kp, self.Kd = 1000, 2 * np.sqrt(1000)
+
             self.damping, self.stiffness = 0.2, 0.2
             self.e = 0.05
             # Passive force sign (helix uses +data.qfrc_passive)
@@ -108,14 +130,20 @@ class Robot:
             # self.pinv_B = None
             self.sel = np.ones((self.nu, 1))
             # Control gains
-            self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
-            self.damping, self.stiffness = 0.015, 0.01
-            self.e = 0.04
+            if self.control_scheme == 'impedance.QP':
+                self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
+            else:
+                self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
+            self.damping, self.stiffness = 0.15, 0.1
+            self.e = 0.01
+        
+
+
 
             # Passive force sign (spirob uses -data.qfrc_passive)
             self.passive_sign = -1
             # Regularization coefficients for optimization  
-            self.reg_qdd = 0.5
+            self.reg_qdd = 0.2
             self.reg_u = 0.5
             self.reg_null = 0.1
             self.reg_dl = 1000
@@ -401,7 +429,9 @@ class Robot:
         
     def apply_control_input(self, u):
         """Apply control input to robot actuators"""
-        self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)
-        # self.data.ctrl[:] = self.B_applied @ u
+        if self.model_name == "spirob":
+            self.data.ctrl[:] = np.clip(u, self.lower_bounds, self.upper_bounds)
+        else:
+            self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)
 
 
