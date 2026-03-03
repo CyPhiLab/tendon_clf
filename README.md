@@ -2,7 +2,7 @@
 
 **A robotics control research codebase for comparing control schemes across soft robotic systems using MuJoCo simulation.**
 
-This repository implements and compares 4 different controllers (ID-CLF-QP, Impedance Control, Impedance-QP, MPC) across 3 robot models (helix, spirob, tendon) for 2 experiment types (set-point tracking, trajectory following).
+This repository implements and compares different controllers, including a novel Soft ID-CLF-QP, across 3 soft robot models (helix, spirob, tendon) for 2 experiment types (set-point tracking, trajectory following).
 
 ## Quick Start
 
@@ -30,10 +30,10 @@ This repository implements and compares 4 different controllers (ID-CLF-QP, Impe
 **Single experiment:**
 ```bash
 # Run ID-CLF-QP controller on helix robot with set-point tracking
-python run.py --robot helix --control id_clf_qp --experiment set --target_pos pos1 --headless
+python run.py --robot helix --control id_clf_qp --experiment set --target_pos pos1 
 
-# Run MPC controller on tendon robot with trajectory tracking
-python run.py --robot tendon --control mpc --experiment tracking --headless
+# Run impedance controller on tendon robot with trajectory tracking
+python run.py --robot tendon --control impedance --experiment tracking --headless
 ```
 
 **Batch experiments:**
@@ -42,43 +42,25 @@ python run.py --robot tendon --control mpc --experiment tracking --headless
 python run_all.py
 ```
 
-**Generate analysis plots:**
-```bash
-python plot.py  # Creates publication-ready figures and CSV reports
-```
-
 ## Architecture
 
 ### Controller Implementations
 
-- **ID-CLF-QP**: Inverse Dynamics with Control Lyapunov Functions using quadratic programming
-- **Impedance**: Traditional Cartesian impedance control
+- **CLF-QP**: Standard implementation
+- **Soft ID-CLF-QP**: Inverse Dynamics with Control Lyapunov Functions using quadratic programming
+- **Impedance Control**: Traditional Cartesian impedance control
 - **Impedance-QP**: Impedance control with QP-based actuator limit handling
-- **MPC**: Model Predictive Control with receding horizon optimization
 
 ### Robot Models
 
-- **helix**: 6-DOF helical soft robot
-- **tendon**: 6-DOF tendon-driven finger
-- **spirob**: 3-DOF logarithmic spiral robot
+- **helix**: A high DOF soft-rigid robot inspired by wave springs. Based on https://ieeexplore.ieee.org/abstract/document/11020854
+- **tendon**: 4-DOF tendon-driven finger
+- **spirob**: A high DOF soft-rigid robot who's shape follows a logarithmic spiral. Based on https://www.sciencedirect.com/science/article/pii/S2666998624006033
 
 ### Experiment Types
 
 - **Set-point tracking**: Move end-effector to target positions (pos1-pos4)
 - **Trajectory tracking**: Follow circular trajectories in task space
-
-## Citation
-
-If you use this codebase in your research, please cite:
-
-```bibtex
-@software{tendon_clf,
-  title={Tendon Control \& Learning Framework},
-  author={[Author Names]},
-  year={2026},
-  url={[Repository URL]}
-}
-```
 
 ## Development
 
@@ -104,24 +86,3 @@ If you use this codebase in your research, please cite:
 2. Add robot configuration in `robot.py` initialization
 3. Update choices in `run.py` argument parser
 
-
-### Performance Tips
-
-- Use `--headless` flag for speedup
-- Reduce logging frequency for very long simulations
-
-## License
-
-[License information]
-
-## Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
-
----
-
-**For questions or support, please open an issue or contact [contact information].**
