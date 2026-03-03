@@ -14,10 +14,8 @@ if __name__ == "__main__":
     parser.add_argument('--no-plots', action='store_true', help='Skip generating plots at the end')
     parser.add_argument('--control', type=str, default='id_clf_qp', choices=['id_clf_qp', 
                                                                              'impedance', 
-                                                                             'mpc', 
                                                                              'impedance_QP', 
                                                                              'clf_qp', 
-                                                                             'osc', 
                                                                              'uosc'], help='Controller type to use')
     parser.add_argument('--robot', type=str, default='helix', choices=['helix', 'tendon','spirob'], help='Robot to simulate')
     parser.add_argument('--experiment', type=str, default='set', choices=['set', 'tracking'], help='Experiment name')
