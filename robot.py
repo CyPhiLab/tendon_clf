@@ -17,7 +17,6 @@ class Robot:
         self.control_scheme = control_scheme
         self._setup_robot_config()
         self.site_id = self.model.site('ee').id
-        self.S = self.compute_S(site_id=self.site_id, qbar=self.data.qpos.copy())
         
         
     def _load_model(self):
@@ -89,6 +88,7 @@ class Robot:
             self.T, _ = self.complete_basis(self.B.T)
             self.Tinv = np.linalg.inv(self.T)
             self.TinvT = self.Tinv.T 
+
             # Selection matrix
             self.sel = np.ones((self.nu,))
             self.sel[[2, 5, 8]] = 0.0
@@ -434,30 +434,3 @@ class Robot:
             self.data.ctrl[:] = np.clip(u, self.lower_bounds, self.upper_bounds)
         else:
             self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)
-
-    
-    def compute_S(self, site_id, qbar=None):
-
-        model = self.model
-
-        # Create temporary data object )
-        data_temp = mujoco.MjData(model)
-
-        # Choose reference posture
-        if qbar is None:
-            qbar = self.data.qpos.copy()
-
-        # Set temporary state
-        data_temp.qpos[:] = qbar
-        data_temp.qvel[:] = 0.0
-        mujoco.mj_forward(model, data_temp)
-
-        # Compute Jacobian at qbar
-        jac = np.zeros((6, model.nv))
-        mujoco.mj_jacSite(model, data_temp, jac[:3], jac[3:], site_id)
-
-        # Use position part only
-        jac = jac[:3, :] 
-        S = jac.T.copy()
-
-        return S
