@@ -8,6 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from robot import Robot
 
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 plt.rcParams.update({
     "font.family": "serif",
@@ -248,19 +250,90 @@ def clf_plot(robots, control, experiment):
     if experiment == "set":
         plt.xlim(0, 0.8)
     else:
-        plt.xlim(0, 4)
+        plt.xlim(0, 1)
 
     legend_above(ax, ncol=None)
     finalize_figure(fig, ax)
     plt.show()
 
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import ast
+
+import ast
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+import ast
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Times New Roman"],
+    "mathtext.fontset": "stix",
+    "font.size": 20,
+    "axes.titlesize": 20,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 18,
+    "ytick.labelsize": 18,
+    "legend.fontsize": 18,
+})
+
+
+def plot_spirob_error(root="results"):
+
+    df = pd.read_csv(
+        "results/spirob/id_clf_qp/set_id_clf_qp_pos3.csv",
+        comment="#"
+    )
+
+    t = df["time"].to_numpy()
+
+    x_log = df["x_log"].apply(ast.literal_eval)
+    xd_log = df["xd_log"].apply(ast.literal_eval)
+
+    x_array = np.vstack(x_log.to_numpy())
+    xd_array = np.vstack(xd_log.to_numpy())
+
+    x = x_array[:, 0]
+    z = x_array[:, 2]
+
+    xd = xd_array[:, 0]
+    zd = xd_array[:, 2]
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
+
+    # ---- x subplot ----
+    axes[0].plot(t, x, linewidth=4, label=r"$x$")
+    axes[0].plot(t, xd, "--", linewidth=2, label=r"$x_d$")
+    axes[0].set_ylabel(r"$x$ (m)", fontname="Times New Roman", fontsize=22)
+    axes[0].legend(loc="lower right", fontsize=18)
+    axes[0].grid(True)
+
+    # ---- z subplot ----
+    axes[1].plot(t, z, linewidth=4, label=r"$z$")
+    axes[1].plot(t, zd, "--", linewidth=2, label=r"$z_d$")
+    axes[1].set_xlabel("Time (s)", fontname="Times New Roman", fontsize=22)
+    axes[1].set_ylabel(r"$z$ (m)", fontname="Times New Roman", fontsize=22)
+    axes[1].legend(loc="lower right", fontsize=18)
+    axes[1].grid(True)
+
+    axes[1].set_xlim(0, 3.0)
+
+    plt.tight_layout()
+    plt.show()
 
 def plot_tracking_trajectory(robots, robot_list, plane, start_time):
     plane = plane.lower()
     idx = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}
     i, j = idx[plane]
 
-    ctrl_order = ["clf_qp", "id_clf_qp", "impedance", "uosc", "osc", "impedance_QP"]
+    ctrl_order = ["clf_qp", "id_clf_qp", "impedance", "uosc", "impedance_QP"]
 
     controller_colors = {
         "id_clf_qp": "#1f77b4",
@@ -274,7 +347,7 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
     fig, axes = plt.subplots(
         nrows=len(robot_list),
         ncols=1,
-        figsize=(8, 6 * len(robot_list))
+        figsize=(8, 4.2 * len(robot_list))
     )
 
     if len(robot_list) == 1:
@@ -319,7 +392,7 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
 
         if robot == "tendon":
             base_scale *= 0.95
-            horizontal_spacing = base_scale * 0.75
+            horizontal_spacing = base_scale * 0.65
             vertical_spacing = base_scale * 0.4
         elif robot == "helix":
             base_scale *= 1.0
@@ -429,7 +502,7 @@ def plot_tracking_trajectory(robots, robot_list, plane, start_time):
         legend_labels,
         loc="upper center",
         bbox_to_anchor=(0.5, 1),
-        ncol=4,
+        ncol=3,
         frameon=True
     )
 
@@ -650,6 +723,77 @@ def csv_to_latex_table(csv_file, output_tex="table/combined_table.tex"):
 
     print(f"LaTeX table saved to {output_tex}")
 
+def parameter_csv_to_latex(csv_file,
+                           output_tex="table/controller_parameter_table.tex"):
+
+    df = pd.read_csv(csv_file)
+    df = df.replace("-", "--")
+
+    controllers = [
+        "CLF-QP",
+        "ID-CLF-QP",
+        "IC",
+        "UIC",
+        "EOSC",
+        "IC-QP"
+    ]
+
+    latex = []
+    latex.append(r"\begin{table*}[t]")
+    latex.append(r"\centering")
+    latex.append(r"\caption{Controller parameter settings for each robot platform.}")
+    latex.append(r"\label{tab:controller_params}")
+    latex.append(r"\resizebox{\textwidth}{!}{%")
+    latex.append(r"\begin{tabular}{|c|c|c|c|c|c|c|c|c|}")
+    latex.append(r"\hline")
+    latex.append(r"\textbf{Robot} & \textbf{Controller} & "
+                 r"$K_p$ & $\epsilon$ & $w_1$ & $w_2$ & $w_3$ & $w_4$ & $\rho$ \\")
+    latex.append(r"\hline")
+
+    robots_unique = df["Robot"].unique()
+
+    for robot in robots_unique:
+
+        robot_df = df[df["Robot"] == robot]
+        first_row = True
+
+        for ctrl in controllers:
+
+            row_data = robot_df[robot_df["Controller"] == ctrl]
+
+            if not row_data.empty:
+                row = row_data.iloc[0]
+                Kp  = row["Kp"]
+                eps = row["epsilon"]
+                w1  = row["w1"]
+                w2  = row["w2"]
+                w3  = row["w3"]
+                w4  = row["w4"]
+                rho = row["rho"]
+            else:
+                Kp = eps = w1 = w2 = w3 = w4 = rho = "--"
+
+            if first_row:
+                latex.append(
+                    rf"\multirow{{6}}{{*}}{{{robot}}} & {ctrl} & "
+                    rf"{Kp} & {eps} & {w1} & {w2} & {w3} & {w4} & {rho} \\"
+                )
+                first_row = False
+            else:
+                latex.append(
+                    rf"& {ctrl} & "
+                    rf"{Kp} & {eps} & {w1} & {w2} & {w3} & {w4} & {rho} \\"
+                )
+
+        latex.append(r"\hline")
+
+    latex.append(r"\end{tabular}}")
+    latex.append(r"\end{table*}")
+
+    with open(output_tex, "w") as f:
+        f.write("\n".join(latex))
+
+    print(f"LaTeX parameter table saved to {output_tex}")
 
 if __name__ == "__main__":
     robots = load_results("results", traj_omega_tag="omg2")
@@ -657,14 +801,17 @@ if __name__ == "__main__":
     clf_plot(robots, control="id_clf_qp", experiment="set")
     clf_plot(robots, control="id_clf_qp", experiment="tracking")
 
-    plot_tracking_trajectory(
-        robots,
-        robot_list=["tendon", "helix"],
-        plane="xz",
-        start_time=8.0
-    )
+    # plot_tracking_trajectory(
+    #     robots,
+    #     robot_list=["tendon", "helix"],
+    #     plane="xz",
+    #     start_time=8.0
+    # )
 
     generate_combined_report("results")
-    csv_to_latex_table("table/combined_benchmark.csv", output_tex="table/combined_table.tex")
+    # csv_to_latex_table("table/combined_benchmark.csv", output_tex="table/combined_table.tex")
 
-    get_robot_parameters(robot_name)
+    # # get_robot_parameters(robot_name)
+
+    plot_spirob_error("results")
+    # parameter_csv_to_latex("table/controller_parameter_table.csv", output_tex="table/controller_parameter_table.tex")

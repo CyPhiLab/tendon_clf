@@ -50,14 +50,14 @@ def main():
         "--robots",
         nargs="+",
         default=["helix", "tendon"],
-        choices=["helix", "tendon", "spirob"],
+        choices=["spirob"],
     )
 
     parser.add_argument(
         "--controllers",
         nargs="+",
         default=["id_clf_qp", "impedance", "osc", "impedance_QP", "clf_qp", "uosc"],
-        choices=["id_clf_qp", "impedance", "osc", "impedance_QP", "clf_qp", "uosc"],
+        choices=["clf_qp"],
     )
 
     args = parser.parse_args()
@@ -71,10 +71,22 @@ def main():
 
     for robot, controller in product(args.robots, args.controllers):
 
-        if robot == "helix" and controller == "clf_qp":
+        if robot == "helix":
+            continue
+        if robot == "tendon":
             continue
 
-        if robot == "spirob":
+        if robot == "spirob" and controller == "impedance_QP":
+            continue
+        if robot == "spirob" and controller == "osc":
+            continue
+        if robot == "spirob" and controller == "impedance":
+            continue
+        if robot == "spirob" and controller == "mpc":
+            continue
+        if robot == "spirob" and controller == "id_clf_qp":    
+            continue
+        if robot == "spirob" and controller == "uosc":
             continue
 
         valid_configs.append((robot, controller))

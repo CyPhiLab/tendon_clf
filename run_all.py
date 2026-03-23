@@ -7,7 +7,7 @@ from utils import *
 
 
 def run_single_experiment(robot, controller, experiment,
-                          target_pos=None, sim_duration=10.0, omega=None):
+                          target_pos=None, omega=None):
 
     print(
         f"Running: {robot} + {controller} + {experiment}"
@@ -24,7 +24,6 @@ def run_single_experiment(robot, controller, experiment,
         controller=None,
         experiment=experiment,
         model_name=robot,
-        sim_duration=sim_duration,
         omega=omega
     )
 
@@ -58,7 +57,7 @@ def main():
         "--controllers",
         nargs="+",
         default=["id_clf_qp", "impedance", "osc", "impedance_QP", "clf_qp", "uosc"],
-        choices=["id_clf_qp", "impedance", "osc", "impedance_QP", "clf_qp", "uosc"],
+        choices=["id_clf_qp", "impedance", "impedance_QP", "clf_qp", "uosc"],
     )
     parser.add_argument(
         "--experiments",
@@ -72,10 +71,9 @@ def main():
         default=["pos1", "pos2", "pos3", "pos4"],
         choices=["pos1", "pos2", "pos3", "pos4"],
     )
-    parser.add_argument("--sim_duration", type=float, default=10.0)
     args = parser.parse_args()
 
-    omega_list = ["omg1", "omg2", "omg3", "omg4"]
+    omega_list = ["omg1", "omg2", "omg3", "omg4", "omg5"]
 
     total_start_time = time.time()
     completed_experiments = 0
@@ -87,6 +85,10 @@ def main():
         args.robots, args.controllers, args.experiments
     ):
 
+        if robot == "tendon" and controller == "osc":
+            continue
+        if robot == "helix" and controller == "osc":
+            continue
         if robot == "helix" and controller == "clf_qp":
             continue
 
@@ -94,7 +96,6 @@ def main():
             "impedance",
             "osc",
             "uosc",
-            "clf_qp",
         ]:
             continue
 
@@ -110,7 +111,6 @@ def main():
     print(f"Robots: {args.robots}")
     print(f"Controllers: {args.controllers}")
     print(f"Experiments: {args.experiments}")
-    print(f"Simulation duration: {args.sim_duration}s")
     if "set" in args.experiments:
         print(f"Target positions: {args.target_positions}")
     print("=" * 80)
@@ -124,7 +124,6 @@ def main():
                         controller,
                         experiment,
                         target_pos=target_pos,
-                        sim_duration=args.sim_duration,
                     )
                     completed_experiments += 1
                     print(
