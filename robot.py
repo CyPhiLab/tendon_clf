@@ -121,7 +121,7 @@ class Robot:
             self.task_dim = 6
             self.control_limits = (-100.0, 0.0)
             self.nu = self.model.nu
-            # Dynamic B matrix - computed at runtime
+            # Dynamic B matrix - computed at runtime (via update_input_matrix after mj_fwdPosition)
             self.update_input_matrix()
             self.T, _ = self.complete_basis(self.B.T)
             self.Tinv = np.linalg.inv(self.T)
@@ -134,8 +134,8 @@ class Robot:
             if self.control_scheme == 'impedance_QP':
                 self.Kp, self.Kd = 2000.0, 2 * np.sqrt(2000.0)
             else:
-                self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
-            self.damping, self.stiffness = 0.15, 0.1
+                self.Kp, self.Kd = 200.0, 2 * np.sqrt(200.0)
+            self.damping, self.stiffness = 0.05, 0.01
             self.e = 0.01
         
 
@@ -172,6 +172,9 @@ class Robot:
         self.G[m:, :] = np.eye(m)
         
         self.Pe = linalg.block_diag(np.eye(m) / self.e, np.eye(m)).T @ linalg.solve_continuous_are(self.F, self.G, np.eye(2*m), np.eye(m)) @ linalg.block_diag(np.eye(m) / self.e, np.eye(m))
+        # Cache constant matrix products used every control step
+        self.PeG = self.Pe @ self.G
+        self.FTPe_PeF = self.F.T @ self.Pe + self.Pe @ self.F
         
     def get_passive_forces(self):
         """Get passive forces with correct sign for each robot"""
@@ -187,27 +190,19 @@ class Robot:
     def update_input_matrix(self):
         """Update input matrix - static for tendon/helix, dynamic for spirob"""
         if self.model_name == 'spirob':
-            # Compute B matrix dynamically for spirob
-            nv = self.model.nv
-            self.B = np.zeros((nv, self.nu))
-            
-            data_temp = mujoco.MjData(self.model)
-            data_temp.qpos[:] = self.data.qpos
-            data_temp.qvel[:] = self.data.qvel
-            
-            mujoco.mj_forward(self.model, data_temp)
-            
-            for i in range(self.nu):
-                data_temp.ctrl[:] = 0.0
-                data_temp.ctrl[i] = 1.0
-                mujoco.mj_forward(self.model, data_temp)
-                self.B[:, i] = data_temp.qfrc_actuator.copy()
-                
+            # actuator_moment is flat (nu*nv,); reshape to (nu, nv) and multiply by gear.
+            # mj_step keeps actuator_moment current during the sim loop.
+            # On the very first call (init), data is fresh so we run mj_forward once.
+            if not np.any(self.data.actuator_moment):
+                mujoco.mj_forward(self.model, self.data)
+            # actuator_moment is flat (nu*nv,) and already includes the gear ratio.
+            # Do not multiply by gear again.
+            self.B = self.data.actuator_moment.reshape(self.nu, self.model.nv).T.copy()
             self.pinv_B = np.linalg.pinv(self.B)
             self.T, _ = self.complete_basis(self.B.T)
             self.Tinv = np.linalg.inv(self.T)
-            self.TinvT = self.Tinv.T 
-            self.B_applied = self.B  # Use same as B
+            self.TinvT = self.Tinv.T
+            self.B_applied = self.B
         # For tendon/helix, B matrix is static and already computed
 
     def complete_basis(self, B, tol=1e-10, return_full=True):
@@ -248,24 +243,30 @@ class Robot:
             # For the SpiRob, this should be a straight configuration
             self.data.qpos[:] = 0.0
 
-    def compute_jacobian_derivative(self, site_id, h=1e-6):
+    def compute_jacobian_derivative(self, site_id, h=1e-6, J_precomputed=None):
         """
         Compute the time derivative of the Jacobian for this robot
         
         Parameters:
         - site_id: ID of the site for Jacobian computation
         - h: Small positive step for numerical differentiation
+        - J_precomputed: optional (task_dim, nv) Jacobian already computed this step.
+          If provided, skips the initial kinematics update and Jacobian evaluation.
         
         Returns:
         - Jdot: The time derivative of the Jacobian
         """
-        # Step 1: Update kinematics
-        mujoco.mj_kinematics(self.model, self.data)
-        mujoco.mj_comPos(self.model, self.data)
-        
-        # Step 2: Compute the initial Jacobian
-        J = np.zeros((6, self.model.nv))  # Assuming a 6xnv Jacobian for full spatial representation
-        mujoco.mj_jacSite(self.model, self.data, J[:3], J[3:], site_id)
+        # Step 1 & 2: Get the Jacobian at the current state.
+        # If the caller already computed it this step, reuse it to skip redundant
+        # mj_kinematics + mj_comPos + mj_jacSite calls.
+        if J_precomputed is not None:
+            J = np.zeros((6, self.model.nv))
+            J[:self.task_dim] = J_precomputed
+        else:
+            mujoco.mj_kinematics(self.model, self.data)
+            mujoco.mj_comPos(self.model, self.data)
+            J = np.zeros((6, self.model.nv))
+            mujoco.mj_jacSite(self.model, self.data, J[:3], J[3:], site_id)
         
         # Step 3: Integrate position using velocity
         qpos_backup = np.copy(self.data.qpos)  # Backup original qpos
@@ -376,10 +377,18 @@ class Robot:
         mujoco.mj_jacSite(self.model, self.data, jac[:3], jac[3:], site_id)
         return jac[:self.task_dim, :]
         
-    def get_jacobian_derivative(self, site_name="ee", h=1e-6):
-        """Compute and return Jacobian derivative on-demand"""
+    def get_jacobian_derivative(self, site_name="ee", h=1e-6, J_precomputed=None):
+        """Compute and return Jacobian derivative on-demand.
+
+        Parameters
+        ----------
+        J_precomputed : ndarray of shape (task_dim, nv), optional
+            If provided, skips the initial kinematics update and Jacobian computation
+            inside compute_jacobian_derivative, saving ~2 mj_kinematics + 1 mj_jacSite
+            calls. Pass the result of get_jacobian() when it was just computed.
+        """
         site_id = self.model.site(site_name).id
-        dJ_dt = self.compute_jacobian_derivative(site_id, h)
+        dJ_dt = self.compute_jacobian_derivative(site_id, h, J_precomputed=J_precomputed)
         return dJ_dt[:self.task_dim, :]
         
     def get_joint_velocities(self):

@@ -154,7 +154,7 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['x'][log_idx] = data.site("ee").xpos
         logs['xd'][log_idx] = target["pos"]
 
-def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1'):
+def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1', record_video=False, video_fps=30):
     """Run physics simulation with specified controller and robot."""
     
     # print(f"Simulating {model_name} with {control_scheme}")
@@ -190,6 +190,20 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
     t = 0.0
     step_count = 0
     log_idx = 0
+
+    # Video recording setup
+    frames = []
+    renderer = None
+    video_camera = None
+    video_frame_interval = max(1, int(1.0 / (video_fps * dt)))
+    if record_video:
+        video_camera = mujoco.MjvCamera()
+        mujoco.mjv_defaultFreeCamera(robot.model, video_camera)
+        video_camera.distance = 1.0
+        video_camera.lookat[0] = 0.0
+        video_camera.lookat[1] = 0.0
+        video_camera.azimuth = 70     # angle around z-axis
+        renderer = mujoco.Renderer(robot.model, height=1080, width=800)
 
     # Main simulation loop
     viewer = None
@@ -232,6 +246,11 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
                 _log_simulation_data(logs, log_idx, robot.data, control_scheme, experiment, result, t, t_ctrl, target)
                 log_idx += 1
 
+            # Capture video frame
+            if record_video and renderer is not None and step_count % video_frame_interval == 0:
+                renderer.update_scene(robot.data, camera=video_camera)
+                frames.append(renderer.render().copy())
+
             # Terminate after fixed duration (10 seconds)
             if experiment == 'tracking' and t >= 4*np.pi/w:
                 break
@@ -250,6 +269,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
     finally:
         if viewer is not None:
             viewer.close()
+        if renderer is not None:
+            renderer.close()
 
     
     # Trim arrays to actual logged data
@@ -261,6 +282,17 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             actual_logs[key] = arr[:log_idx]
     print(f"Average Control Time {np.mean(actual_logs['ctrl_time']):.6f} seconds")
     print(f"Simulation finished after {actual_logs['sim_time'][-1]} seconds")
+
+    if record_video and frames:
+        import imageio
+        video_dir = f"results/{model_name}/{control_scheme}/videos"
+        os.makedirs(video_dir, exist_ok=True)
+        if experiment == 'set':
+            video_path = f"{video_dir}/{experiment}_{control_scheme}_{target_pos}.mp4"
+        else:
+            video_path = f"{video_dir}/{experiment}_{control_scheme}_{omega}.mp4"
+        imageio.mimwrite(video_path, frames, fps=video_fps)
+        print(f"Video saved to {video_path}")
 
     return actual_logs
 

@@ -5,8 +5,7 @@ import time
 import numpy as np
 import cvxpy as cp
 from .base import BaseController, ControllerResult
-
-
+import proxsuite
 class IDCLFQPController(BaseController):
     """
     Inverse Dynamics Control Lyapunov Function Quadratic Programming controller.
@@ -69,109 +68,187 @@ class IDCLFQPController(BaseController):
         Relative-Degree Safety-Critical Constraints." ACC, 2016.
     """
     
-    def __call__(self, robot, target_vel, target_acc, twist, previous_solution=None):
-        """ID-CLF-QP controller using on-demand robot physics interface"""
-        
-        # Update input matrix for dynamic robots
-        robot.update_input_matrix()
-        
-        # Get physics data on-demand
-        M = robot.get_mass_matrix()
-        M_inv = robot.get_mass_matrix_inverse()
-        jac = robot.get_jacobian()
-        dJ_dt = robot.get_jacobian_derivative()
-        dq = robot.get_joint_velocities()
-        h = robot.get_bias_forces() + robot.get_passive_forces()
-        
-        Mbar = robot.TinvT @ M @ robot.Tinv
-        hbar = robot.TinvT @ h
-        Bbar = robot.TinvT @ robot.B
-        
-        # Use robot attributes directly for configuration
-        F = robot.F
-        G = robot.G
-        Pe = robot.Pe
-        e = robot.e
-        Kp = robot.Kp
-        Kd = robot.Kd
+    def __init__(self):
+        """Initialize controller with lazy problem compilation."""
+        self._prob = None
+        self._u_var = None
+        self._qdd_var = None
+        self._dl_var = None
+        self._params = {}
 
-        # Desired task acceleration 
-        mu_des = target_acc + Kp * twist + Kd * (target_vel - jac @ dq)
-        eta = np.concatenate((-twist, jac @ dq - target_vel), axis=0)
-        # Lyapunov function
-        V = eta.T @ Pe @ eta
+    def _build_problem(self, robot, task_dim):
+        """Build the CVXPY problem once, using Parameters for all per-step data.
 
-        # Generic optimization formulation (robot-agnostic)
+        Uses auxiliary variables (y_task, y_null) so that parameterized matrix
+        products appear only in affine equality constraints — making the problem
+        DPP-compliant and allowing cvxpy to canonicalize exactly once.
+        """
         nu = robot.nu
         nq = robot.model.nq
-        u = cp.Variable(shape=(nu,))
-        qdd = cp.Variable(shape=(nq,))
-        dl = cp.Variable(shape=(1,))
-        dV = eta.T @ (F.T @ Pe + Pe @ F) @ eta + 2 * eta.T @ Pe @ G @ (dJ_dt @ dq + jac @ qdd - target_acc)
-        N = np.eye(robot.model.nv) - np.linalg.pinv(jac) @ jac
-        qdd_null = N @ qdd
-        qdd_ref = -50 *N @ dq
+        nv = robot.model.nv
 
-        r_theta = Mbar @ robot.T @ qdd + hbar - Bbar @ u
-        objective = cp.Minimize(cp.square(cp.norm(dJ_dt @ dq + jac @ qdd - mu_des)) 
-                                + robot.reg_qdd * cp.square(cp.norm(qdd))  
-                                + robot.reg_u * cp.square(cp.norm(u)) 
-                                + robot.reg_dl * (cp.square(dl)) 
-                                + robot.reg_null * cp.square(cp.norm(qdd_null - qdd_ref))
-                                ) 
-        # Vdot for our main CLF
-        constraints = [dV <= - 1/e * V + dl, 
-                       r_theta[:nu] == 0]
+        # Decision variables
+        u   = cp.Variable(shape=(nu,),        name='u')
+        qdd = cp.Variable(shape=(nq,),        name='qdd')
+        dl  = cp.Variable(shape=(1,),         name='dl')
+        # Auxiliary variables for parameterized quadratic terms
+        y_task = cp.Variable(shape=(task_dim,), name='y_task')
+        y_null = cp.Variable(shape=(nv,),       name='y_null')
+
+        # Parameters — updated each step, never trigger recompilation
+        p_jac        = cp.Parameter(shape=(task_dim, nv), name='jac')
+        p_task_const = cp.Parameter(shape=(task_dim,),    name='task_const')  # dJ@dq - mu_des
+        # Null-space term: instead of a (nv,nv) N parameter, introduce auxiliary variable
+        # w ∈ R^task_dim satisfying JJT @ w = J @ qdd.  Then N @ qdd = qdd - J^T @ w,
+        # which avoids forming or passing the full (nv,nv) projector each step.
+        w            = cp.Variable(shape=(task_dim,),     name='w')
+        p_JJT        = cp.Parameter(shape=(task_dim, task_dim), name='JJT', symmetric=True)
+        p_qdd_ref    = cp.Parameter(shape=(nv,),          name='qdd_ref')
+        p_clf_coeff  = cp.Parameter(shape=(nv,),          name='clf_coeff')   # 2*eta'*Pe*G*jac
+        p_clf_rhs    = cp.Parameter(shape=(1,),           name='clf_rhs')     # -1/e*V - const
+        # ID constraint via pinv(B): pinv_B @ (M qdd + h) == u
+        # Rearranged: p_pinvBM @ qdd - u == p_pinvBh  (p_pinvBh = -pinv_B @ h)
+        # Avoids T/Tinv/TinvT in the controller; only pinv_B (nu x nv) is needed.
+        p_pinvBM     = cp.Parameter(shape=(nu, nq),       name='pinvBM')      # pinv_B @ M
+        p_pinvBh     = cp.Parameter(shape=(nu,),          name='pinvBh')      # -pinv_B @ h
+
+        objective = cp.Minimize(
+            cp.sum_squares(y_task)
+            + robot.reg_qdd * cp.sum_squares(qdd)
+            + robot.reg_u   * cp.sum_squares(u)
+            + robot.reg_dl  * cp.sum_squares(dl)
+            + robot.reg_null * cp.sum_squares(y_null)
+        )
+
+        constraints = [
+            # Auxiliary equalities (make parameterized products DPP-compliant)
+            y_task == p_jac @ qdd + p_task_const,
+            # Null-space: y_null = N @ qdd - qdd_ref = qdd - J^T w - qdd_ref
+            y_null == qdd - p_jac.T @ w - p_qdd_ref,
+            p_JJT  @ w == p_jac @ qdd,
+            # CLF: clf_coeff @ qdd - dl <= clf_rhs
+            p_clf_coeff @ qdd - dl <= p_clf_rhs,
+            # Inverse dynamics: pinv_B @ M @ qdd - u == -pinv_B @ h
+            p_pinvBM @ qdd - u == p_pinvBh,
+        ]
         constraints += robot.get_control_constraints(u)
 
-        prob = cp.Problem(objective=objective, constraints=constraints)
-        
+        prob = cp.Problem(objective, constraints)
+
+        params = {
+            'jac':        p_jac,
+            'task_const': p_task_const,
+            'JJT':        p_JJT,
+            'qdd_ref':    p_qdd_ref,
+            'clf_coeff':  p_clf_coeff,
+            'clf_rhs':    p_clf_rhs,
+            'pinvBM':     p_pinvBM,
+            'pinvBh':     p_pinvBh,
+        }
+        return prob, u, qdd, dl, params
+
+    def __call__(self, robot, target_vel, target_acc, twist, previous_solution=None):
+        """ID-CLF-QP controller using on-demand robot physics interface"""
+
+        # Update input matrix for dynamic robots
+        t_ctrl_start = time.time()
+        robot.update_input_matrix()
+
+        # Get physics data on-demand
+        M     = robot.get_mass_matrix()
+        jac   = robot.get_jacobian()
+        dJ_dt = robot.get_jacobian_derivative(J_precomputed=jac)  # skip redundant kinematics
+        dq    = robot.get_joint_velocities()
+        h     = robot.get_bias_forces() + robot.get_passive_forces()
+
+        Pe  = robot.Pe
+        eps = robot.e   # CLF convergence parameter (renamed to avoid shadowing except clause)
+        Kp  = robot.Kp
+        Kd  = robot.Kd
+        nu  = robot.nu
+
+        mu_des = target_acc + Kp * twist + Kd * (target_vel - jac @ dq)
+        eta    = np.concatenate((-twist, jac @ dq - target_vel), axis=0)
+        V      = float(eta.T @ Pe @ eta)
+
+        # Build (and compile) the problem once on the first call
+        if self._prob is None:
+            self._prob, self._u_var, self._qdd_var, self._dl_var, self._params = \
+                self._build_problem(robot, jac.shape[0])
+
+        # Pre-compute numpy quantities needed by parameters.
+        # robot.PeG and robot.FTPe_PeF are constant matrices cached at robot init.
+        eta_T_PeG = eta @ robot.PeG                                             # (task_dim,)
+        clf_coeff = 2.0 * eta_T_PeG @ jac                                      # (nv,)
+        clf_const = float(eta @ robot.FTPe_PeF @ eta
+                          + 2.0 * eta_T_PeG @ (dJ_dt @ dq - target_acc))
+        clf_rhs_val = -V / eps - clf_const
+
+        # Null-space qdd_ref = -50 * N @ dq = -50 * (dq - J^T (JJ^T)^{-1} J dq)
+        # Avoids forming the full (nv,nv) N matrix; uses O(nv * task_dim) instead of O(nv^2).
+        JJT     = jac @ jac.T                                                   # (task_dim, task_dim)
+        Jdq     = jac @ dq                                                      # (task_dim,)
+        JpinvJdq = jac.T @ np.linalg.solve(JJT, Jdq)                          # (nv,)
+        qdd_ref = -50.0 * (dq - JpinvJdq)
+
+        # Update parameters (no recompilation)
+        p = self._params
+        p['jac'].value        = jac
+        p['task_const'].value = dJ_dt @ dq - mu_des          # constant part of task residual
+        p['JJT'].value        = JJT
+        p['qdd_ref'].value    = qdd_ref
+        p['clf_coeff'].value  = clf_coeff
+        p['clf_rhs'].value    = np.array([clf_rhs_val])
+        pinv_B = robot.pinv_B
+        p['pinvBM'].value     = pinv_B @ M
+        p['pinvBh'].value     = -(pinv_B @ h)
+
         # Warm start with previous solution if available
         if previous_solution is not None:
             try:
-                u.value = previous_solution['u']
-                qdd.value = previous_solution['qdd'] 
-                dl.value = previous_solution['dl']
-            except:
-                pass  # If warm start fails, proceed without it
-        
-        try:
-            t_ctrl_start = time.time()
-            prob.solve(solver=cp.SCS, verbose=False, warm_start=True)
-            t_ctrl = time.time() - t_ctrl_start
-            
-            if u.value is not None:
-                robot.apply_control_input(u.value)
-                
-                current_solution = {
-                    'u': u.value.copy(),
-                    'qdd': qdd.value.copy(),
-                    'dl': dl.value.copy(),
-                    # 'su': su.value.copy()
-                }
+                self._u_var.value   = previous_solution['u']
+                self._qdd_var.value = previous_solution['qdd']
+                self._dl_var.value  = previous_solution['dl']
+            except Exception:
+                pass
 
+        try:
+            
+            self._prob.solve(solver=cp.OSQP, warm_start=True, verbose=False)
+            t_ctrl = time.time() - t_ctrl_start
+
+            u_val = self._u_var.value
+            if u_val is not None:
+                robot.apply_control_input(u_val)
+
+                current_solution = {
+                    'u':   u_val.copy(),
+                    'qdd': self._qdd_var.value.copy(),
+                    'dl':  self._dl_var.value.copy(),
+                }
                 return ControllerResult(
                     task_error=np.linalg.norm(twist[:3]),
-                    control_input=u.value.copy(),
-                    lyapunov_value=float(V),
+                    control_input=u_val.copy(),
+                    lyapunov_value=V,
                     previous_solution=current_solution,
                     t_ctrl=t_ctrl
                 )
             else:
-                print(f"failed convergence - no solution\\n")
+                print("failed convergence - no solution\n")
                 return ControllerResult(
                     task_error=np.linalg.norm(twist[:3]),
-                    control_input=np.zeros((nu, 1)),
-                    lyapunov_value=float(V),
+                    control_input=np.zeros((nu,)),
+                    lyapunov_value=V,
                     previous_solution=previous_solution,
                     t_ctrl=t_ctrl
                 )
-        except Exception as e:
-            print(f"failed convergence - exception: {e}\\n")
+        except Exception as exc:
+            t_ctrl = time.time() - t_ctrl_start
+            print(f"failed convergence - exception: {exc}\n")
             return ControllerResult(
                 task_error=np.linalg.norm(twist[:3]),
-                control_input=np.zeros((nu, 1)),
-                lyapunov_value=float(V),
+                control_input=np.zeros((nu,)),
+                lyapunov_value=V,
                 previous_solution=previous_solution,
                 t_ctrl=t_ctrl
             )
