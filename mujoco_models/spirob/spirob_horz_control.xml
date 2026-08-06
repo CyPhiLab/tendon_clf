@@ -75,6 +75,15 @@
                   contype="0"
                   conaffinity="0"/>
       </body>
+
+        <!-- Framed for the horizontal arm with its base raised to z = 0.55 by
+             Robot.initialize_simulation_state(); the arm reaches into -x. -->
+        <camera name="ortho_side"
+            mode="fixed"
+            projection="orthographic"
+            pos="-0.25 -1.5 0.5"
+            xyaxes="1 0 0  0 0 1"
+            fovy="0.8"/>
     </worldbody>
     <keyframe>
         <!-- Robot pre-bent into hole approach position; cylinder resting on floor -->

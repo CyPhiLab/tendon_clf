@@ -6,24 +6,49 @@ from pathlib import Path
 from scipy import linalg
 
 
+# Height the spirob_horz base is lifted to so the arm hangs in free space.
+# utils.set_target/circular_trajectory place targets relative to this, so it
+# lives here as the single source of truth.
+SPIROB_HORZ_BASE_HEIGHT = 0.55
+
+
 class Robot:
     """Unified robot class that encapsulates robot-specific configurations and MuJoCo model"""
     
+    # Robots whose scene file does not live at the default
+    # mujoco_models/<name>/<name>_control.xml path.  spirob_horz shares the
+    # spirob/ directory because meshdir="assets" resolves relative to it.
+    MODEL_PATH_OVERRIDES = {
+        'spirob_horz': Path("mujoco_models") / "spirob" / "spirob_horz_control.xml",
+    }
+
+    # Robots driven through tendons, where B must be rebuilt from
+    # data.actuator_moment every step rather than held static.
+    TENDON_ROBOTS = ('spirob', 'spirob_horz')
+
     def __init__(self, model_name: str, control_scheme: str):
         self.model_name = model_name
         self.model = self._load_model()
         self.data = mujoco.MjData(self.model)
         self.model.opt.gravity = (0, 0, -9.81)
         self.control_scheme = control_scheme
+        # Defaults that individual robot configs may override.
+        self.pinv_rcond = None       # None -> numpy's default pinv cutoff
+        self.override_passives = True  # blanket-assign stiffness/damping at init
+        self.base_height = None      # None -> leave the base where the XML puts it
+        self.k_v, self.k_e = 1.0, 0.0  # dcmotor gain / back-EMF (probed when needed)
+        self.include_constraint_forces = False  # carry qfrc_constraint in h
         self._setup_robot_config()
         self.site_id = self.model.site('ee').id
-        
-        
+
+
     def _load_model(self):
         """Load MuJoCo model from standard path convention"""
-        model_path = Path("mujoco_models") / self.model_name / f"{self.model_name}_control.xml"
+        model_path = self.MODEL_PATH_OVERRIDES.get(
+            self.model_name,
+            Path("mujoco_models") / self.model_name / f"{self.model_name}_control.xml")
         return mujoco.MjModel.from_xml_path(str(model_path.absolute()))
-    
+
     def _setup_robot_config(self):
         """Configure robot-specific parameters"""
         if self.model_name == 'tendon':
@@ -157,7 +182,61 @@ class Robot:
             # Control constraint bounds
             self.lower_bounds = np.full((self.nu,), self.control_limits[0])
             self.upper_bounds = np.full((self.nu,), self.control_limits[1])
-            
+
+        elif self.model_name == 'spirob_horz':
+            self.task_dim = 3
+            # ctrl is a dcmotor voltage here, not a force: ctrlrange is (-12, 0) V.
+            self.control_limits = (-12.0, 0.0)
+            self.nu = self.model.nu
+            # dcmotor force law: actuator_force = k_v*ctrl - k_e*actuator_velocity.
+            # Probed from the compiled model so a retuned nominal="..." is picked up.
+            self._probe_actuator_constants()
+            # B's common mode (all three tendons pulling equally) barely moves the
+            # arm, so B is near-singular; truncate it out of the pseudo-inverse.
+            self.pinv_rcond = 1e-2
+            # Adjacent spiral segments rest against each other in every
+            # configuration (~30 contacts even with the arm hanging in free
+            # space), and the resulting constraint force is on average larger
+            # than qfrc_bias.  Carrying it in h makes M qdd + h = B u exact
+            # (residual 1e-12 vs 1e-1 without it).
+            self.include_constraint_forces = True
+            # The XML tapers stiffness along the spiral and sets damping per joint;
+            # keep those instead of overwriting them with scalars.
+            self.override_passives = False
+            # Lift the base so the arm hangs in free space.  ID-CLF-QP has no
+            # contact term in h, so resting on the floor would make it fight
+            # unmodelled constraint forces.
+            self.base_body = 'segment_1__configuration_default'
+            self.base_height = SPIROB_HORZ_BASE_HEIGHT
+            # Let gravity settle the arm before the controller engages, so the
+            # run does not start at B's singular point.
+            self.settle_steps = 1000
+            # Dynamic B matrix - computed at runtime (via update_input_matrix after mj_fwdPosition)
+            self.update_input_matrix()
+            self.B_applied = np.eye(self.nu)
+            self.sel = np.ones((self.nu, 1))
+            # Control gains
+            if self.control_scheme == 'impedance_QP':
+                self.Kp, self.Kd = 2000.0, 2 * np.sqrt(2000.0)
+            else:
+                self.Kp, self.Kd = 200.0, 2 * np.sqrt(200.0)
+            self.damping, self.stiffness = 0.05, 0.01  # unused: override_passives is False
+            self.e = 0.01
+            # Passive force sign (spirob uses -data.qfrc_passive)
+            self.passive_sign = -1
+            # Regularization coefficients for optimization
+            self.reg_qdd = 0.2
+            self.reg_u = 0.5
+            self.reg_null = 0.1
+            self.reg_dl = 1000
+            # MPC-specific coefficients
+            self.mpc_task_weight = 1.0
+            self.mpc_null_weight = 0.0
+            self.mpc_terminal_weight = 10.0
+            # Control constraint bounds
+            self.lower_bounds = np.full((self.nu,), self.control_limits[0])
+            self.upper_bounds = np.full((self.nu,), self.control_limits[1])
+
         # Compute Control Lyapunov Function matrices
         self._setup_clf_matrices()
         
@@ -176,10 +255,61 @@ class Robot:
         self.PeG = self.Pe @ self.G
         self.FTPe_PeF = self.F.T @ self.Pe + self.Pe @ self.F
         
+    def _probe_actuator_constants(self):
+        """Measure the dcmotor force law from the compiled model.
+
+        A `dcmotor` transmission produces an affine, velocity-dependent force
+
+            actuator_force = k_v * ctrl - k_e * actuator_velocity
+
+        where k_v = tau_nom/V_nom and k_e = k_v * (V_nom/omega_nom) follow from
+        the actuator's `nominal` attribute.  Probing rather than hardcoding means
+        retuning the XML does not silently invalidate the controller model.
+        Saturation (|actuator_force| <= forcerange) is not modelled; it only binds
+        at tendon speeds above ~0.4 m/s.
+        """
+        qpos, qvel, ctrl = (self.data.qpos.copy(), self.data.qvel.copy(),
+                            self.data.ctrl.copy())
+        # k_v: unit ctrl at rest.
+        self.data.qpos[:] = 0.0
+        self.data.qvel[:] = 0.0
+        self.data.ctrl[:] = -1.0
+        mujoco.mj_forward(self.model, self.data)
+        self.k_v = float(-np.mean(self.data.actuator_force))
+        # k_e: nonzero velocity with no ctrl.
+        self.data.qvel[:] = 0.1
+        self.data.ctrl[:] = 0.0
+        mujoco.mj_forward(self.model, self.data)
+        moving = np.abs(self.data.actuator_velocity) > 1e-9
+        self.k_e = float(np.mean(-self.data.actuator_force[moving]
+                                 / self.data.actuator_velocity[moving]))
+        # Restore whatever state the caller had.
+        self.data.qpos[:] = qpos
+        self.data.qvel[:] = qvel
+        self.data.ctrl[:] = ctrl
+        mujoco.mj_forward(self.model, self.data)
+
     def get_passive_forces(self):
-        """Get passive forces with correct sign for each robot"""
-        return self.passive_sign * self.data.qfrc_passive
-    
+        """Get passive forces with correct sign for each robot.
+
+        For dcmotor-driven robots this also carries the back-EMF term.  MuJoCo's
+        dynamics are
+
+            M qdd + qfrc_bias - qfrc_passive = moment.T @ (k_v*u - k_e*v_act)
+
+        so the controller's `M qdd + h = B u` form needs the velocity-dependent
+        part of the actuator force folded into h (B carries the k_v scaling).
+        The term is not small: at qdot = 0.2 with ctrl = -6 it flips the sign of
+        a tendon's force.
+        """
+        passive = self.passive_sign * self.data.qfrc_passive
+        if self.k_e:
+            moment = self.data.actuator_moment.reshape(self.nu, self.model.nv)
+            passive = passive + moment.T @ (self.k_e * self.data.actuator_velocity)
+        if self.include_constraint_forces:
+            passive = passive - self.data.qfrc_constraint
+        return passive
+
     def get_control_constraints(self, u_var):
         """Get control constraints for optimization (robot-agnostic)"""
         constraints = []
@@ -189,16 +319,20 @@ class Robot:
     
     def update_input_matrix(self):
         """Update input matrix - static for tendon/helix, dynamic for spirob"""
-        if self.model_name == 'spirob':
+        if self.model_name in self.TENDON_ROBOTS:
             # actuator_moment is flat (nu*nv,); reshape to (nu, nv) and multiply by gear.
             # mj_step keeps actuator_moment current during the sim loop.
             # On the very first call (init), data is fresh so we run mj_forward once.
             if not np.any(self.data.actuator_moment):
                 mujoco.mj_forward(self.model, self.data)
             # actuator_moment is flat (nu*nv,) and already includes the gear ratio.
-            # Do not multiply by gear again.
-            self.B = self.data.actuator_moment.reshape(self.nu, self.model.nv).T.copy()
-            self.pinv_B = np.linalg.pinv(self.B)
+            # Do not multiply by gear again.  k_v converts ctrl to actuator force
+            # (1.0 for plain `motor` transmissions, tau_nom/V_nom for a dcmotor).
+            self.B = self.k_v * self.data.actuator_moment.reshape(self.nu, self.model.nv).T
+            if self.pinv_rcond is None:
+                self.pinv_B = np.linalg.pinv(self.B)
+            else:
+                self.pinv_B = np.linalg.pinv(self.B, rcond=self.pinv_rcond)
             self.T, _ = self.complete_basis(self.B.T)
             self.Tinv = np.linalg.inv(self.T)
             self.TinvT = self.Tinv.T
@@ -233,8 +367,15 @@ class Robot:
     def initialize_simulation_state(self):
         """Initialize robot-specific simulation state and model parameters."""
         print("Initializing robot configuration...")
-        self.model.jnt_stiffness[:] = self.stiffness
-        self.model.dof_damping[:] = self.damping
+        if self.override_passives:
+            # spirob_horz opts out: its XML tapers stiffness per joint along the
+            # spiral, and a blanket assignment would erase that.
+            self.model.jnt_stiffness[:] = self.stiffness
+            self.model.dof_damping[:] = self.damping
+        if self.base_height is not None:
+            # Done here rather than in the XML: spirob_horz.xml is generated by
+            # onshape-to-robot and would lose the edit on regeneration.
+            self.model.body_pos[self.model.body(self.base_body).id][2] = self.base_height
         if self.model_name == 'helix':
             self.data.qpos[2] = 0.0
             self.model.jnt_range[range(2,len(self.data.qpos),3)] = [[-0.001, 0.03/2] for i in range(2,len(self.data.qpos),3)]
@@ -242,6 +383,19 @@ class Robot:
         elif self.model_name == 'spirob':
             # For the SpiRob, this should be a straight configuration
             self.data.qpos[:] = 0.0
+        elif self.model_name == 'spirob_horz':
+            # qpos = 0 is exactly the worst-conditioned point for B (cond ~950),
+            # so start from the gravity-settled configuration instead: it is the
+            # state the robot would actually be in at rest, and B is far better
+            # conditioned there.
+            self.data.qpos[:] = 0.0
+            self.data.qvel[:] = 0.0
+            self.data.ctrl[:] = 0.0
+            for _ in range(self.settle_steps):
+                mujoco.mj_step(self.model, self.data)
+            self.data.qvel[:] = 0.0
+            self.data.time = 0.0
+            mujoco.mj_forward(self.model, self.data)
 
     def compute_jacobian_derivative(self, site_id, h=1e-6, J_precomputed=None):
         """
@@ -439,7 +593,7 @@ class Robot:
         
     def apply_control_input(self, u):
         """Apply control input to robot actuators"""
-        if self.model_name == "spirob":
+        if self.model_name in self.TENDON_ROBOTS:
             self.data.ctrl[:] = np.clip(u, self.lower_bounds, self.upper_bounds)
         else:
             self.data.ctrl[:] = self.B_applied @ np.clip(u, self.lower_bounds, self.upper_bounds)

@@ -43,7 +43,8 @@ control_name = {
 robot_name = {
     "tendon": "Finger",
     "helix": "Helix",
-    "spirob": "SpiRob"
+    "spirob": "SpiRob",
+    "spirob_horz": "SpiRob (horiz.)"
 }
 
 def legend_above(ax, ncol=None):
@@ -224,7 +225,7 @@ def clf_plot(robots, control, experiment):
                 continue
             items.append((robot, ctrl, exp_data))
 
-    robot_order = ["tendon", "helix", "spirob"]
+    robot_order = ["tendon", "helix", "spirob", "spirob_horz"]
     items.sort(key=lambda x: robot_order.index(x[0]) if x[0] in robot_order else 999)
 
     for robot, ctrl, exp_data in items:
@@ -535,7 +536,7 @@ def get_robot_parameters(robot_name_dict):
 
 def generate_combined_report(root):
     rows = []
-    robots = ["tendon", "helix", "spirob"]
+    robots = ["tendon", "helix", "spirob", "spirob_horz"]
 
     for robot in robots:
         robot_path = os.path.join(root, robot)

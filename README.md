@@ -56,6 +56,9 @@ python run_all.py
 - **helix**: A high DOF soft-rigid robot inspired by wave springs. Based on https://ieeexplore.ieee.org/abstract/document/11020854
 - **tendon**: 4-DOF tendon-driven finger
 - **spirob**: A high DOF soft-rigid robot who's shape follows a logarithmic spiral. Based on https://www.sciencedirect.com/science/article/pii/S2666998624006033
+- **spirob_horz**: The same spiral arm mounted horizontally, with dcmotor-driven
+  tendons instead of ideal force actuators. Its base is raised programmatically so
+  the arm hangs in free space; see `SPIROB_HORZ_NOTES.md` for the port details.
 
 ### Experiment Types
 

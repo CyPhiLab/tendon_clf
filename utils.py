@@ -11,7 +11,34 @@ from controllers import (ControllerResult, IDCLFQPController, ImpedanceControlle
                         ImpedanceQPController, CLFQPController, UOSCController)
 
 # Import Robot class
-from robot import Robot
+from robot import Robot, SPIROB_HORZ_BASE_HEIGHT
+
+# spirob_horz reaches horizontally into -x from a base raised to
+# SPIROB_HORZ_BASE_HEIGHT, so its targets ride a circle in the y-z plane rather
+# than the x-z circle the vertical robots use.  The centre and radius are taken
+# from the measured static-equilibrium workspace (see SPIROB_HORZ_NOTES.md):
+# the tip reaches x = -0.44 straight and sweeps roughly +/-0.1 in y and z.
+SPIROB_HORZ_TARGET_X = -0.36                    # depth of the target plane
+SPIROB_HORZ_TARGET_Z = SPIROB_HORZ_BASE_HEIGHT - 0.03   # centre height
+SPIROB_HORZ_TARGET_R = 0.055                    # circle radius
+
+
+def _spirob_horz_circle(theta):
+    """Target circle for spirob_horz, in the y-z plane at fixed x.
+
+    Returns the position and its first two derivatives with respect to theta,
+    so both the set-point and tracking cases can share one definition.
+    """
+    pos = np.array([SPIROB_HORZ_TARGET_X,
+                    SPIROB_HORZ_TARGET_R * np.cos(theta),
+                    SPIROB_HORZ_TARGET_Z + SPIROB_HORZ_TARGET_R * np.sin(theta)])
+    dpos = np.array([0.0,
+                     -SPIROB_HORZ_TARGET_R * np.sin(theta),
+                     SPIROB_HORZ_TARGET_R * np.cos(theta)])
+    ddpos = np.array([0.0,
+                      -SPIROB_HORZ_TARGET_R * np.cos(theta),
+                      -SPIROB_HORZ_TARGET_R * np.sin(theta)])
+    return pos, dpos, ddpos
 
 
 # Configure MuJoCo to use the EGL rendering backend (requires GPU)
@@ -32,10 +59,16 @@ def circular_trajectory(t, model_name, omega):
     Circular trajectory through the 4 given points.
     One full revolution in time T.
     """
+    if model_name == 'spirob_horz':
+        theta = omega * t
+        pos, dpos, ddpos = _spirob_horz_circle(theta)
+        # chain rule: d/dt = omega * d/dtheta
+        return {"pos": pos, "vel": omega * dpos, "acc": omega**2 * ddpos}
+
     if model_name == 'tendon':
         L = 0.24
         h = L
-    
+
     elif model_name == 'helix':
         L = 0.45
         h = 0.7
@@ -79,6 +112,10 @@ def circular_trajectory(t, model_name, omega):
     return {"pos": pos, "vel": vel, "acc": acc}
 
 def set_target(target_pos, model_name):
+    if model_name == 'spirob_horz':
+        theta = {'pos1': 0.0, 'pos2': np.pi / 2, 'pos3': np.pi, 'pos4': 3 * np.pi / 2}
+        return _spirob_horz_circle(theta[target_pos])[0]
+
     if model_name == 'tendon':
         L = 0.24
         h = L
@@ -209,8 +246,12 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
     viewer = None
     if not headless:
         viewer = mujoco.viewer.launch_passive(robot.model, robot.data)
-        viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
-        viewer.cam.fixedcamid = robot.model.camera("ortho_side").id
+        cam_id = mujoco.mj_name2id(robot.model, mujoco.mjtObj.mjOBJ_CAMERA, "ortho_side")
+        if cam_id != -1:
+            viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+            viewer.cam.fixedcamid = cam_id
+        else:
+            print("No 'ortho_side' camera in this model; using the free camera.")
 
     try:
         while True:

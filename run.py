@@ -17,7 +17,7 @@ if __name__ == "__main__":
                                                                              'impedance_QP', 
                                                                              'clf_qp', 
                                                                              'uosc'], help='Controller type to use')
-    parser.add_argument('--robot', type=str, default='helix', choices=['helix', 'tendon','spirob'], help='Robot to simulate')
+    parser.add_argument('--robot', type=str, default='helix', choices=['helix', 'tendon','spirob','spirob_horz'], help='Robot to simulate')
     parser.add_argument('--experiment', type=str, default='set', choices=['set', 'tracking'], help='Experiment name')
     parser.add_argument('--target_pos', type=str, default='pos4', choices=['pos1', 'pos2', 'pos3', 'pos4'], help='Target position for the end-effector')
     parser.add_argument('--sim_duration', type=float, default=10.0, help='Duration of the simulation in seconds')

@@ -52,7 +52,7 @@ def main():
         "--robots",
         nargs="+",
         default=["helix", "tendon", "spirob"],
-        choices=["helix", "tendon", "spirob"],
+        choices=["helix", "tendon", "spirob", "spirob_horz"],
     )
     parser.add_argument(
         "--controllers",
@@ -90,7 +90,7 @@ def main():
         if robot == "helix" and controller == "clf_qp":
             continue
 
-        if robot == "spirob" and controller in [
+        if robot in ("spirob", "spirob_horz") and controller in [
             "impedance",
             "osc",
             "uosc",
