@@ -15,12 +15,17 @@ from robot import Robot, SPIROB_HORZ_BASE_HEIGHT
 
 # spirob_horz reaches horizontally into -x from a base raised to
 # SPIROB_HORZ_BASE_HEIGHT, so its targets ride a circle in the y-z plane rather
-# than the x-z circle the vertical robots use.  The centre and radius are taken
-# from the measured static-equilibrium workspace (see SPIROB_HORZ_NOTES.md):
-# the tip reaches x = -0.44 straight and sweeps roughly +/-0.1 in y and z.
-SPIROB_HORZ_TARGET_X = -0.36                    # depth of the target plane
+# than the x-z circle the vertical robots use.  Sized from the measured
+# static-equilibrium workspace (see SPIROB_HORZ_NOTES.md), which spans
+# x in [-0.475, +0.215], y in [-0.196, +0.196], z in [-0.238, +0.223] relative
+# to the base.  The radius is set by the tracking experiment rather than the
+# set-point one: the arm tracks well up to a tip speed of roughly 0.1 m/s, and
+# tip speed is radius * omega, so 0.16 would make everything above omg1
+# untrackable.  At 0.08 all five omegas stay usable and the set-point targets
+# are still 0.165 m from the rest pose (~35% of the straight-arm reach).
+SPIROB_HORZ_TARGET_X = -0.30                    # depth of the target plane
 SPIROB_HORZ_TARGET_Z = SPIROB_HORZ_BASE_HEIGHT - 0.03   # centre height
-SPIROB_HORZ_TARGET_R = 0.055                    # circle radius
+SPIROB_HORZ_TARGET_R = 0.08                     # circle radius
 
 
 def _spirob_horz_circle(theta):
