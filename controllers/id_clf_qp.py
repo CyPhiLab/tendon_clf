@@ -5,7 +5,8 @@ import time
 import numpy as np
 import cvxpy as cp
 from .base import BaseController, ControllerResult
-import proxsuite
+
+
 class IDCLFQPController(BaseController):
     """
     Inverse Dynamics Control Lyapunov Function Quadratic Programming controller.

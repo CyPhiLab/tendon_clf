@@ -356,7 +356,7 @@ class Robot:
     def get_mass_matrix(self):
         """Compute and return mass matrix on-demand"""
         M = np.zeros((self.model.nv, self.model.nv))
-        mujoco.mj_fullM(self.model, M, self.data.qM)
+        mujoco.mj_fullM(self.model, self.data, M)
         return M
         
     def get_mass_matrix_inverse(self):
