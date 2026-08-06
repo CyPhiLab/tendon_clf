@@ -74,7 +74,8 @@ so the controller's `M q̈ + h = B u` needs **both**:
 2. `h += moment.T @ (k_e * actuator_velocity)` — the back-EMF term, folded into
    `get_passive_forces()`, which all four controllers already consume via
    `h = get_bias_forces() + get_passive_forces()`. The existing `passive_sign = -1`
-   for spirob is correct and unchanged.
+   for spirob is correct and unchanged. Dropping it doubles the final task error
+   at the shipped targets, and costs more the faster the arm moves.
 
 Saturation (`|force| ≤ 12`) is affine in `u` and could be added as a per-step bound
 (`u ≥ (−12 + k_e·v)/k_v`, `u ≤ (12 + k_e·v)/k_v`). It only binds when tendon speed
@@ -217,8 +218,8 @@ max |M q̈ + h − B u|   without qfrc_constraint:  1.10e-01
 `include_constraint_forces` (default `False`, `True` for `spirob_horz`) subtracts
 `data.qfrc_constraint` in `get_passive_forces()`. The value is one step stale — it
 comes from the previous `mj_step`'s forward pass — so it acts as feedforward, not
-as a term the QP can plan against. That is enough: it is worth a **10×** reduction
-in final task error (see Results).
+as a term the QP can plan against. That is enough: it is worth an **8×** reduction
+in final task error (see Results), the single largest of any fix here.
 
 This does not contradict the earlier decision to raise the base rather than model
 floor contact. Floor contact is intermittent and impulsive; inter-segment contact is
@@ -226,38 +227,50 @@ permanent and slowly varying, which is what makes a one-step-stale feedforward w
 
 ## Results
 
-ID-CLF-QP, set-point experiment, 5 s, mean over the four targets. Each row changes
-exactly one thing from the shipped configuration.
+ID-CLF-QP, set-point experiment, 5 s, mean over the four targets, at the shipped
+target geometry. Each row changes exactly one thing from the shipped configuration.
 
 | configuration | mean final error | vs baseline |
 |---|---|---|
-| **shipped** (`task_dim=3`, constraint term, `rcond=1e-2`) | **9.68e-05 m** | — |
-| without `qfrc_constraint` in `h` | 9.92e-04 m | **10× worse** |
-| with `B` unscaled (`k_v = 1`) | 5.82e-04 m | **6× worse** |
-| without the back-EMF term in `h` | 1.05e-04 m | 8% worse |
-| without `rcond` truncation | 9.68e-05 m | identical |
-| `task_dim = 6` | 7.03e-05 m | 27% better |
+| **shipped** (`task_dim=3`, constraint term, `rcond=1e-2`) | **1.85e-04 m** | — |
+| without `qfrc_constraint` in `h` | 1.50e-03 m | **8× worse** |
+| with `B` unscaled (`k_v = 1`) | 1.05e-03 m | **5.7× worse** |
+| `task_dim = 6` | 6.01e-04 m | **3.2× worse** |
+| without the back-EMF term in `h` | 3.63e-04 m | 2× worse |
+| without `rcond` truncation | 1.85e-04 m | identical |
 
-Convergence is fast and clean: from a 0.22 m initial error to under 1 mm in
-0.3–1.3 s, with the Lyapunov value `V` decreasing monotonically.
+Convergence is fast and clean: from a 0.165 m initial error to under 1 mm in
+0.3–1.1 s, with the Lyapunov value `V` decreasing monotonically.
 
-The back-EMF term looks small here only because set-point runs are slow after the
-initial transient; it is worth keeping since it costs nothing and makes the model
-exact. It matters much more during fast tracking.
+**These numbers are target-geometry dependent — measure before concluding.** An
+earlier pass at a smaller, closer target circle (`x = −0.36`, radius 0.055) put the
+back-EMF term at only 8% and `task_dim = 6` at 27% *better* than `m = 3`. Both
+reversed once the targets moved out to a real excursion: bigger moves mean higher
+tendon speeds, which is exactly where the velocity-dependent term bites and where
+the extra orientation rows start costing actuation. Easy targets hide both effects.
 
 ### The `task_dim` question, answered
 
 `task_dim = 6` on a 3-actuator arm whose `B` is effectively rank 2 was expected to
-waste actuation damping angular velocity to zero. Measured, it does not hurt — it is
-27% *better* in final error and more consistent across targets (6.2–7.5e-5 vs
-7.3–15.7e-5), at essentially the same convergence time (0.43 s vs 0.41 s mean).
+waste actuation damping angular velocity to zero. At the shipped targets it does,
+and the damage is uneven:
 
-The shipped value is nevertheless **`task_dim = 3`**: the difference is 0.03 mm,
-far below anything physically meaningful, and `m = 3` is the honest task
-specification for this arm — `compute_target_data()` zeroes the orientation rows of
-the twist anyway, so `m = 6` asks the controller to regulate an orientation nobody
-specified. It also keeps the QP smaller and matches the `tendon` robot. Changing it
-back is a one-line edit in `robot.py`; the numbers above are what to expect.
+| target | `m = 3` final error | `m = 6` final error | `m = 6` time to 1 mm |
+|---|---|---|---|
+| pos1 (+y) | 1.29e-04 | 7.03e-04 | 2.49 s |
+| pos2 (+z) | 2.57e-04 | 7.00e-05 | 0.65 s |
+| pos3 (−y) | 1.34e-04 | 1.55e-03 | 2.39 s |
+| pos4 (−z) | 2.21e-04 | 8.23e-05 | 1.16 s |
+
+`m = 6` is fine on the two vertical targets and roughly an order of magnitude worse
+on the two lateral ones, taking ~2.4 s to reach a millimetre against ~0.8 s. The
+lateral moves are the ones that need the differential tendon modes most, so paying
+actuation to regulate an orientation nobody asked for hurts precisely there —
+`compute_target_data()` zeroes the orientation rows of the twist regardless.
+
+**`task_dim = 3` ships.** It is the honest task specification for this arm, it is
+uniformly better here, and it keeps the QP smaller and consistent with the `tendon`
+robot.
 
 ## Still open
 
