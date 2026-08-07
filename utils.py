@@ -27,6 +27,41 @@ SPIROB_HORZ_TARGET_X = -0.30                    # depth of the target plane
 SPIROB_HORZ_TARGET_Z = SPIROB_HORZ_BASE_HEIGHT - 0.03   # centre height
 SPIROB_HORZ_TARGET_R = 0.08                     # circle radius
 
+# --- horizontal sweep demo ('--omega sweep') --------------------------------
+# An arc swept about the base's vertical axis, at the radius of the arm's own
+# length, in a plane perpendicular to gravity.  Unlike the circle above this is
+# deliberately outside the reachable set: the tip only gets 0.443 m from the
+# base at rest, so a 0.5 m arc cannot be reached anywhere along it and tracking
+# error will be correspondingly large.  That is intended -- the demo is about
+# the shape of the motion, not the tracking accuracy.
+SPIROB_HORZ_ARC_KEY = 'sweep'
+SPIROB_HORZ_ARC_R = 0.50                        # arc radius, ~ the arm's length
+SPIROB_HORZ_ARC_Z = SPIROB_HORZ_BASE_HEIGHT - 0.04  # the tip's natural rest height
+SPIROB_HORZ_ARC_HALF_ANGLE = np.deg2rad(20.0)   # sweep is +/- this about -x
+
+
+def _spirob_horz_arc(t, omega):
+    """Horizontal arc sweep for spirob_horz, in the x-y plane at fixed z.
+
+    The tip angle about the base follows psi(t) = psi_max * sin(omega*t), so the
+    arc is swept back and forth smoothly, reversing with zero velocity at each
+    end.  The simulation loop runs for 4*pi/omega, i.e. two complete sweeps.
+    """
+    psi = SPIROB_HORZ_ARC_HALF_ANGLE * np.sin(omega * t)
+    dpsi = SPIROB_HORZ_ARC_HALF_ANGLE * omega * np.cos(omega * t)
+    ddpsi = -SPIROB_HORZ_ARC_HALF_ANGLE * omega**2 * np.sin(omega * t)
+
+    R = SPIROB_HORZ_ARC_R
+    c, s = np.cos(psi), np.sin(psi)
+    # psi = 0 points straight out along -x, matching the arm's rest direction.
+    pos = np.array([-R * c, R * s, SPIROB_HORZ_ARC_Z])
+    # d/dt via the chain rule through psi(t).
+    vel = np.array([R * s * dpsi, R * c * dpsi, 0.0])
+    acc = np.array([R * (s * ddpsi + c * dpsi**2),
+                    R * (c * ddpsi - s * dpsi**2),
+                    0.0])
+    return {"pos": pos, "vel": vel, "acc": acc}
+
 
 def _spirob_horz_circle(theta):
     """Target circle for spirob_horz, in the y-z plane at fixed x.
@@ -55,16 +90,24 @@ def get_omega(omega_str):
         'omg2': 0.2 * np.pi,
         'omg3': 0.3 * np.pi,
         'omg4': 0.4 * np.pi,
-        'omg5': 0.5 * np.pi
+        'omg5': 0.5 * np.pi,
+        # Horizontal sweep demo; slow enough that the tip speed stays near the
+        # ~0.1 m/s the arm can actually follow, despite the arc being out of reach.
+        SPIROB_HORZ_ARC_KEY: 0.1 * np.pi,
     }
     return omg[omega_str]
 
-def circular_trajectory(t, model_name, omega):
+def circular_trajectory(t, model_name, omega, omega_key=None):
     """
     Circular trajectory through the 4 given points.
     One full revolution in time T.
+
+    `omega_key` selects a named trajectory variant where one exists; currently
+    only spirob_horz has one ('sweep', the horizontal arc demo).
     """
     if model_name == 'spirob_horz':
+        if omega_key == SPIROB_HORZ_ARC_KEY:
+            return _spirob_horz_arc(t, omega)
         theta = omega * t
         pos, dpos, ddpos = _spirob_horz_circle(theta)
         # chain rule: d/dt = omega * d/dtheta
@@ -267,7 +310,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             # Get target based on experiment type
             if experiment == 'tracking':
                 w = get_omega(omega)
-                target = circular_trajectory(t, model_name, w)
+                target = circular_trajectory(t, model_name, w, omega_key=omega)
             else:  # experiment == 'set'
                 target = set_target(target_pos, model_name)
             
