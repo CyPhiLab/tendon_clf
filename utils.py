@@ -34,7 +34,13 @@ SPIROB_HORZ_TARGET_R = 0.08                     # circle radius
 # base at rest, so a 0.5 m arc cannot be reached anywhere along it and tracking
 # error will be correspondingly large.  That is intended -- the demo is about
 # the shape of the motion, not the tracking accuracy.
+# Selected with `--experiment tracking --omega sweep`.  The rate is a plain
+# parameter: --sweep-omega RAD_PER_S (or --sweep-hz), defaulting to the value
+# below.  Peak tip speed is R * half_angle * omega -- 0.055 m/s at the default --
+# and the arm tracks to roughly 0.1 m/s, so past ~0.6 rad/s the arc degrades on
+# purpose.  Run duration is 4*pi/omega, i.e. two complete sweeps.
 SPIROB_HORZ_ARC_KEY = 'sweep'
+SPIROB_HORZ_ARC_OMEGA = 0.1 * np.pi             # default sweep rate [rad/s]
 SPIROB_HORZ_ARC_R = 0.50                        # arc radius, ~ the arm's length
 SPIROB_HORZ_ARC_Z = SPIROB_HORZ_BASE_HEIGHT - 0.04  # the tip's natural rest height
 SPIROB_HORZ_ARC_HALF_ANGLE = np.deg2rad(20.0)   # sweep is +/- this about -x
@@ -91,11 +97,28 @@ def get_omega(omega_str):
         'omg3': 0.3 * np.pi,
         'omg4': 0.4 * np.pi,
         'omg5': 0.5 * np.pi,
-        # Horizontal sweep demo; slow enough that the tip speed stays near the
-        # ~0.1 m/s the arm can actually follow, despite the arc being out of reach.
-        SPIROB_HORZ_ARC_KEY: 0.1 * np.pi,
+        # Horizontal sweep demo; override the rate with --sweep-omega.
+        SPIROB_HORZ_ARC_KEY: SPIROB_HORZ_ARC_OMEGA,
     }
     return omg[omega_str]
+
+def resolve_omega(omega_str, sweep_omega=None):
+    """Angular rate for a trajectory, in rad/s.
+
+    `sweep_omega` overrides the default rate of the named sweep trajectory and
+    is ignored for the numbered omg keys, so the two cannot be confused.
+    """
+    if sweep_omega is not None and omega_str == SPIROB_HORZ_ARC_KEY:
+        if sweep_omega <= 0:
+            raise ValueError(f"sweep_omega must be positive, got {sweep_omega}")
+        return float(sweep_omega)
+    return get_omega(omega_str)
+
+def omega_label(omega_str, sweep_omega=None):
+    """Filename tag for a run, so sweeps at different rates do not collide."""
+    if sweep_omega is not None and omega_str == SPIROB_HORZ_ARC_KEY:
+        return f"{omega_str}_w{float(sweep_omega):g}".replace('.', 'p')
+    return omega_str
 
 def circular_trajectory(t, model_name, omega, omega_key=None):
     """
@@ -106,7 +129,7 @@ def circular_trajectory(t, model_name, omega, omega_key=None):
     only spirob_horz has one ('sweep', the horizontal arc demo).
     """
     if model_name == 'spirob_horz':
-        if omega_key == SPIROB_HORZ_ARC_KEY:
+        if omega_key is not None and omega_key.startswith(SPIROB_HORZ_ARC_KEY):
             return _spirob_horz_arc(t, omega)
         theta = omega * t
         pos, dpos, ddpos = _spirob_horz_circle(theta)
@@ -239,8 +262,12 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['x'][log_idx] = data.site("ee").xpos
         logs['xd'][log_idx] = target["pos"]
 
-def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1', record_video=False, video_fps=30):
-    """Run physics simulation with specified controller and robot."""
+def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1', record_video=False, video_fps=30, sweep_omega=None):
+    """Run physics simulation with specified controller and robot.
+
+    `sweep_omega` overrides the rate of the named sweep trajectory, in rad/s.
+    It is ignored for every other value of `omega`.
+    """
     
     # print(f"Simulating {model_name} with {control_scheme}")
     robot = Robot(model_name, control_scheme)
@@ -265,7 +292,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
     # Pre-allocate logging arrays for better performance
     dt = robot.model.opt.timestep
     if experiment == 'tracking':
-        sim_duration = 4 * np.pi / get_omega(omega)
+        sim_duration = 4 * np.pi / resolve_omega(omega, sweep_omega)
     max_steps = int(sim_duration / dt) + 100  # Add buffer
     log_frequency = 5  # Log every 5 steps
     max_log_steps = max_steps // log_frequency + 1
@@ -309,7 +336,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
                 
             # Get target based on experiment type
             if experiment == 'tracking':
-                w = get_omega(omega)
+                w = resolve_omega(omega, sweep_omega)
                 target = circular_trajectory(t, model_name, w, omega_key=omega)
             else:  # experiment == 'set'
                 target = set_target(target_pos, model_name)
