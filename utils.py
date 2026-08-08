@@ -262,15 +262,18 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['x'][log_idx] = data.site("ee").xpos
         logs['xd'][log_idx] = target["pos"]
 
-def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1', record_video=False, video_fps=30, sweep_omega=None):
+def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1', record_video=False, video_fps=30, sweep_omega=None, timestep=None):
     """Run physics simulation with specified controller and robot.
 
     `sweep_omega` overrides the rate of the named sweep trajectory, in rad/s.
     It is ignored for every other value of `omega`.
+
+    `timestep` overrides the model's integration timestep, which is also the
+    control rate since the controller runs once per step.
     """
     
     # print(f"Simulating {model_name} with {control_scheme}")
-    robot = Robot(model_name, control_scheme)
+    robot = Robot(model_name, control_scheme, timestep=timestep)
     
     
     # Create controller instance based on control_scheme

@@ -33,6 +33,9 @@ if __name__ == "__main__":
                             help='Sweep rate in rad/s (default 0.314). Only affects --omega sweep')
     sweep_rate.add_argument('--sweep-hz', type=float, default=None,
                             help='Sweep rate in Hz, i.e. sweeps per second. Only affects --omega sweep')
+    parser.add_argument('--timestep', type=float, default=None,
+                        help='Override the integration timestep in seconds (also the control '
+                             'rate). Defaults to the model file\'s value')
     parser.add_argument('--record-video', action='store_true', help='Record simulation as MP4 video')
     parser.add_argument('--video-fps', type=int, default=30, help='Frames per second for recorded video')
     parser.add_argument('--verbose', action='store_true', help='Print detailed system information')
@@ -70,7 +73,8 @@ if __name__ == "__main__":
                             omega=args.omega,
                             record_video=args.record_video,
                             video_fps=args.video_fps,
-                            sweep_omega=sweep_omega)
+                            sweep_omega=sweep_omega,
+                            timestep=args.timestep)
     
     # Record end time and add runtime data to results
     end_time = time.time()

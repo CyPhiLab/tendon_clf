@@ -26,7 +26,7 @@ class Robot:
     # data.actuator_moment every step rather than held static.
     TENDON_ROBOTS = ('spirob', 'spirob_horz')
 
-    def __init__(self, model_name: str, control_scheme: str):
+    def __init__(self, model_name: str, control_scheme: str, timestep: float = None):
         self.model_name = model_name
         self.model = self._load_model()
         self.data = mujoco.MjData(self.model)
@@ -36,9 +36,17 @@ class Robot:
         self.pinv_rcond = None       # None -> numpy's default pinv cutoff
         self.override_passives = True  # blanket-assign stiffness/damping at init
         self.base_height = None      # None -> leave the base where the XML puts it
+        self.timestep = None         # None -> keep the model's own timestep
         self.k_v, self.k_e = 1.0, 0.0  # dcmotor gain / back-EMF (probed when needed)
         self.include_constraint_forces = False  # carry qfrc_constraint in h
         self._setup_robot_config()
+        # An explicit timestep from the caller beats the robot config, which in
+        # turn beats whatever the model file declares.  The controller runs once
+        # per step, so this sets the control rate too.
+        if timestep is not None:
+            self.timestep = timestep
+        if self.timestep is not None:
+            self.model.opt.timestep = self.timestep
         self.site_id = self.model.site('ee').id
 
 
