@@ -258,13 +258,56 @@ paying actuation to regulate an orientation that `compute_target_data()` zeroes 
 hurts precisely there. `task_dim = 3` also keeps the QP smaller and matches the
 `tendon` robot.
 
+### Tracking
+
+Circular trajectory, radius 0.08 in the y-z plane, steady-state (first quarter of
+each run discarded as the approach transient):
+
+| omega | tip speed | mean error | max error | % of radius |
+|---|---|---|---|---|
+| omg1 | 0.025 m/s | 0.0027 m | 0.0132 m | 3.4% |
+| omg2 | 0.050 m/s | 0.0144 m | 0.0280 m | 18% |
+| omg3 | 0.075 m/s | 0.0189 m | 0.0376 m | 24% |
+| omg4 | 0.101 m/s | 0.0209 m | 0.0466 m | 26% |
+| omg5 | 0.126 m/s | 0.0252 m | 0.0434 m | 32% |
+
+**Tracking regressed 2-16× when the model moved to the submodule** (it was 0.17 mm
+/ 8.2 mm / 16.0 mm at omg1 / omg3 / omg5 on the old copy), worst at the slow end.
+Set-point accuracy barely moved over the same change, so this is specific to
+tracking a moving reference. The likely cause is upstream halving `dof_damping`
+(0.2 → 0.1) and dropping the joint `frictionloss`, while `Kp`/`Kd` are still the
+values inherited from the vertical `spirob`: a less-damped plant with unchanged
+gains still converges to a fixed point but rings around a moving one. This is the
+gain sweep listed under Still open, and it now has a concrete reason to happen.
+
+### Timestep
+
+`--timestep` (also `Robot(timestep=)` / `simulate_model(timestep=)`) overrides the
+model's 0.001. Because the controller runs once per step, this sets the control
+rate too. Physics alone is far from its stability limit — over the gravity-settled
+rest pose, 4× the timestep moves the tip 0.12 mm and does not change the contact
+set (9 contacts at every dt):
+
+| dt | set-point final error | tracking omg3 mean / max | wall vs dt=0.001 |
+|---|---|---|---|
+| 0.001 | 1.76e-04 m | 0.0189 / 0.0376 m | — |
+| 0.002 | 3.32e-04 m | 0.0198 / 0.0372 m | 1.5-1.9× faster |
+| 0.004 | 7.19e-04 m | 0.0271 / 0.0795 m | 2.4-3.7× faster |
+
+Nothing diverges at any of these — no NaNs, and peak `|u|` is identical (12.83).
+**0.002 is the safe speedup**: 1.5-1.9× faster for +0.15 mm on set-point and +5% on
+tracking. 0.004 is fine for set-point work (still sub-millimetre) but doubles the
+tracking peak error, so it is not appropriate for trajectory results.
+
+The default stays at the model's own 0.001, since that is what upstream chose.
+
 ## Still open
 
 - Actuator saturation (`|force| ≤ 12`) is not represented in the QP. It binds above
   ~0.41 m/s tendon speed, which the faster sweep rates do reach.
-- Gains (`Kp`, `Kd`, `e`, `reg_*`) are inherited from the vertical `spirob` and were
-  never swept. They give ~0.15 mm set-point accuracy, so there was nothing to chase;
-  the tracking runs are where a sweep would pay off — especially now that upstream
-  halved the damping.
+- **Gains (`Kp`, `Kd`, `e`, `reg_*`) are inherited from the vertical `spirob` and were
+  never swept.** Set-point accuracy is fine at ~0.15 mm, but tracking regressed 2-16×
+  when upstream halved the damping and removed joint friction (see Tracking above).
+  That makes `Kd` the first thing to raise, and it is now the highest-value open item.
 - The other controllers (`impedance`, `impedance_QP`, `clf_qp`, `uosc`) have not been
   exercised on `spirob_horz`. `run_all.py` skips the same set for it as for `spirob`.
