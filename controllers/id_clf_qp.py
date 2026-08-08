@@ -112,6 +112,11 @@ class IDCLFQPController(BaseController):
         # Avoids T/Tinv/TinvT in the controller; only pinv_B (nu x nv) is needed.
         p_pinvBM     = cp.Parameter(shape=(nu, nq),       name='pinvBM')      # pinv_B @ M
         p_pinvBh     = cp.Parameter(shape=(nu,),          name='pinvBh')      # -pinv_B @ h
+        # Control bounds are parameters, not constants: a dcmotor's force limit
+        # makes them depend on tendon velocity, so they change every step.  For
+        # robots with static limits these simply take the same value each step.
+        p_lb         = cp.Parameter(shape=(nu,),          name='lb')
+        p_ub         = cp.Parameter(shape=(nu,),          name='ub')
 
         objective = cp.Minimize(
             cp.sum_squares(y_task)
@@ -131,8 +136,9 @@ class IDCLFQPController(BaseController):
             p_clf_coeff @ qdd - dl <= p_clf_rhs,
             # Inverse dynamics: pinv_B @ M @ qdd - u == -pinv_B @ h
             p_pinvBM @ qdd - u == p_pinvBh,
+            p_lb <= u,
+            u <= p_ub,
         ]
-        constraints += robot.get_control_constraints(u)
 
         prob = cp.Problem(objective, constraints)
 
@@ -145,6 +151,8 @@ class IDCLFQPController(BaseController):
             'clf_rhs':    p_clf_rhs,
             'pinvBM':     p_pinvBM,
             'pinvBh':     p_pinvBh,
+            'lb':         p_lb,
+            'ub':         p_ub,
         }
         return prob, u, qdd, dl, params
 
@@ -203,6 +211,9 @@ class IDCLFQPController(BaseController):
         pinv_B = robot.pinv_B
         p['pinvBM'].value     = pinv_B @ M
         p['pinvBh'].value     = -(pinv_B @ h)
+        lb, ub = robot.get_control_bounds()
+        p['lb'].value         = lb
+        p['ub'].value         = ub
 
         # Warm start with previous solution if available
         if previous_solution is not None:

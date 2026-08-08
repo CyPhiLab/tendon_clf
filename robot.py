@@ -39,6 +39,7 @@ class Robot:
         self.timestep = None         # None -> keep the model's own timestep
         self.k_v, self.k_e = 1.0, 0.0  # dcmotor gain / back-EMF (probed when needed)
         self.include_constraint_forces = False  # carry qfrc_constraint in h
+        self.velocity_dependent_bounds = False  # dcmotor force limit -> ctrl bound
         self._setup_robot_config()
         # An explicit timestep from the caller beats the robot config, which in
         # turn beats whatever the model file declares.  The controller runs once
@@ -199,6 +200,11 @@ class Robot:
             # dcmotor force law: actuator_force = k_v*ctrl - k_e*actuator_velocity.
             # Probed from the compiled model so a retuned nominal="..." is picked up.
             self._probe_actuator_constants()
+            # The dcmotor also saturates on force (|f| <= 12 N), which at tendon
+            # speeds above ~0.41 m/s is a tighter bound on ctrl than the +/-12 V
+            # ctrlrange.  Tracking runs sit around 1 m/s, so this binds roughly
+            # half the time and the QP must know about it.
+            self.velocity_dependent_bounds = True
             # B's common mode (all three tendons pulling equally) barely moves the
             # arm, so B is near-singular; truncate it out of the pseudo-inverse.
             self.pinv_rcond = 1e-2
@@ -326,6 +332,32 @@ class Robot:
         constraints.append(self.lower_bounds <= u_var)
         constraints.append(u_var <= self.upper_bounds)
         return constraints
+
+    def get_control_bounds(self):
+        """Control bounds valid at the *current* state.
+
+        For a plain `motor` these are the static ctrlrange.  A `dcmotor` also
+        saturates on force, and since its law is affine in ctrl and velocity,
+
+            -F <= k_v*u - k_e*v <= F   <=>   (-F + k_e*v)/k_v <= u <= (F + k_e*v)/k_v
+
+        that force limit is a *velocity-dependent* bound on ctrl.  Ignoring it
+        lets the QP plan with authority the motor does not have at speed: at
+        2.6 m/s of tendon velocity the true bound is -3.6 V, not -12 V, and
+        MuJoCo silently clips the difference.
+        """
+        lo, hi = self.lower_bounds, self.upper_bounds
+        if not self.velocity_dependent_bounds:
+            return lo, hi
+        v = self.data.actuator_velocity
+        f = self.model.actuator_forcerange[:, 1]
+        lo = np.maximum(lo, (-f + self.k_e * v) / self.k_v)
+        hi = np.minimum(hi, (f + self.k_e * v) / self.k_v)
+        # A tendon paid out fast enough can push the force-feasible window
+        # entirely outside the voltage range; keep the QP feasible by collapsing
+        # to the achievable end rather than handing it lo > hi.
+        hi = np.maximum(hi, lo)
+        return lo, hi
     
     def update_input_matrix(self):
         """Update input matrix - static for tendon/helix, dynamic for spirob"""
