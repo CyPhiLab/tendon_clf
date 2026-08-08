@@ -1,5 +1,11 @@
 <mujoco model="scene">
-    <include file="spirob_horz.xml" />
+    <!-- The robot model is owned by the spirob_mujoco repo, pinned as a submodule
+         at external/spirob_mujoco; this file is only the scene around it.
+         The <compiler> line MUST come after the <include>: a meshdir declared
+         before it is overridden by the included file's own meshdir="assets",
+         which then resolves against this directory and fails. -->
+    <include file="../../external/spirob_mujoco/models/spirob.xml" />
+    <compiler meshdir="../../external/spirob_mujoco/models/assets" />
 
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />

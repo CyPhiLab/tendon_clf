@@ -209,8 +209,10 @@ class Robot:
             self.base_body = 'segment_1__configuration_default'
             self.base_height = SPIROB_HORZ_BASE_HEIGHT
             # Let gravity settle the arm before the controller engages, so the
-            # run does not start at B's singular point.
-            self.settle_steps = 1000
+            # run does not start at B's singular point.  Specified in seconds so
+            # it survives a timestep change upstream (the model moved from
+            # 0.002 to 0.001 when it became a submodule).
+            self.settle_time = 2.0
             # Dynamic B matrix - computed at runtime (via update_input_matrix after mj_fwdPosition)
             self.update_input_matrix()
             self.B_applied = np.eye(self.nu)
@@ -391,7 +393,7 @@ class Robot:
             self.data.qpos[:] = 0.0
             self.data.qvel[:] = 0.0
             self.data.ctrl[:] = 0.0
-            for _ in range(self.settle_steps):
+            for _ in range(int(self.settle_time / self.model.opt.timestep)):
                 mujoco.mj_step(self.model, self.data)
             self.data.qvel[:] = 0.0
             self.data.time = 0.0
