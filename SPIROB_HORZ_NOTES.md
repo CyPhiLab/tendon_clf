@@ -280,6 +280,50 @@ values inherited from the vertical `spirob`: a less-damped plant with unchanged
 gains still converges to a fixed point but rings around a moving one. This is the
 gain sweep listed under Still open, and it now has a concrete reason to happen.
 
+### Tuning: there is nothing to win, and here is the evidence
+
+The tracking regression above looked like a gains problem. It is not. A sweep of
+`Kp` 200→2000 against `zeta = Kd/(2*sqrt(Kp))` 1→3 — a 10× range on `Kp` — moves
+the omg3 mean error by **1%** (0.0198 → 0.0196), with actuator saturation pinned
+near 30% in every one of the twelve combinations. `reg_u` from 0.5 down to 0.0 does
+nothing whatsoever. `reg_qdd` and `reg_null` are worth 1–4%.
+
+The reason is that the arm is out of authority, not out of gain:
+
+| omega | tip speed | mean error | ctrl at the voltage limit | force at the 12 N limit |
+|---|---|---|---|---|
+| omg1 | 0.025 m/s | 0.0027 m | 27.4% | **1.6%** |
+| omg2 | 0.050 m/s | 0.0159 m | 61.2% | **53.0%** |
+| omg3 | 0.075 m/s | 0.0198 m | 63.0% | 49.1% |
+| omg4 | 0.101 m/s | 0.0214 m | 64.1% | 48.5% |
+| omg5 | 0.126 m/s | 0.0247 m | 65.7% | 47.1% |
+
+**Only omg1 measures the controller.** Between omg1 and omg2 the force limit goes
+from essentially never binding to binding half the time, and the error jumps 6×.
+Everything at omg2 and above is a measurement of the motor. Quantitative tracking
+claims should either stay at omg1, or use a smaller radius so that tip speed stays
+under ~0.03 m/s across the omega range.
+
+`e`, the CLF convergence parameter (`gamma = 1/e`), is the only knob that moves
+tracking at all, and it does not survive scrutiny. At omg3 it looks like a 38% win
+(0.0198 → 0.0123 at `e = 0.05`, with saturation dropping 30% → 9%). But:
+
+| e | omg1 | omg2 | omg3 | omg4 | omg5 |
+|---|---|---|---|---|---|
+| 0.010 (shipped) | **0.0027** | 0.0159 | 0.0198 | **0.0214** | **0.0247** |
+| 0.030 | 0.0032 | **0.0052** | 0.0190 | 0.0253 | 0.0261 |
+| 0.050 | 0.0040 | 0.0067 | **0.0123** | 0.0266 | 0.0276 |
+
+`e = 0.05` is worse than the shipped value at three of the five speeds — it only wins
+where it was tuned. It is also a cliff rather than a basin: at omg3, `e = 0.055`
+gives 0.0111 and `e = 0.060` gives 0.0302, a 2.7× penalty from one 0.005 step. And it
+costs 2.6× on set-point convergence (0.69 s → 1.82 s to a millimetre). Mean error
+across all five speeds is 0.0169 / 0.0158 / 0.0154 for `e` = 0.01 / 0.03 / 0.05 — a
+wash.
+
+**Conclusion: the gains stay as they are.** Tuning cannot fix an actuation limit, and
+any value chosen at one speed makes three others worse.
+
 ### Timestep
 
 `--timestep` (also `Robot(timestep=)` / `simulate_model(timestep=)`) overrides the
@@ -303,11 +347,18 @@ The default stays at the model's own 0.001, since that is what upstream chose.
 
 ## Still open
 
-- Actuator saturation (`|force| ≤ 12`) is not represented in the QP. It binds above
-  ~0.41 m/s tendon speed, which the faster sweep rates do reach.
-- **Gains (`Kp`, `Kd`, `e`, `reg_*`) are inherited from the vertical `spirob` and were
-  never swept.** Set-point accuracy is fine at ~0.15 mm, but tracking regressed 2-16×
-  when upstream halved the damping and removed joint friction (see Tracking above).
-  That makes `Kd` the first thing to raise, and it is now the highest-value open item.
+- ~~Actuator saturation is not represented in the QP.~~ **Done**: `get_control_bounds()`
+  turns the dcmotor force limit into a velocity-dependent bound on ctrl, which the
+  ID-CLF-QP takes as a per-step parameter. It did *not* change tracking error — past
+  `|v| = F/k_e = 3.56` the back-EMF alone saturates the motor, so the delivered force
+  is the same whether the QP asks for the feasible bound or the full −12 V. It is a
+  correctness fix: the QP's predicted `q̈` now matches what the motor can deliver.
+  (`|v|` here is `actuator_velocity`, which is gear-scaled by `gear="43.478"`, not a
+  tendon linear speed — the 0.41 figure quoted earlier in these notes is in the same
+  units.)
+- ~~Gains were never swept.~~ **Done, and the answer is negative** — see Tuning above.
+  `Kp`/`Kd`/`reg_*` do nothing because the arm is actuation-limited, and `e` only helps
+  at the single speed it is tuned on. The tracking regression is not a gains problem,
+  so the damping change is not the explanation it looked like.
 - The other controllers (`impedance`, `impedance_QP`, `clf_qp`, `uosc`) have not been
   exercised on `spirob_horz`. `run_all.py` skips the same set for it as for `spirob`.
