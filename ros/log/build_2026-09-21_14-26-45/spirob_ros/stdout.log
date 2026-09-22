@@ -1,0 +1,52 @@
+running develop
+Removing /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob-ros.egg-link (link to .)
+running egg_info
+writing ../build/spirob_ros/spirob_ros.egg-info/PKG-INFO
+writing dependency_links to ../build/spirob_ros/spirob_ros.egg-info/dependency_links.txt
+writing entry points to ../build/spirob_ros/spirob_ros.egg-info/entry_points.txt
+writing requirements to ../build/spirob_ros/spirob_ros.egg-info/requires.txt
+writing top-level names to ../build/spirob_ros/spirob_ros.egg-info/top_level.txt
+reading manifest file '../build/spirob_ros/spirob_ros.egg-info/SOURCES.txt'
+writing manifest file '../build/spirob_ros/spirob_ros.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/zach/huy/tendon_clf/ros/build/spirob_ros/build
+creating /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib
+creating /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+copying spirob_ros/state_estimation_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+copying spirob_ros/simulation_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+copying spirob_ros/__init__.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+copying spirob_ros/control_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+copying spirob_ros/virtual_measurement_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+copying spirob_ros/plot_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+copying spirob_ros/hardware_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+running install
+running install_lib
+creating /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/state_estimation_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/simulation_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/__init__.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/control_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/virtual_measurement_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/plot_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/hardware_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/state_estimation_node.py to state_estimation_node.cpython-312.pyc
+byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/simulation_node.py to simulation_node.cpython-312.pyc
+byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/__init__.py to __init__.cpython-312.pyc
+byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/control_node.py to control_node.cpython-312.pyc
+byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/virtual_measurement_node.py to virtual_measurement_node.cpython-312.pyc
+byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/plot_node.py to plot_node.cpython-312.pyc
+byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/hardware_node.py to hardware_node.cpython-312.pyc
+running install_data
+copying resource/spirob_ros -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/share/ament_index/resource_index/packages
+copying package.xml -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/share/spirob_ros
+copying launch/spirob.launch.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/share/spirob_ros/launch
+running install_egg_info
+Copying ../build/spirob_ros/spirob_ros.egg-info to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros-0.0.1-py3.12.egg-info
+running install_scripts
+Installing control_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+Installing hardware_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+Installing simulation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+Installing state_estimation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+Installing virtual_measurement_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+writing list of installed files to '/home/zach/huy/tendon_clf/ros/build/spirob_ros/install.log'

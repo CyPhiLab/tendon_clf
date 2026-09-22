@@ -1,0 +1,1 @@
+/home/zach/huy/tendon_clf/ros/build/spirob_interfaces/rosidl_generator_cpp/spirob_interfaces/msg/detail/robot_state__type_support.hpp

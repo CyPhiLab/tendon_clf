@@ -1,0 +1,157 @@
+[0.037s] Invoking command in '/home/zach/huy/tendon_clf/ros/build/spirob_interfaces': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zach/drl-turtle/ros2_ws/install/turtle_rl:/home/zach/drl-turtle/ros2_ws/install/turtle_hardware:/home/zach/drl-turtle/ros2_ws/install/opencv_tests:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/zach/huy/tendon_clf/ros/build/spirob_interfaces -- -j16 -l16
+[0.254s] [  1%] Built target spirob_interfaces__rosidl_generator_type_description
+[0.285s] [  1%] Built target ament_cmake_python_symlink_spirob_interfaces
+[0.325s] [  3%] Built target spirob_interfaces__cpp
+[0.342s] [ 24%] Built target spirob_interfaces__rosidl_generator_c
+[0.419s] [ 62%] Built target spirob_interfaces__rosidl_typesupport_cpp
+[0.419s] [ 62%] Built target spirob_interfaces__rosidl_typesupport_fastrtps_cpp
+[0.419s] [ 62%] Built target spirob_interfaces__rosidl_typesupport_introspection_c
+[0.419s] [ 79%] Built target spirob_interfaces__rosidl_typesupport_introspection_cpp
+[0.420s] [ 79%] Built target spirob_interfaces__rosidl_typesupport_c
+[0.420s] [ 79%] Built target spirob_interfaces__rosidl_typesupport_fastrtps_c
+[0.492s] [ 79%] Built target spirob_interfaces
+[0.572s] [ 81%] Built target spirob_interfaces__py
+[0.670s] [ 88%] Built target spirob_interfaces__rosidl_generator_py
+[0.743s] [100%] Built target spirob_interfaces_s__rosidl_typesupport_introspection_c
+[0.743s] [100%] Built target spirob_interfaces_s__rosidl_typesupport_c
+[0.743s] [100%] Built target spirob_interfaces_s__rosidl_typesupport_fastrtps_c
+[0.936s] running egg_info
+[0.983s] writing spirob_interfaces.egg-info/PKG-INFO
+[0.984s] writing dependency_links to spirob_interfaces.egg-info/dependency_links.txt
+[0.984s] writing top-level names to spirob_interfaces.egg-info/top_level.txt
+[1.136s] reading manifest file 'spirob_interfaces.egg-info/SOURCES.txt'
+[1.139s] writing manifest file 'spirob_interfaces.egg-info/SOURCES.txt'
+[1.256s] [100%] Built target ament_cmake_python_build_spirob_interfaces_egg
+[1.296s] Invoked command in '/home/zach/huy/tendon_clf/ros/build/spirob_interfaces' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zach/drl-turtle/ros2_ws/install/turtle_rl:/home/zach/drl-turtle/ros2_ws/install/turtle_hardware:/home/zach/drl-turtle/ros2_ws/install/opencv_tests:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/zach/huy/tendon_clf/ros/build/spirob_interfaces -- -j16 -l16
+[1.339s] Invoking command in '/home/zach/huy/tendon_clf/ros/build/spirob_interfaces': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zach/drl-turtle/ros2_ws/install/turtle_rl:/home/zach/drl-turtle/ros2_ws/install/turtle_hardware:/home/zach/drl-turtle/ros2_ws/install/opencv_tests:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/zach/huy/tendon_clf/ros/build/spirob_interfaces
+[1.365s] -- Install configuration: ""
+[1.367s] -- Execute custom install script
+[1.368s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/ament_index/resource_index/rosidl_interfaces/spirob_interfaces
+[1.368s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/MotorState.json
+[1.368s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/MotorCommand.json
+[1.369s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/RobotState.json
+[1.372s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__functions.h
+[1.372s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__struct.h
+[1.372s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__type_support.h
+[1.372s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__functions.h
+[1.372s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__struct.h
+[1.372s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__type_support.h
+[1.373s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__functions.h
+[1.373s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__struct.h
+[1.373s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__type_support.h
+[1.373s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/motor_command.h
+[1.373s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/motor_state.h
+[1.374s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/robot_state.h
+[1.374s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/rosidl_generator_c__visibility_control.h
+[1.374s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/library_path.sh
+[1.374s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/library_path.dsv
+[1.375s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__rosidl_typesupport_fastrtps_c.h
+[1.375s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__rosidl_typesupport_fastrtps_c.h
+[1.375s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__rosidl_typesupport_fastrtps_c.h
+[1.376s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/rosidl_typesupport_fastrtps_c__visibility_control.h
+[1.376s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__rosidl_typesupport_introspection_c.h
+[1.376s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__rosidl_typesupport_introspection_c.h
+[1.377s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__rosidl_typesupport_introspection_c.h
+[1.377s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/rosidl_typesupport_introspection_c__visibility_control.h
+[1.378s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__builder.hpp
+[1.378s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__struct.hpp
+[1.378s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__traits.hpp
+[1.378s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__type_support.hpp
+[1.378s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__builder.hpp
+[1.379s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__struct.hpp
+[1.379s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__traits.hpp
+[1.379s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__type_support.hpp
+[1.380s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__builder.hpp
+[1.380s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__struct.hpp
+[1.380s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__traits.hpp
+[1.380s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__type_support.hpp
+[1.380s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/motor_command.hpp
+[1.381s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/motor_state.hpp
+[1.381s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/robot_state.hpp
+[1.381s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/rosidl_generator_cpp__visibility_control.hpp
+[1.382s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__rosidl_typesupport_fastrtps_cpp.hpp
+[1.382s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__rosidl_typesupport_fastrtps_cpp.hpp
+[1.382s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__rosidl_typesupport_fastrtps_cpp.hpp
+[1.383s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/rosidl_typesupport_fastrtps_cpp__visibility_control.h
+[1.383s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_command__rosidl_typesupport_introspection_cpp.hpp
+[1.383s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/motor_state__rosidl_typesupport_introspection_cpp.hpp
+[1.384s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/include/spirob_interfaces/spirob_interfaces/msg/detail/robot_state__rosidl_typesupport_introspection_cpp.hpp
+[1.384s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/pythonpath.sh
+[1.384s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/pythonpath.dsv
+[1.385s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces-0.0.1-py3.12.egg-info/PKG-INFO
+[1.385s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces-0.0.1-py3.12.egg-info/SOURCES.txt
+[1.385s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces-0.0.1-py3.12.egg-info/dependency_links.txt
+[1.385s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces-0.0.1-py3.12.egg-info/top_level.txt
+[1.386s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/__init__.py
+[1.386s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/_spirob_interfaces_s.ep.rosidl_typesupport_c.c
+[1.386s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/_spirob_interfaces_s.ep.rosidl_typesupport_fastrtps_c.c
+[1.387s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/_spirob_interfaces_s.ep.rosidl_typesupport_introspection_c.c
+[1.387s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg/__init__.py
+[1.387s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg/_motor_command.py
+[1.387s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg/_motor_command_s.c
+[1.387s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg/_motor_state.py
+[1.387s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg/_motor_state_s.c
+[1.388s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg/_robot_state.py
+[1.388s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg/_robot_state_s.c
+[1.388s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/spirob_interfaces_s__rosidl_typesupport_c.so
+[1.389s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/spirob_interfaces_s__rosidl_typesupport_fastrtps_c.so
+[1.389s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/spirob_interfaces_s__rosidl_typesupport_introspection_c.so
+[1.390s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/spirob_interfaces_s__rosidl_typesupport_fastrtps_c.so
+[1.391s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/spirob_interfaces_s__rosidl_typesupport_introspection_c.so
+[1.391s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/spirob_interfaces_s__rosidl_typesupport_c.so
+[1.391s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/MotorState.idl
+[1.391s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/MotorCommand.idl
+[1.392s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/RobotState.idl
+[1.392s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/MotorState.msg
+[1.392s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/MotorCommand.msg
+[1.392s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/msg/RobotState.msg
+[1.392s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/ament_index/resource_index/package_run_dependencies/spirob_interfaces
+[1.393s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/ament_index/resource_index/parent_prefix_path/spirob_interfaces
+[1.393s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/ament_prefix_path.sh
+[1.393s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/ament_prefix_path.dsv
+[1.394s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/path.sh
+[1.394s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/environment/path.dsv
+[1.394s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/local_setup.bash
+[1.395s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/local_setup.sh
+[1.395s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/local_setup.zsh
+[1.395s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/local_setup.dsv
+[1.396s] -- Symlinking: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/package.dsv
+[1.428s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/ament_index/resource_index/packages/spirob_interfaces
+[1.428s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/rosidl_cmake-extras.cmake
+[1.428s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/ament_cmake_export_dependencies-extras.cmake
+[1.428s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/ament_cmake_export_include_directories-extras.cmake
+[1.429s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/ament_cmake_export_libraries-extras.cmake
+[1.429s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/ament_cmake_export_targets-extras.cmake
+[1.429s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/rosidl_cmake_export_typesupport_targets-extras.cmake
+[1.430s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/rosidl_cmake_export_typesupport_libraries-extras.cmake
+[1.430s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfacesConfig.cmake
+[1.430s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfacesConfig-version.cmake
+[1.431s] -- Up-to-date symlink: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/package.xml
+[1.433s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_generator_c.so
+[1.434s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_typesupport_fastrtps_c.so
+[1.436s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_typesupport_introspection_c.so
+[1.437s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_typesupport_c.so
+[1.439s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_typesupport_fastrtps_cpp.so
+[1.441s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_typesupport_introspection_cpp.so
+[1.442s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_typesupport_cpp.so
+[1.553s] Listing '/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces'...
+[1.553s] Listing '/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages/spirob_interfaces/msg'...
+[1.574s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/libspirob_interfaces__rosidl_generator_py.so
+[1.575s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_generator_cExport.cmake
+[1.575s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_generator_cExport-noconfig.cmake
+[1.576s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_typesupport_fastrtps_cExport.cmake
+[1.576s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_typesupport_fastrtps_cExport-noconfig.cmake
+[1.576s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_introspection_cExport.cmake
+[1.577s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_introspection_cExport-noconfig.cmake
+[1.577s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_cExport.cmake
+[1.577s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_cExport-noconfig.cmake
+[1.578s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_generator_cppExport.cmake
+[1.578s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_typesupport_fastrtps_cppExport.cmake
+[1.579s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_typesupport_fastrtps_cppExport-noconfig.cmake
+[1.579s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_introspection_cppExport.cmake
+[1.579s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_introspection_cppExport-noconfig.cmake
+[1.580s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_cppExport.cmake
+[1.580s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/spirob_interfaces__rosidl_typesupport_cppExport-noconfig.cmake
+[1.581s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_generator_pyExport.cmake
+[1.581s] -- Up-to-date: /home/zach/huy/tendon_clf/ros/install/spirob_interfaces/share/spirob_interfaces/cmake/export_spirob_interfaces__rosidl_generator_pyExport-noconfig.cmake
+[1.588s] Invoked command in '/home/zach/huy/tendon_clf/ros/build/spirob_interfaces' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zach/drl-turtle/ros2_ws/install/turtle_rl:/home/zach/drl-turtle/ros2_ws/install/turtle_hardware:/home/zach/drl-turtle/ros2_ws/install/opencv_tests:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/zach/huy/tendon_clf/ros/build/spirob_interfaces

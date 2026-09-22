@@ -1,0 +1,1 @@
+/home/zach/huy/tendon_clf/ros/build/spirob_interfaces/rosidl_typesupport_introspection_cpp/spirob_interfaces/msg/detail/motor_command__rosidl_typesupport_introspection_cpp.hpp

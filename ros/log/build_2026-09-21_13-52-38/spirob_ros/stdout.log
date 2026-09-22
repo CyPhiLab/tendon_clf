@@ -1,0 +1,18 @@
+running develop
+running egg_info
+writing spirob_ros.egg-info/PKG-INFO
+writing dependency_links to spirob_ros.egg-info/dependency_links.txt
+writing entry points to spirob_ros.egg-info/entry_points.txt
+writing requirements to spirob_ros.egg-info/requires.txt
+writing top-level names to spirob_ros.egg-info/top_level.txt
+reading manifest file 'spirob_ros.egg-info/SOURCES.txt'
+writing manifest file 'spirob_ros.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob-ros.egg-link (link to .)
+Installing control_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+Installing hardware_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+Installing state_estimation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+Installing virtual_measurement_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+
+Installed /home/zach/huy/tendon_clf/ros/build/spirob_ros
+running symlink_data
