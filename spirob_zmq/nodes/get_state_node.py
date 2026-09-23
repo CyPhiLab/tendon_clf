@@ -12,11 +12,6 @@ class GetStateNode(Node):
         super().__init__('get_state_node', params)
         self.model = load_model(self)
 
-        # Same physical parameters as standalone id-clf-qp script
-        self.model.jnt_stiffness[:] = 0.3
-        self.model.dof_damping[:] = 0.1
-        self.model.opt.gravity[:] = [0, 0, -9.81]
-
         # Initialize state to zero
         self.data = mujoco.MjData(self.model)
         self.data.qpos[:] = 0.0

@@ -3,7 +3,7 @@
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import MOTOR_COMMAND, SITE_MEASUREMENT, command_to_u, load_model
+from spirob_zmq.common import MOTOR_STATE, SITE_MEASUREMENT, TRUE_STATE, load_model
 from spirob_zmq.core import Node, run_node
 
 
@@ -32,24 +32,45 @@ class VirtualMeasurementNode(Node):
         seed = self.declare_parameter('seed', 0)
         self.rng = np.random.default_rng(seed if seed != 0 else None)
 
-        # Latest commanded tendon forces, defaults to zero until control_node starts
+        # Latest applied tendon forces, defaults to zero until hardware_node reports.
+        # The plant is driven by what hardware_node says was applied (MotorState),
+        # not by what control_node asked for: that is what drives the real robot,
+        # and it is the same input the EKF predicts with. Driving it from
+        # MotorCommand let the plant see each new command up to one hardware tick
+        # before the EKF did, so the EKF predicted with the wrong u.
         self.ctrl_u = np.zeros(self.model.nu)
-        self.create_subscription(MOTOR_COMMAND, self._on_command)
+        self.create_subscription(MOTOR_STATE, self._on_motor_state)
         self.meas_pub = self.create_publisher(SITE_MEASUREMENT)
+        self.truth_pub = self.create_publisher(TRUE_STATE)
+        self.ee_site_id = self.model.site('ee').id
         self.timer = self.create_timer(self.dt, self._tick)
 
-    def _on_command(self, msg):
-        self.ctrl_u = command_to_u(msg, self.motor_ids)
+    def _on_motor_state(self, msg):
+        if msg['motor_id'] in self.motor_ids:
+            self.ctrl_u[self.motor_ids.index(msg['motor_id'])] = msg['app_ctrl']
 
     def _tick(self):
         # Forward dynamics for one step
         self.data.ctrl[:] = self.ctrl_u
         mujoco.mj_step(self.model, self.data)
+        # mj_step leaves xpos at the pre-step configuration; refresh it so the
+        # measurement matches the current qpos.
+        mujoco.mj_kinematics(self.model, self.data)
 
         # True site positions + additive Gaussian noise
         true_pos = np.concatenate([self.data.site(sid).xpos.copy() for sid in self.site_ids])
         noisy_pos = true_pos + self.rng.normal(0.0, self.noise_std, size=true_pos.shape)
-        self.meas_pub.publish({'stamp': self.now(), 'data': noisy_pos})
+        stamp = self.now()
+        self.meas_pub.publish({'stamp': stamp, 'data': noisy_pos})
+
+        # Ground truth for evaluating the estimator. q/dq are the plant state
+        # after this step; site_pos is exactly what the measurement was built from.
+        self.truth_pub.publish({
+            'stamp': stamp,
+            'q': self.data.qpos,
+            'dq': self.data.qvel,
+            'site_pos': true_pos,
+        })
 
 
 def main(argv=None):

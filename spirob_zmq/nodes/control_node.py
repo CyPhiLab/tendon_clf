@@ -17,11 +17,6 @@ class ControlNode(Node):
         self.model = load_model(self)
         self.data = mujoco.MjData(self.model)
 
-        # Physical properties
-        self.model.jnt_stiffness[:] = 0.3
-        self.model.dof_damping[:] = 0.1
-        self.model.opt.gravity[:] = [0, 0, -9.81]
-
         # CLF invariants
         self.task_dim = 6
         self.F = np.zeros((2*self.task_dim, 2*self.task_dim))

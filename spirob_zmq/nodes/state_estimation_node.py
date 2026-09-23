@@ -101,6 +101,11 @@ class StateEstimationNode(Node):
         mujoco.mj_step(self.model, self.data)
         x_pred = np.concatenate([self.data.qpos, self.data.qvel])
 
+        # mj_step leaves xpos/Jacobians at the pre-step configuration; refresh
+        # them so z_pred and H are evaluated at x_pred, not at x_{k-1}.
+        mujoco.mj_kinematics(self.model, self.data)
+        mujoco.mj_comPos(self.model, self.data)
+
         # Predicted covariance estimate at k
         P_pred = self.F @ self.P @ self.F.T + self.Q
 
