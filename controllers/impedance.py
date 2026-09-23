@@ -102,7 +102,10 @@ class ImpedanceController(BaseController):
         C, g = robot.get_coriolis_and_gravity()
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
         Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
-        tau = jac.T @ (Mx @ ydd + Cy) + g + robot.get_passive_forces().flatten()
+        I = np.eye(robot.model.nv)
+
+        f = Mx @ ydd + Cy + Jbar.T @ (g + robot.get_passive_forces().flatten())
+        tau = jac.T @ f + (I - jac.T @ Jbar.T) @ (C @ dq + g + robot.get_passive_forces().flatten())
         u = robot.pinv_B @ tau
         t_ctrl = time.time() - t_ctrl_start
         try:
@@ -144,11 +147,13 @@ class UOSCController(BaseController):
         Jbar = M_inv @ jac.T @ Mx
         C, g = robot.get_coriolis_and_gravity()
         ydd = target_acc + Kp * twist +  Kd * (target_vel - jac @ dq)
-        Cy = Jbar.T @ C @ dq - Mx @ dJ_dt @ dq
         I = np.eye(robot.model.nv)
-        N = I - np.linalg.pinv(jac) @ jac
-        Bp = robot.B @ robot.pinv_B
-        tau = (I - N @ np.linalg.pinv((I - Bp) @ N, rcond=1e-8)) @ (jac.T @ (Mx@ydd + Cy)) + g + robot.get_passive_forces().flatten()
+        Ip = robot.B @ robot.pinv_B
+        N = I - jac.T @ Jbar.T
+        tau_null = np.linalg.pinv((Ip - I) @ N, rcond=1e-8) @ (I - Ip) @ (jac.T @ Mx @ (ydd - dJ_dt @ dq) 
+                                                                          + jac.T @ Jbar.T @ (C @ dq + g + robot.get_passive_forces().flatten()))
+        tau = jac.T @ Mx @ (ydd - dJ_dt @ dq) + jac.T @ Jbar.T @ (C @ dq + g + robot.get_passive_forces().flatten()) + N @ tau_null
+
         u = robot.pinv_B @ tau
         t_ctrl = time.time() - t_ctrl_start
         try:

@@ -1,0 +1,1 @@
+/home/zach/huy/tendon_clf/ros/build/spirob_interfaces/ament_cmake_environment_hooks/local_setup.bash

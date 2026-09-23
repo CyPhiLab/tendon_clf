@@ -1,0 +1,1 @@
+/home/zach/huy/tendon_clf/ros/build/spirob_interfaces/rosidl_generator_c/spirob_interfaces/msg/detail/robot_state__struct.h

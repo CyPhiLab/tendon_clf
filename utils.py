@@ -50,11 +50,11 @@ def circular_trajectory(t, model_name, omega):
     a = L/3
     b = L/6
     phi = np.pi/4
-    x1 = a * np.cos(theta) - 0.1
+    x1 = a * np.cos(theta)
     if model_name == 'spirob':
         z1 = b * np.sin(theta) - (3*L/4-b)
     else:
-        z1 = b * np.sin(theta) - (L-b) + 0.05
+        z1 = b * np.sin(theta) - (L-b) 
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi)
@@ -95,11 +95,11 @@ def set_target(target_pos, model_name):
     a = L/3
     b = L/6
     phi = np.pi/4
-    x1 = a * np.cos(theta) - 0.1
+    x1 = a * np.cos(theta)
     if model_name == 'spirob':
-        z1 = b * np.sin(theta) - (3*L/4-b) 
+        z1 = b * np.sin(theta) - (3*L/4-b)
     else:
-        z1 = b * np.sin(theta) - (L-b) + 0.05
+        z1 = b * np.sin(theta) - (L-b)
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi) 
@@ -133,9 +133,9 @@ def _create_log_arrays(num_steps, control_scheme, experiment, nu):
     if control_scheme == 'id_clf_qp':
         logs['V'] = np.zeros(num_steps)
     
-    if experiment == 'tracking':
-        logs['x'] = np.zeros((num_steps, 3))
-        logs['xd'] = np.zeros((num_steps, 3))
+    # if experiment == 'tracking':
+    logs['x'] = np.zeros((num_steps, 3))
+    logs['xd'] = np.zeros((num_steps, 3))
     
     return logs
 
@@ -153,6 +153,10 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
     if experiment == 'tracking':
         logs['x'][log_idx] = data.site("ee").xpos
         logs['xd'][log_idx] = target["pos"]
+
+    if experiment == 'set':
+        logs['x'][log_idx] = data.site("ee").xpos
+        logs['xd'][log_idx] = target
 
 def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1'):
     """Run physics simulation with specified controller and robot."""
@@ -293,6 +297,9 @@ def save_results(results, experiment, control_scheme, model_name, target_pos=Non
     if experiment == "tracking":
         x_log = np.asarray(x_log).squeeze().tolist()
         xd_log = np.asarray(xd_log).squeeze().tolist()
+    if experiment == "set":
+        x_log = np.asarray(x_log).squeeze().tolist()
+        xd_log = np.asarray(xd_log).squeeze().tolist()
 
     # ================================
     # Build dataframe
@@ -306,7 +313,9 @@ def save_results(results, experiment, control_scheme, model_name, target_pos=Non
         df["lyapunov_V"] = V_log
 
     if experiment == "tracking":
-        # store vectors as strings
+        df["x_log"] = [list(v) for v in x_log]
+        df["xd_log"] = [list(v) for v in xd_log]
+    if experiment == "set":
         df["x_log"] = [list(v) for v in x_log]
         df["xd_log"] = [list(v) for v in xd_log]
 

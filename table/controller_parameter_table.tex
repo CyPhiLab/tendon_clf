@@ -1,0 +1,32 @@
+\begin{table*}[t]
+\centering
+\caption{Controller parameter settings for each robot platform.}
+\label{tab:controller_params}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|c|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Robot} & \textbf{Controller} & $K_p$ & $\epsilon$ & $w_1$ & $w_2$ & $w_3$ & $w_4$ & $\rho$ \\
+\hline
+\multirow{6}{*}{Finger} & CLF-QP & 500.0 & 0.05 & 1 & 0.2 & 0.5 & 0.1 & 1000 \\
+& ID-CLF-QP & 500.0 & 0.03 & 1 & 0.2 & 0.2 & 0.1 & 1000 \\
+& IC & 500.0 & 0.03 & -- & 0.2 & 0.2 & 0.1 & 1000 \\
+& UIC & 500.0 & 0.03 & -- & 0.2 & 0.2 & 0.1 & 1000 \\
+& EOSC & 500.0 & 0.03 & -- & 0.2 & 0.2 & 0.1 & 1000 \\
+& IC-QP & 500.0 & 0.03 & 1 & 0.2 & 0.2 & 0.1 & 1000 \\
+\hline
+\multirow{6}{*}{Helix} & CLF-QP & 500.0 & 0.05 & 1 & 0.1 & 0.2 & 0.1 & 1000 \\
+& ID-CLF-QP & 500.0 & 0.05 & 1 & 0.1 & 0.2 & 0.1 & 1000 \\
+& IC & 2000.0 & 0.05 & -- & 0.1 & 0.2 & 0.1 & 1000 \\
+& UIC & 1000.0 & 0.05 & -- & 0.1 & 0.2 & 0.1 & 1000 \\
+& EOSC & 2000.0 & 0.05 & -- & 0.1 & 0.2 & 0.1 & 1000 \\
+& IC-QP & 500.0 & 0.05 & 1 & 0.1 & 0.2 & 0.1 & 1000 \\
+\hline
+\multirow{6}{*}{SpiRob} & CLF-QP & 500.0 & 0.01 & 1 & 0.2 & 0.5 & 0.1 & 1000 \\
+& ID-CLF-QP & 500.0 & 0.01 & 1 & 0.2 & 0.5 & 0.1 & 1000 \\
+& IC & 500.0 & 0.01 & -- & 0.2 & 0.5 & 0.1 & 1000 \\
+& UIC & 500.0 & 0.01 & -- & 0.2 & 0.5 & 0.1 & 1000 \\
+& EOSC & 500.0 & 0.01 & -- & 0.2 & 0.5 & 0.1 & 1000 \\
+& IC-QP & 500.0 & 0.01 & 1 & 0.2 & 0.5 & 0.1 & 1000 \\
+\hline
+\end{tabular}}
+\end{table*}

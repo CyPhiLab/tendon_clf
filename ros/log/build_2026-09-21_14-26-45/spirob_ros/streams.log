@@ -1,0 +1,56 @@
+[1.736s] Invoking command in '/home/zach/huy/tendon_clf/ros/build/spirob_ros': AMENT_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${CMAKE_PREFIX_PATH} DEBUGINFOD_URLS=https://debuginfod.ubuntu.com LD_LIBRARY_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --uninstall --editable --build-directory /home/zach/huy/tendon_clf/ros/build/spirob_ros/build
+[2.406s] running develop
+[2.829s] Removing /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob-ros.egg-link (link to .)
+[2.905s] Invoked command in '/home/zach/huy/tendon_clf/ros/build/spirob_ros' returned '0': AMENT_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${CMAKE_PREFIX_PATH} DEBUGINFOD_URLS=https://debuginfod.ubuntu.com LD_LIBRARY_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --uninstall --editable --build-directory /home/zach/huy/tendon_clf/ros/build/spirob_ros/build
+[2.907s] Invoking command in '/home/zach/huy/tendon_clf/ros/spirob_ros': AMENT_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${CMAKE_PREFIX_PATH} DEBUGINFOD_URLS=https://debuginfod.ubuntu.com LD_LIBRARY_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/spirob_ros build --build-base /home/zach/huy/tendon_clf/ros/build/spirob_ros/build install --record /home/zach/huy/tendon_clf/ros/build/spirob_ros/install.log --single-version-externally-managed install_data --force
+[3.455s] running egg_info
+[3.494s] writing ../build/spirob_ros/spirob_ros.egg-info/PKG-INFO
+[3.495s] writing dependency_links to ../build/spirob_ros/spirob_ros.egg-info/dependency_links.txt
+[3.495s] writing entry points to ../build/spirob_ros/spirob_ros.egg-info/entry_points.txt
+[3.495s] writing requirements to ../build/spirob_ros/spirob_ros.egg-info/requires.txt
+[3.495s] writing top-level names to ../build/spirob_ros/spirob_ros.egg-info/top_level.txt
+[3.573s] reading manifest file '../build/spirob_ros/spirob_ros.egg-info/SOURCES.txt'
+[3.575s] writing manifest file '../build/spirob_ros/spirob_ros.egg-info/SOURCES.txt'
+[3.575s] running build
+[3.575s] running build_py
+[3.576s] creating /home/zach/huy/tendon_clf/ros/build/spirob_ros/build
+[3.576s] creating /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib
+[3.578s] creating /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.578s] copying spirob_ros/state_estimation_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.578s] copying spirob_ros/simulation_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.578s] copying spirob_ros/__init__.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.578s] copying spirob_ros/control_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.579s] copying spirob_ros/virtual_measurement_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.579s] copying spirob_ros/plot_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.579s] copying spirob_ros/hardware_node.py -> /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros
+[3.579s] running install
+[3.590s] running install_lib
+[3.636s] creating /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.636s] copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/state_estimation_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.637s] copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/simulation_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.637s] copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/__init__.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.637s] copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/control_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.638s] copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/virtual_measurement_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.638s] copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/plot_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.638s] copying /home/zach/huy/tendon_clf/ros/build/spirob_ros/build/lib/spirob_ros/hardware_node.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros
+[3.639s] byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/state_estimation_node.py to state_estimation_node.cpython-312.pyc
+[3.643s] byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/simulation_node.py to simulation_node.cpython-312.pyc
+[3.644s] byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/__init__.py to __init__.cpython-312.pyc
+[3.645s] byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/control_node.py to control_node.cpython-312.pyc
+[3.650s] byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/virtual_measurement_node.py to virtual_measurement_node.cpython-312.pyc
+[3.651s] byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/plot_node.py to plot_node.cpython-312.pyc
+[3.651s] byte-compiling /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros/hardware_node.py to hardware_node.cpython-312.pyc
+[3.653s] running install_data
+[3.654s] copying resource/spirob_ros -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/share/ament_index/resource_index/packages
+[3.654s] copying package.xml -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/share/spirob_ros
+[3.654s] copying launch/spirob.launch.py -> /home/zach/huy/tendon_clf/ros/install/spirob_ros/share/spirob_ros/launch
+[3.655s] running install_egg_info
+[3.700s] Copying ../build/spirob_ros/spirob_ros.egg-info to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob_ros-0.0.1-py3.12.egg-info
+[3.702s] running install_scripts
+[3.955s] Installing control_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[3.955s] Installing hardware_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[3.956s] Installing simulation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[3.956s] Installing state_estimation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[3.956s] Installing virtual_measurement_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[3.956s] writing list of installed files to '/home/zach/huy/tendon_clf/ros/build/spirob_ros/install.log'
+[4.018s] Invoked command in '/home/zach/huy/tendon_clf/ros/spirob_ros' returned '0': AMENT_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${CMAKE_PREFIX_PATH} DEBUGINFOD_URLS=https://debuginfod.ubuntu.com LD_LIBRARY_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/spirob_ros build --build-base /home/zach/huy/tendon_clf/ros/build/spirob_ros/build install --record /home/zach/huy/tendon_clf/ros/build/spirob_ros/install.log --single-version-externally-managed install_data --force

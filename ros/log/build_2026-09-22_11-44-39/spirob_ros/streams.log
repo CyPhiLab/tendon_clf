@@ -1,0 +1,22 @@
+[1.291s] Invoking command in '/home/zach/huy/tendon_clf/ros/build/spirob_ros': AMENT_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${CMAKE_PREFIX_PATH} DEBUGINFOD_URLS=https://debuginfod.ubuntu.com LD_LIBRARY_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/zach/huy/tendon_clf/ros/build/spirob_ros/build --no-deps symlink_data
+[1.790s] running develop
+[2.095s] running egg_info
+[2.121s] writing spirob_ros.egg-info/PKG-INFO
+[2.121s] writing dependency_links to spirob_ros.egg-info/dependency_links.txt
+[2.122s] writing entry points to spirob_ros.egg-info/entry_points.txt
+[2.122s] writing requirements to spirob_ros.egg-info/requires.txt
+[2.122s] writing top-level names to spirob_ros.egg-info/top_level.txt
+[2.182s] reading manifest file 'spirob_ros.egg-info/SOURCES.txt'
+[2.183s] writing manifest file 'spirob_ros.egg-info/SOURCES.txt'
+[2.215s] running build_ext
+[2.216s] Creating /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob-ros.egg-link (link to .)
+[2.216s] Installing control_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.217s] Installing get_state_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.217s] Installing hardware_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.217s] Installing simulation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.217s] Installing state_estimation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.217s] Installing virtual_measurement_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.218s] 
+[2.218s] Installed /home/zach/huy/tendon_clf/ros/build/spirob_ros
+[2.218s] running symlink_data
+[2.272s] Invoked command in '/home/zach/huy/tendon_clf/ros/build/spirob_ros' returned '0': AMENT_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces:${CMAKE_PREFIX_PATH} DEBUGINFOD_URLS=https://debuginfod.ubuntu.com LD_LIBRARY_PATH=/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/zach/huy/tendon_clf/ros/build/spirob_ros/build --no-deps symlink_data

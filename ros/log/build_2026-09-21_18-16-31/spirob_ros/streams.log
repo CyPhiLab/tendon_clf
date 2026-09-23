@@ -1,0 +1,22 @@
+[1.481s] Invoking command in '/home/zach/huy/tendon_clf/ros/build/spirob_ros': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/build/spirob_ros:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_rl/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_interfaces/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_hardware/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_actions/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/opencv_tests/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/image_geometry/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/cv_bridge/lib/python3.12/site-packages:/opt/ros/jazzy/lib/python3.12/site-packages /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/zach/huy/tendon_clf/ros/build/spirob_ros/build --no-deps symlink_data
+[2.074s] running develop
+[2.460s] running egg_info
+[2.495s] writing spirob_ros.egg-info/PKG-INFO
+[2.495s] writing dependency_links to spirob_ros.egg-info/dependency_links.txt
+[2.495s] writing entry points to spirob_ros.egg-info/entry_points.txt
+[2.496s] writing requirements to spirob_ros.egg-info/requires.txt
+[2.496s] writing top-level names to spirob_ros.egg-info/top_level.txt
+[2.572s] reading manifest file 'spirob_ros.egg-info/SOURCES.txt'
+[2.573s] writing manifest file 'spirob_ros.egg-info/SOURCES.txt'
+[2.611s] running build_ext
+[2.612s] Creating /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages/spirob-ros.egg-link (link to .)
+[2.613s] Installing control_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.613s] Installing get_state_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.613s] Installing hardware_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.613s] Installing simulation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.613s] Installing state_estimation_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.614s] Installing virtual_measurement_node script to /home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/spirob_ros
+[2.614s] 
+[2.614s] Installed /home/zach/huy/tendon_clf/ros/build/spirob_ros
+[2.614s] running symlink_data
+[2.685s] Invoked command in '/home/zach/huy/tendon_clf/ros/build/spirob_ros' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/zach/huy/tendon_clf/ros/build/spirob_ros/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/install/spirob_interfaces/lib/python3.12/site-packages:/home/zach/huy/tendon_clf/ros/build/spirob_ros:/home/zach/huy/tendon_clf/ros/install/spirob_ros/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_rl/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_interfaces/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_hardware/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/turtle_actions/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/opencv_tests/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/image_geometry/lib/python3.12/site-packages:/home/zach/drl-turtle/ros2_ws/install/cv_bridge/lib/python3.12/site-packages:/opt/ros/jazzy/lib/python3.12/site-packages /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/zach/huy/tendon_clf/ros/build/spirob_ros/build --no-deps symlink_data

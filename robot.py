@@ -136,7 +136,7 @@ class Robot:
             else:
                 self.Kp, self.Kd = 500.0, 2 * np.sqrt(500.0)
             self.damping, self.stiffness = 0.15, 0.1
-            self.e = 0.01
+            self.e = 0.05
         
 
 
