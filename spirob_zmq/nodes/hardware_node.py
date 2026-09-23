@@ -20,6 +20,7 @@ measured speed, which is what the plant and the EKF consume.
 """
 
 import math
+import threading
 
 import numpy as np
 
@@ -53,7 +54,8 @@ class HardwareNode(Node):
         self.u_min = self.declare_parameter('u_min', -12.0)
         self.u_max = self.declare_parameter('u_max', 0.0)
 
-        # Control loop rate (CAN feedback loop is set to 100 Hz)
+        # Rate at which motor feedback is published (the motors' CAN status
+        # frames are configured for 100 Hz); commands are sent as they arrive
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
         self.dry_run = self.declare_parameter('dry_run', True)
         self.cmd_u = None
@@ -85,11 +87,36 @@ class HardwareNode(Node):
         else:
             self.get_logger().warn('hardware_node running in dry_run mode -- no CAN bus opened')
 
-        # Send current commands
-        self.timer = self.create_timer(1.0 / self.rate_hz, self._on_timer)
+        # Commands go out as soon as they arrive (set_current is a non-blocking CAN
+        # send). Holding them for a fixed-rate timer added up to one period of
+        # delay, which was enough to make the closed loop oscillate. Feedback
+        # arrives as periodic status frames and reading it blocks, so a reader
+        # thread collects it and a timer publishes it at rate_hz.
+        self._fb_lock = threading.Lock()
+        self._latest_fb = [None] * len(self.motor_ids)
+        self._fb_fresh = False
+        self._reader = None
+        if self.controller is not None:
+            self._reader = threading.Thread(target=self._feedback_loop, daemon=True)
+            self._reader.start()
+            self.timer = self.create_timer(1.0 / self.rate_hz, self._publish_feedback)
 
     def _on_command(self, msg):
         self.cmd_u = command_to_u(msg, self.motor_ids)
+        currents = self.ctrl_to_current(self.cmd_u, self.shaft_speed)
+        if self.dry_run:
+            # No hardware: the command is what gets applied
+            self._publish_states([{
+                'position': 0.0,
+                'velocity': 0.0,
+                'current': float(currents[i]),
+                'app_ctrl': float(np.clip(self.cmd_u[i], self.u_min, self.u_max)),
+                'fault_code': 0,
+            } for i in range(len(self.motor_ids))])
+            return
+        self.controller.set_current(currents.tolist())
+        motors_relaxed = [self.controller.motors[i] for i, current in enumerate(currents) if current == 0.0]
+        self.controller.disable(motors_relaxed)
 
     def ctrl_to_current(self, u, shaft_speed):
         u = np.clip(u, self.u_min, self.u_max)
@@ -102,45 +129,52 @@ class HardwareNode(Node):
         force = current * self.k_t * self.gear / (self.gear_model * self.r_spool)
         return (force + self.law.k_e * act_vel) / self.law.k_v
 
-    def _on_timer(self):
-        if self.cmd_u is None:
-            return
+    def _feedback_loop(self):
+        """Reader thread: block on the bus for status frames, keep the latest."""
+        while self.ok():
+            feedbacks = self.controller.get_feedback_all_motors(timeout=0.05)
+            with self._fb_lock:
+                for i, fb in enumerate(feedbacks):
+                    if fb is not None:
+                        self._latest_fb[i] = fb
+                        self._fb_fresh = True
 
-        currents = self.ctrl_to_current(self.cmd_u, self.shaft_speed)
-        if self.dry_run:
-            feedbacks = [None] * len(self.motor_ids)
-        else:
-            self.controller.set_current(currents.tolist())
-            motors_relaxed = [self.controller.motors[i] for i, current in enumerate(currents) if current == 0.0]
-            self.controller.disable(motors_relaxed)
-            feedbacks = self.controller.get_feedback_all_motors()
+    def _publish_feedback(self):
+        with self._fb_lock:
+            if not self._fb_fresh:
+                return
+            feedbacks = list(self._latest_fb)
+            self._fb_fresh = False
+        states = []
+        for i, fb in enumerate(feedbacks):
+            if fb is None:
+                states.append(None)
+                continue
+            # AK servo-mode feedback: position in degrees, speed in electrical RPM
+            speed = fb['speed'] / self.pole_pairs / self.gear * 2.0 * math.pi / 60.0
+            self.shaft_speed[i] = speed
+            states.append({
+                'position': math.radians(fb['position']),
+                'velocity': speed,
+                'current': fb['current'],
+                'app_ctrl': float(self.current_to_ctrl(fb['current'], speed)[i]),
+                'fault_code': fb['error_code'],
+            })
+        self._publish_states(states)
 
+    def _publish_states(self, states):
         stamp = self.now()
-        for i, (motor_id, fb) in enumerate(zip(self.motor_ids, feedbacks)):
-            if fb is not None:
-                # AK servo-mode feedback: position in degrees, speed in electrical RPM
-                speed = fb['speed'] / self.pole_pairs / self.gear * 2.0 * math.pi / 60.0
-                self.shaft_speed[i] = speed
-                state = {
-                    'position': math.radians(fb['position']),
-                    'velocity': speed,
-                    'current': fb['current'],
-                    'app_ctrl': float(self.current_to_ctrl(fb['current'], speed)[i]),
-                    'fault_code': fb['error_code'],
-                }
-            else:
-                state = {
-                    'position': 0.0,
-                    'velocity': 0.0,
-                    'current': float(currents[i]),
-                    'app_ctrl': float(self.cmd_u[i]),
-                    'fault_code': 0,
-                }
+        for motor_id, state in zip(self.motor_ids, states):
+            if state is None:
+                continue
             state['stamp'] = stamp
             state['motor_id'] = motor_id
             self.state_pub.publish(state)
 
     def destroy_node(self):
+        self.shutdown()
+        if self._reader is not None:
+            self._reader.join(timeout=0.2)
         if self.controller is not None:
             try:
                 self.controller.disable(self.controller.motors)

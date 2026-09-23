@@ -82,6 +82,39 @@ class _Timer:
         self.next_t = time.monotonic() + period
 
 
+class _Stats:
+    """Wall-clock cost of one callback, and for timers how late they fired."""
+
+    def __init__(self, name, period=None):
+        self.name = name
+        self.period = period
+        self.reset()
+
+    def reset(self):
+        self.n = 0
+        self.total = 0.0
+        self.worst = 0.0
+        self.worst_late = 0.0
+        self.overruns = 0   # timer callbacks that took longer than their period
+        self.skipped = 0    # timer periods skipped because we fell behind
+
+    def add(self, duration, late=0.0):
+        self.n += 1
+        self.total += duration
+        self.worst = max(self.worst, duration)
+        self.worst_late = max(self.worst_late, late)
+        if self.period is not None and duration > self.period:
+            self.overruns += 1
+
+    def line(self):
+        text = (f'{self.name}: {self.n} calls, mean {1e3 * self.total / self.n:.2f} ms, '
+                f'max {1e3 * self.worst:.2f} ms')
+        if self.period is not None:
+            text += (f' | period {1e3 * self.period:.1f} ms, max late {1e3 * self.worst_late:.2f} ms, '
+                     f'{self.overruns} overruns, {self.skipped} skipped periods')
+        return text
+
+
 class Node:
     """Single-threaded node: subscriptions and timers are serviced by ``spin()``.
 
@@ -111,6 +144,10 @@ class Node:
         self._subs = {}      # topic -> list of (callback, latest_only)
         self._timers = []
         self._running = True
+        # Real-time bookkeeping: summary at shutdown, and every timing_report_s if > 0
+        self._stats = {}
+        self._timing_report_s = self._params.get('timing_report_s', 0)
+        self._last_report = time.monotonic()
 
     # --- rclpy-like API -------------------------------------------------
     def get_logger(self):
@@ -141,6 +178,8 @@ class Node:
 
     def create_timer(self, period, callback):
         timer = _Timer(period, callback)
+        timer.stats = self._stats.setdefault(
+            f'timer {callback.__name__}', _Stats(f'timer {callback.__name__}', period))
         self._timers.append(timer)
         return timer
 
@@ -155,8 +194,14 @@ class Node:
 
     def destroy_node(self):
         self._running = False
+        self.report_timing()
         self._pub.close()
         self._sub.close()
+
+    def report_timing(self):
+        for stats in self._stats.values():
+            if stats.n:
+                self._logger.info(stats.line())
 
     # --- event loop -------------------------------------------------------
     def _publish(self, topic, msg):
@@ -179,11 +224,17 @@ class Node:
         for topic, msg in pending:
             for callback, latest_only in self._subs[topic]:
                 if not latest_only:
-                    callback(msg)
+                    self._timed(topic, callback, msg)
         for topic, msg in latest.items():
             for callback, latest_only in self._subs[topic]:
                 if latest_only:
-                    callback(msg)
+                    self._timed(topic, callback, msg)
+
+    def _timed(self, topic, callback, msg):
+        t0 = time.perf_counter()
+        callback(msg)
+        key = f'on {topic}'
+        self._stats.setdefault(key, _Stats(key)).add(time.perf_counter() - t0)
 
     def spin(self):
         poller = zmq.Poller()
@@ -202,12 +253,21 @@ class Node:
                 if not self._running:
                     break
                 if now >= timer.next_t:
+                    late = now - timer.next_t
+                    t0 = time.perf_counter()
                     timer.callback()
+                    timer.stats.add(time.perf_counter() - t0, late)
                     timer.next_t += timer.period
                     # If we fell more than a period behind (slow callback), skip
                     # missed ticks instead of bursting to catch up (as rclpy does).
                     if timer.next_t < time.monotonic():
+                        timer.stats.skipped += int((time.monotonic() - timer.next_t) / timer.period) + 1
                         timer.next_t = time.monotonic() + timer.period
+            if self._timing_report_s and now - self._last_report > self._timing_report_s:
+                self.report_timing()
+                for stats in self._stats.values():
+                    stats.reset()
+                self._last_report = now
 
 
 class _Publisher:

@@ -6,6 +6,16 @@
          which then resolves against this directory and fails. -->
     <include file="../../external/spirob_mujoco/models/spirob.xml" />
     <compiler meshdir="../../external/spirob_mujoco/models/assets" />
+    <!-- Adjacent segments are stopped by their joint limits, not by mesh-mesh
+         collision. The model disables filterparent so parent-child segment
+         pairs collide; those contacts are either grazing (~1e-3 N, ~1e-10 N m
+         of generalized force) or the mechanical stop at the joint range, which
+         the joint limits already enforce. Re-enabling filterparent skips them
+         (non-adjacent self-contact when the spiral coils is kept) and makes a
+         step ~3x cheaper; against the full-collision model the markers deviate
+         at most 2.8 mm over 3 s open loop, and the rest pose is identical.
+         Candidate change for the upstream model. -->
+    <option><flag filterparent="enable"/></option>
 
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />

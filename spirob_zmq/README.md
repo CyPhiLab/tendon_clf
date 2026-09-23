@@ -24,10 +24,27 @@ start pose, target, ctrl limits and controller gains; any `-p` override wins.
 | `spirob_horz` (default) | `external/spirob_mujoco` via `mujoco_models/spirob/spirob_horz_control.xml` | dcmotor (ctrl in volts, back-EMF, 12 N m limit), implicitfast at 1 ms, base raised to 0.55 m, starts gravity-settled. Settings follow SPIROB_HORZ_NOTES.md. |
 
 Nodes step the model at its own timestep, several substeps per tick, instead
-of overwriting it with 1/rate_hz. On the horizontal arm a step costs ~0.6 ms,
-~60% of it mesh-mesh collision between adjacent segments (the model disables
-`filterparent`), so the simulated plant runs at ~0.6x real time on a 4-core
-machine. Use `lockstep` for accurate evaluation.
+of overwriting it with 1/rate_hz. A step of the horizontal arm costs ~0.17 ms.
+The scene re-enables `filterparent`, so adjacent segments are stopped by their
+joint limits instead of mesh-mesh collision (0.6 ms per step with it; see the
+comment in `spirob_horz_control.xml`). The whole simulated stack then runs in
+real time on 4 cores, and lockstep runs faster than real time.
+
+## Real-time loop
+
+- The EKF runs once per measurement, over the measurement's stamped interval.
+- `hardware_node` sends each command as soon as it arrives. A reader thread
+  collects CAN feedback, which a timer publishes at `rate_hz`. Holding commands
+  for the 100 Hz timer made the closed loop oscillate (lockstep: ~12 mm vs
+  ~0.7 mm).
+- Every node records callback cost, timer lateness, overruns, and skipped
+  periods. It prints a summary on shutdown, and every N seconds with
+  `-p timing_report_s=N`.
+
+Measured real time on 4 cores, with the simulated plant, 0.1 mm measurement
+noise, and 20 s: plant at 0.99x real time, EKF at 99 Hz with 4.3 ms median
+latency and 1.1 mm RMS ee error, controller at 196 Hz. Lockstep, for the same
+setup: EKF 0.02 mm, closed loop 0.7-0.8 mm.
 
 ## Run (from the repo root)
 
