@@ -1,1 +1,0 @@
-/home/zach/huy/tendon_clf/ros/build/spirob_ros/launch/spirob_no_ekf.launch.py

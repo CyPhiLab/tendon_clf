@@ -45,7 +45,6 @@ control_name = {
 robot_name = {
     "tendon": "Finger",
     "helix": "Helix",
-    "spirob": "SpiRob",
     "spirob_horz": "SpiRob (horiz.)"
 }
 
@@ -227,7 +226,7 @@ def clf_plot(robots, control, experiment):
                 continue
             items.append((robot, ctrl, exp_data))
 
-    robot_order = ["tendon", "helix", "spirob", "spirob_horz"]
+    robot_order = ["tendon", "helix", "spirob_horz"]
     items.sort(key=lambda x: robot_order.index(x[0]) if x[0] in robot_order else 999)
 
     for robot, ctrl, exp_data in items:
@@ -285,49 +284,6 @@ plt.rcParams.update({
     "legend.fontsize": 18,
 })
 
-
-def plot_spirob_error(root="results"):
-
-    df = pd.read_csv(
-        "results/spirob/id_clf_qp/set_id_clf_qp_pos3.csv",
-        comment="#"
-    )
-
-    t = df["time"].to_numpy()
-
-    x_log = df["x_log"].apply(ast.literal_eval)
-    xd_log = df["xd_log"].apply(ast.literal_eval)
-
-    x_array = np.vstack(x_log.to_numpy())
-    xd_array = np.vstack(xd_log.to_numpy())
-
-    x = x_array[:, 0]
-    z = x_array[:, 2]
-
-    xd = xd_array[:, 0]
-    zd = xd_array[:, 2]
-
-    fig, axes = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
-
-    # ---- x subplot ----
-    axes[0].plot(t, x, linewidth=4, label=r"$x$")
-    axes[0].plot(t, xd, "--", linewidth=2, label=r"$x_d$")
-    axes[0].set_ylabel(r"$x$ (m)", fontname="Times New Roman", fontsize=22)
-    axes[0].legend(loc="lower right", fontsize=18)
-    axes[0].grid(True)
-
-    # ---- z subplot ----
-    axes[1].plot(t, z, linewidth=4, label=r"$z$")
-    axes[1].plot(t, zd, "--", linewidth=2, label=r"$z_d$")
-    axes[1].set_xlabel("Time (s)", fontname="Times New Roman", fontsize=22)
-    axes[1].set_ylabel(r"$z$ (m)", fontname="Times New Roman", fontsize=22)
-    axes[1].legend(loc="lower right", fontsize=18)
-    axes[1].grid(True)
-
-    axes[1].set_xlim(0, 3.0)
-
-    plt.tight_layout()
-    plt.show()
 
 def plot_tracking_trajectory(robots, robot_list, plane, start_time):
     plane = plane.lower()
@@ -609,7 +565,7 @@ def get_robot_parameters(robot_name_dict):
 
 def generate_combined_report(root):
     rows = []
-    robots = ["tendon", "helix", "spirob", "spirob_horz"]
+    robots = ["tendon", "helix", "spirob_horz"]
 
     for robot in robots:
         robot_path = os.path.join(root, robot)
@@ -704,9 +660,6 @@ def csv_to_latex_table(csv_file, output_tex="table/combined_table.tex"):
                 tt_mse = rf"\textbf{{{tt_mse}}}"
             else:
                 ctrl_str = ctrl
-
-            if robot.lower() == "spirob":
-                tt_mse = "--"
 
             if first_row:
                 latex.append(rf"\multirow{{6}}{{*}}{{{robot}}} & {ctrl_str} & {final_error} & {tt_mse} \\")
@@ -814,5 +767,4 @@ if __name__ == "__main__":
 
     # # get_robot_parameters(robot_name)
 
-    plot_spirob_error("results")
     # parameter_csv_to_latex("table/controller_parameter_table.csv", output_tex="table/controller_parameter_table.tex")

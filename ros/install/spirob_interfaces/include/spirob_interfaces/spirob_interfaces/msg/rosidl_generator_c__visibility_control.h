@@ -1,1 +1,0 @@
-/home/zach/huy/tendon_clf/ros/build/spirob_interfaces/rosidl_generator_c/spirob_interfaces/msg/rosidl_generator_c__visibility_control.h

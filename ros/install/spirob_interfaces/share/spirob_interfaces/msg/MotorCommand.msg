@@ -1,1 +1,0 @@
-/home/zach/huy/tendon_clf/ros/spirob_interfaces/msg/MotorCommand.msg

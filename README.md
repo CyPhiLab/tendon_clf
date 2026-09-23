@@ -16,8 +16,9 @@ This repository implements and compares different controllers, including a novel
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone --recurse-submodules <repository-url>
    cd tendon_clf
+   # or, in an existing clone: git submodule update --init external/spirob_mujoco
    ```
 
 2. **Install dependencies:**
@@ -41,6 +42,12 @@ python run.py --robot tendon --control impedance --experiment tracking --headles
 # Run all combinations (configurable)
 python run_all.py
 ```
+
+**Real-time stack (estimator + controller + hardware, cross-platform):**
+```bash
+python -m spirob_zmq.launch            # simulated SpiRob, EKF, controller, viewer
+```
+See [`spirob_zmq/README.md`](spirob_zmq/README.md) for simulation, hardware, and evaluation.
 
 ## Architecture
 

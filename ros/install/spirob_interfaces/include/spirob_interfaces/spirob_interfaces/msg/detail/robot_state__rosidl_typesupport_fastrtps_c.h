@@ -1,1 +1,0 @@
-/home/zach/huy/tendon_clf/ros/build/spirob_interfaces/rosidl_typesupport_fastrtps_c/spirob_interfaces/msg/detail/robot_state__rosidl_typesupport_fastrtps_c.h
