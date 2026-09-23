@@ -11,7 +11,80 @@ from controllers import (ControllerResult, IDCLFQPController, ImpedanceControlle
                         ImpedanceQPController, CLFQPController, UOSCController)
 
 # Import Robot class
-from robot import Robot
+from robot import Robot, SPIROB_HORZ_BASE_HEIGHT
+
+# spirob_horz reaches horizontally into -x from a base raised to
+# SPIROB_HORZ_BASE_HEIGHT, so its targets ride a circle in the y-z plane rather
+# than the x-z circle the vertical robots use.  Sized from the measured
+# static-equilibrium workspace (see SPIROB_HORZ_NOTES.md), which spans
+# x in [-0.475, +0.215], y in [-0.196, +0.196], z in [-0.238, +0.223] relative
+# to the base.  The radius is set by the tracking experiment rather than the
+# set-point one: the arm tracks well up to a tip speed of roughly 0.1 m/s, and
+# tip speed is radius * omega, so 0.16 would make everything above omg1
+# untrackable.  At 0.08 all five omegas stay usable and the set-point targets
+# are still 0.165 m from the rest pose (~35% of the straight-arm reach).
+SPIROB_HORZ_TARGET_X = -0.30                    # depth of the target plane
+SPIROB_HORZ_TARGET_Z = SPIROB_HORZ_BASE_HEIGHT - 0.03   # centre height
+SPIROB_HORZ_TARGET_R = 0.08                     # circle radius
+
+# --- horizontal sweep demo ('--omega sweep') --------------------------------
+# An arc swept about the base's vertical axis, at the radius of the arm's own
+# length, in a plane perpendicular to gravity.  Unlike the circle above this is
+# deliberately outside the reachable set: the tip only gets 0.443 m from the
+# base at rest, so a 0.5 m arc cannot be reached anywhere along it and tracking
+# error will be correspondingly large.  That is intended -- the demo is about
+# the shape of the motion, not the tracking accuracy.
+# Selected with `--experiment tracking --omega sweep`.  The rate is a plain
+# parameter: --sweep-omega RAD_PER_S (or --sweep-hz), defaulting to the value
+# below.  Peak tip speed is R * half_angle * omega -- 0.055 m/s at the default --
+# and the arm tracks to roughly 0.1 m/s, so past ~0.6 rad/s the arc degrades on
+# purpose.  Run duration is 4*pi/omega, i.e. two complete sweeps.
+SPIROB_HORZ_ARC_KEY = 'sweep'
+SPIROB_HORZ_ARC_OMEGA = 0.1 * np.pi             # default sweep rate [rad/s]
+SPIROB_HORZ_ARC_R = 0.50                        # arc radius, ~ the arm's length
+SPIROB_HORZ_ARC_Z = SPIROB_HORZ_BASE_HEIGHT - 0.04  # the tip's natural rest height
+SPIROB_HORZ_ARC_HALF_ANGLE = np.deg2rad(20.0)   # sweep is +/- this about -x
+
+
+def _spirob_horz_arc(t, omega):
+    """Horizontal arc sweep for spirob_horz, in the x-y plane at fixed z.
+
+    The tip angle about the base follows psi(t) = psi_max * sin(omega*t), so the
+    arc is swept back and forth smoothly, reversing with zero velocity at each
+    end.  The simulation loop runs for 4*pi/omega, i.e. two complete sweeps.
+    """
+    psi = SPIROB_HORZ_ARC_HALF_ANGLE * np.sin(omega * t)
+    dpsi = SPIROB_HORZ_ARC_HALF_ANGLE * omega * np.cos(omega * t)
+    ddpsi = -SPIROB_HORZ_ARC_HALF_ANGLE * omega**2 * np.sin(omega * t)
+
+    R = SPIROB_HORZ_ARC_R
+    c, s = np.cos(psi), np.sin(psi)
+    # psi = 0 points straight out along -x, matching the arm's rest direction.
+    pos = np.array([-R * c, R * s, SPIROB_HORZ_ARC_Z])
+    # d/dt via the chain rule through psi(t).
+    vel = np.array([R * s * dpsi, R * c * dpsi, 0.0])
+    acc = np.array([R * (s * ddpsi + c * dpsi**2),
+                    R * (c * ddpsi - s * dpsi**2),
+                    0.0])
+    return {"pos": pos, "vel": vel, "acc": acc}
+
+
+def _spirob_horz_circle(theta):
+    """Target circle for spirob_horz, in the y-z plane at fixed x.
+
+    Returns the position and its first two derivatives with respect to theta,
+    so both the set-point and tracking cases can share one definition.
+    """
+    pos = np.array([SPIROB_HORZ_TARGET_X,
+                    SPIROB_HORZ_TARGET_R * np.cos(theta),
+                    SPIROB_HORZ_TARGET_Z + SPIROB_HORZ_TARGET_R * np.sin(theta)])
+    dpos = np.array([0.0,
+                     -SPIROB_HORZ_TARGET_R * np.sin(theta),
+                     SPIROB_HORZ_TARGET_R * np.cos(theta)])
+    ddpos = np.array([0.0,
+                      -SPIROB_HORZ_TARGET_R * np.cos(theta),
+                      -SPIROB_HORZ_TARGET_R * np.sin(theta)])
+    return pos, dpos, ddpos
 
 
 # Configure MuJoCo to use the EGL rendering backend (requires GPU)
@@ -23,26 +96,54 @@ def get_omega(omega_str):
         'omg2': 0.2 * np.pi,
         'omg3': 0.3 * np.pi,
         'omg4': 0.4 * np.pi,
-        'omg5': 0.5 * np.pi
+        'omg5': 0.5 * np.pi,
+        # Horizontal sweep demo; override the rate with --sweep-omega.
+        SPIROB_HORZ_ARC_KEY: SPIROB_HORZ_ARC_OMEGA,
     }
     return omg[omega_str]
 
-def circular_trajectory(t, model_name, omega):
+def resolve_omega(omega_str, sweep_omega=None):
+    """Angular rate for a trajectory, in rad/s.
+
+    `sweep_omega` overrides the default rate of the named sweep trajectory and
+    is ignored for the numbered omg keys, so the two cannot be confused.
+    """
+    if sweep_omega is not None and omega_str == SPIROB_HORZ_ARC_KEY:
+        if sweep_omega <= 0:
+            raise ValueError(f"sweep_omega must be positive, got {sweep_omega}")
+        return float(sweep_omega)
+    return get_omega(omega_str)
+
+def omega_label(omega_str, sweep_omega=None):
+    """Filename tag for a run, so sweeps at different rates do not collide."""
+    if sweep_omega is not None and omega_str == SPIROB_HORZ_ARC_KEY:
+        return f"{omega_str}_w{float(sweep_omega):g}".replace('.', 'p')
+    return omega_str
+
+def circular_trajectory(t, model_name, omega, omega_key=None):
     """
     Circular trajectory through the 4 given points.
     One full revolution in time T.
+
+    `omega_key` selects a named trajectory variant where one exists; currently
+    only spirob_horz has one ('sweep', the horizontal arc demo).
     """
+    if model_name == 'spirob_horz':
+        if omega_key is not None and omega_key.startswith(SPIROB_HORZ_ARC_KEY):
+            return _spirob_horz_arc(t, omega)
+        theta = omega * t
+        pos, dpos, ddpos = _spirob_horz_circle(theta)
+        # chain rule: d/dt = omega * d/dtheta
+        return {"pos": pos, "vel": omega * dpos, "acc": omega**2 * ddpos}
+
     if model_name == 'tendon':
         L = 0.24
         h = L
-    
+
     elif model_name == 'helix':
         L = 0.45
         h = 0.7
 
-    elif model_name == 'spirob':
-        L = 0.45
-        h = L
 
     # Angle
     theta = omega * t
@@ -51,10 +152,7 @@ def circular_trajectory(t, model_name, omega):
     b = L/6
     phi = np.pi/4
     x1 = a * np.cos(theta)
-    if model_name == 'spirob':
-        z1 = b * np.sin(theta) - (3*L/4-b)
-    else:
-        z1 = b * np.sin(theta) - (L-b) 
+    z1 = b * np.sin(theta) - (L-b)
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi)
@@ -79,15 +177,16 @@ def circular_trajectory(t, model_name, omega):
     return {"pos": pos, "vel": vel, "acc": acc}
 
 def set_target(target_pos, model_name):
+    if model_name == 'spirob_horz':
+        theta = {'pos1': 0.0, 'pos2': np.pi / 2, 'pos3': np.pi, 'pos4': 3 * np.pi / 2}
+        return _spirob_horz_circle(theta[target_pos])[0]
+
     if model_name == 'tendon':
         L = 0.24
         h = L
     elif model_name == 'helix':
         L = 0.45
         h = 0.7
-    elif model_name == 'spirob':
-        L = 0.48
-        h = L
 
     # # Position
     theta = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
@@ -96,10 +195,7 @@ def set_target(target_pos, model_name):
     b = L/6
     phi = np.pi/4
     x1 = a * np.cos(theta)
-    if model_name == 'spirob':
-        z1 = b * np.sin(theta) - (3*L/4-b)
-    else:
-        z1 = b * np.sin(theta) - (L-b)
+    z1 = b * np.sin(theta) - (L-b)
 
     # Position
     x = x1 * np.cos(phi) - z1 * np.sin(phi) 
@@ -158,11 +254,18 @@ def _log_simulation_data(logs, log_idx, data, control_scheme, experiment, result
         logs['x'][log_idx] = data.site("ee").xpos
         logs['xd'][log_idx] = target
 
-def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1'):
-    """Run physics simulation with specified controller and robot."""
+def simulate_model(headless=False, control_scheme=None, target_pos=None, controller=None, experiment=None, model_name=None, sim_duration=10.0, omega='omg1', record_video=False, video_fps=30, sweep_omega=None, timestep=None):
+    """Run physics simulation with specified controller and robot.
+
+    `sweep_omega` overrides the rate of the named sweep trajectory, in rad/s.
+    It is ignored for every other value of `omega`.
+
+    `timestep` overrides the model's integration timestep, which is also the
+    control rate since the controller runs once per step.
+    """
     
     # print(f"Simulating {model_name} with {control_scheme}")
-    robot = Robot(model_name, control_scheme)
+    robot = Robot(model_name, control_scheme, timestep=timestep)
     
     
     # Create controller instance based on control_scheme
@@ -184,7 +287,7 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
     # Pre-allocate logging arrays for better performance
     dt = robot.model.opt.timestep
     if experiment == 'tracking':
-        sim_duration = 4 * np.pi / get_omega(omega)
+        sim_duration = 4 * np.pi / resolve_omega(omega, sweep_omega)
     max_steps = int(sim_duration / dt) + 100  # Add buffer
     log_frequency = 5  # Log every 5 steps
     max_log_steps = max_steps // log_frequency + 1
@@ -195,12 +298,30 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
     step_count = 0
     log_idx = 0
 
+    # Video recording setup
+    frames = []
+    renderer = None
+    video_camera = None
+    video_frame_interval = max(1, int(1.0 / (video_fps * dt)))
+    if record_video:
+        video_camera = mujoco.MjvCamera()
+        mujoco.mjv_defaultFreeCamera(robot.model, video_camera)
+        video_camera.distance = 1.0
+        video_camera.lookat[0] = 0.0
+        video_camera.lookat[1] = 0.0
+        video_camera.azimuth = 70     # angle around z-axis
+        renderer = mujoco.Renderer(robot.model, height=1080, width=800)
+
     # Main simulation loop
     viewer = None
     if not headless:
         viewer = mujoco.viewer.launch_passive(robot.model, robot.data)
-        viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
-        viewer.cam.fixedcamid = robot.model.camera("ortho_side").id
+        cam_id = mujoco.mj_name2id(robot.model, mujoco.mjtObj.mjOBJ_CAMERA, "ortho_side")
+        if cam_id != -1:
+            viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+            viewer.cam.fixedcamid = cam_id
+        else:
+            print("No 'ortho_side' camera in this model; using the free camera.")
 
     try:
         while True:
@@ -210,8 +331,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
                 
             # Get target based on experiment type
             if experiment == 'tracking':
-                w = get_omega(omega)
-                target = circular_trajectory(t, model_name, w)
+                w = resolve_omega(omega, sweep_omega)
+                target = circular_trajectory(t, model_name, w, omega_key=omega)
             else:  # experiment == 'set'
                 target = set_target(target_pos, model_name)
             
@@ -236,6 +357,11 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
                 _log_simulation_data(logs, log_idx, robot.data, control_scheme, experiment, result, t, t_ctrl, target)
                 log_idx += 1
 
+            # Capture video frame
+            if record_video and renderer is not None and step_count % video_frame_interval == 0:
+                renderer.update_scene(robot.data, camera=video_camera)
+                frames.append(renderer.render().copy())
+
             # Terminate after fixed duration (10 seconds)
             if experiment == 'tracking' and t >= 4*np.pi/w:
                 break
@@ -254,6 +380,8 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
     finally:
         if viewer is not None:
             viewer.close()
+        if renderer is not None:
+            renderer.close()
 
     
     # Trim arrays to actual logged data
@@ -265,6 +393,17 @@ def simulate_model(headless=False, control_scheme=None, target_pos=None, control
             actual_logs[key] = arr[:log_idx]
     print(f"Average Control Time {np.mean(actual_logs['ctrl_time']):.6f} seconds")
     print(f"Simulation finished after {actual_logs['sim_time'][-1]} seconds")
+
+    if record_video and frames:
+        import imageio
+        video_dir = f"results/{model_name}/{control_scheme}/videos"
+        os.makedirs(video_dir, exist_ok=True)
+        if experiment == 'set':
+            video_path = f"{video_dir}/{experiment}_{control_scheme}_{target_pos}.mp4"
+        else:
+            video_path = f"{video_dir}/{experiment}_{control_scheme}_{omega}.mp4"
+        imageio.mimwrite(video_path, frames, fps=video_fps)
+        print(f"Video saved to {video_path}")
 
     return actual_logs
 

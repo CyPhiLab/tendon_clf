@@ -14,9 +14,8 @@ SITE_MEASUREMENT = '/spirob/site_measurement'
 # Ground truth from the simulated plant, for evaluating the estimator (no ROS equivalent).
 TRUE_STATE = '/spirob/true_state'
 
-# Marker sites the EKF measures. The vertical model defines them in its XML;
-# for models that don't (the spirob_mujoco submodule), load_model adds them at
-# the same places: the origin of the body that follows segment N.
+# Marker sites the EKF measures, added by load_model if the model lacks them
+# (the spirob_mujoco model does): the origin of the body that follows segment N.
 MARKER_BODIES = {
     'ee_seg5': 'segment_6__configuration_default',
     'ee_seg10': 'segment_11_2__configuration_default',
