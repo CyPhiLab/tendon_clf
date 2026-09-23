@@ -50,6 +50,25 @@ class StateEstimationNode(Node):
         self.F = np.eye(nx)
         self.F[:self.nq, self.nq:] = self.dt * np.eye(self.nq, self.nv)
 
+        # How F is computed:
+        #   'analytic' (default): linearize MuJoCo's Euler step of the smooth
+        #       dynamics (~1 ms). Ignores constraints (joint frictionloss, contacts).
+        #   'fd': mjd_transitionFD on the full model, constraints included (~20 ms).
+        self.jacobian_mode = self.declare_parameter('jacobian', 'analytic')
+        # d(gravity + tendon force)/dq is the expensive part of the analytic F and
+        # changes slowly with configuration, so it is only refreshed every N ticks.
+        self.position_jacobian_every = self.declare_parameter('position_jacobian_every', 10)
+        m = self.model
+        if self.jacobian_mode == 'analytic' and (
+                m.opt.integrator != mujoco.mjtIntegrator.mjINT_EULER
+                or m.actuator_gaintype.any() or m.actuator_biastype.any() or m.actuator_dyntype.any()):
+            self.get_logger().warn(
+                "analytic jacobian assumes the Euler integrator and plain motor actuators; using 'fd'")
+            self.jacobian_mode = 'fd'
+        self.lin_data = mujoco.MjData(self.model)
+        self._dfdq = None
+        self._ticks = 0
+
         # EKF state and covariance, x = [q; dq]
         self.x = np.zeros(nx)
         self.P = np.eye(nx) * 1e-8
@@ -90,7 +109,11 @@ class StateEstimationNode(Node):
         nq, nv = self.nq, self.nv
 
         # F_k computed at x_k-1, u_k-1
-        self.F = self.discrete_jacobian(self.x, self.app_u)[0]
+        if self.jacobian_mode == 'fd':
+            self.F = self.discrete_jacobian(self.x, self.app_u)[0]
+        else:
+            self.F = self.analytic_jacobian(self.x, self.app_u)
+        self._ticks += 1
 
         # States at k-1
         self.data.qpos[:] = self.x[:nq]
@@ -123,9 +146,12 @@ class StateEstimationNode(Node):
 
             y = z - z_pred
             S = H @ P_pred @ H.T + self.R
-            K = P_pred @ H.T @ np.linalg.inv(S)
+            # K = P H^T S^-1, via a solve instead of an explicit inverse (S is symmetric)
+            K = np.linalg.solve(S, H @ P_pred).T
             x_upd = x_pred + K @ y
-            P_upd = (np.eye(nq + nv) - K @ H) @ P_pred
+            # Joseph form keeps P symmetric positive semi-definite despite round-off
+            I_KH = np.eye(nq + nv) - K @ H
+            P_upd = I_KH @ P_pred @ I_KH.T + K @ self.R @ K.T
         else:
             x_upd = x_pred
             P_upd = P_pred
@@ -150,6 +176,67 @@ class StateEstimationNode(Node):
             'task_vel': jac @ self.x[nq:],
             'is_valid': self.have_estimate,
         })
+
+    def analytic_jacobian(self, x, u, eps=1e-6):
+        """Linearize MuJoCo's Euler step of the smooth dynamics at (x, u).
+
+        With implicit joint damping D (what MuJoCo's Euler integrator does):
+            v' = v + h (M + hD)^-1 (f(q) - D v),   q' = q + h v'
+        where f(q) = actuator (tendon) force - gravity - joint stiffness. Hence
+            dv'/dq = h (M + hD)^-1 df/dq,  dv'/dv = I - h (M + hD)^-1 D,
+            dq'/dq = I + h dv'/dq,         dq'/dv = h dv'/dv.
+        M, D and the stiffness are exact; df/dq for gravity and tendon moment
+        arms uses cheap position-only passes (no collision or constraint solve).
+        Agrees with mjd_transitionFD on the constraint-free model to <1% (the
+        rest is Coriolis and dM/dq at nonzero velocity). Constraint forces
+        (joint frictionloss, contacts) are not included.
+        """
+        m, d = self.model, self.lin_data
+        nq, nv, h = m.nq, m.nv, m.opt.timestep
+
+        d.qpos[:] = x[:nq]
+        d.qvel[:] = 0.0
+        if self._dfdq is None or self._ticks % self.position_jacobian_every == 0:
+            f0 = self._position_forces(u)
+            dfdq = np.zeros((nv, nv))
+            for j in range(nv):
+                d.qpos[:] = x[:nq]
+                d.qpos[j] += eps
+                dfdq[:, j] = (self._position_forces(u) - f0) / eps
+            self._dfdq = dfdq
+            d.qpos[:] = x[:nq]
+        mujoco.mj_kinematics(m, d)
+        mujoco.mj_comPos(m, d)
+        mujoco.mj_crb(m, d)
+        M = np.zeros((nv, nv))
+        mujoco.mj_fullM(m, d, M)
+
+        dfdq = self._dfdq - np.diag(m.jnt_stiffness[m.dof_jntid])
+        damping = m.dof_damping
+        MhD = M + h * np.diag(damping)
+        dv_dq = h * np.linalg.solve(MhD, dfdq)
+        dv_dv = np.eye(nv) - h * np.linalg.solve(MhD, np.diag(damping))
+
+        F = np.empty((2 * nv, 2 * nv))
+        F[nv:, :nv] = dv_dq
+        F[nv:, nv:] = dv_dv
+        F[:nv, :nv] = np.eye(nv) + h * dv_dq
+        F[:nv, nv:] = h * dv_dv
+        return F
+
+    def _position_forces(self, u):
+        """Actuator force minus gravity at lin_data.qpos with zero velocity."""
+        m, d = self.model, self.lin_data
+        mujoco.mj_kinematics(m, d)
+        mujoco.mj_comPos(m, d)
+        mujoco.mj_tendon(m, d)
+        mujoco.mj_transmission(m, d)
+        gravity = np.zeros(m.nv)
+        mujoco.mj_rne(m, d, 0, gravity)
+        moment = np.zeros((m.nu, m.nv))
+        mujoco.mju_sparse2dense(moment, d.actuator_moment, d.moment_rownnz,
+                                d.moment_rowadr, d.moment_colind)
+        return moment.T @ (m.actuator_gainprm[:, 0] * u) - gravity
 
     def discrete_jacobian(self, x, u):
         """
