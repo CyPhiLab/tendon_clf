@@ -82,13 +82,6 @@
                   conaffinity="0"/>
         </body>
 
-        <camera name="ortho_side"
-            mode="fixed"
-            orthographic="true"
-            pos="0.2 -1 0.3"
-            xyaxes="1 0 0  0 0 1"
-            fovy="0.6"/>
-
     </worldbody>
 
 
