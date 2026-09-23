@@ -12,22 +12,17 @@ class SimulationNode(Node):
         super().__init__('simulation_node')
 
         model_path = self.declare_parameter(
-            'model_path',
-            '/home/zach/huy/tendon_clf/mujoco_models/spirob/spirob_control.xml'
-        ).get_parameter_value().string_value
-
-        viewer_rate_hz = self.declare_parameter(
-            'viewer_rate_hz', 50.0).get_parameter_value().double_value
-
+            'model_path', 'mujoco_models/spirob/spirob_control.xml').get_parameter_value().string_value
         if not Path(model_path).exists():
             self.get_logger().error(f"Model file not found: {model_path}")
             raise FileNotFoundError(f"Model file not found: {model_path}")
-
         self.model = mujoco.MjModel.from_xml_path(model_path)
         self.data = mujoco.MjData(self.model)
         self.nq = self.model.nq
         self.have_state = False
         self._shutting_down = False
+        viewer_rate_hz = self.declare_parameter(
+            'viewer_rate_hz', 50.0).get_parameter_value().double_value
 
         # Subscribe to the ekf corrected state from state_estimation_node
         self.state_sub = self.create_subscription(RobotState, '/spirob/robot_state', self._on_state, 1)

@@ -11,7 +11,8 @@ from spirob_interfaces.msg import MotorCommand, RobotState
 class ControlNode(Node):
     def __init__(self):
         super().__init__('control_node')
-        model_path = self.declare_parameter('model_path', 'mujoco_models/spirob/spirob_control.xml').get_parameter_value().string_value
+        model_path = self.declare_parameter(
+            'model_path', 'mujoco_models/spirob/spirob_control.xml').get_parameter_value().string_value
         if not Path(model_path).exists():
             self.get_logger().error(f"Model file not found: {model_path}")
             raise FileNotFoundError(f"Model file not found: {model_path}")
