@@ -62,7 +62,8 @@ class VirtualMeasurementNode(Node):
         # True site positions + additive Gaussian noise
         true_pos = np.concatenate([self.data.site(sid).xpos.copy() for sid in self.site_ids])
         noisy_pos = true_pos + self.rng.normal(0.0, self.noise_std, size=true_pos.shape)
-        stamp = self.now()
+        # Stamped with the plant's simulated time: the time the measurement refers to
+        stamp = self.data.time
         self.meas_pub.publish({'stamp': stamp, 'data': noisy_pos})
 
         # Ground truth for evaluating the estimator. q/dq are the plant state

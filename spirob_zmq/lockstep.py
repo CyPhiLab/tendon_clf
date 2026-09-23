@@ -68,7 +68,9 @@ def build(mode, params, per_node, skip=()):
         module = importlib.import_module(f'spirob_zmq.nodes.{name}')
         cls = next(v for k, v in vars(module).items()
                    if isinstance(v, type) and k.endswith('Node') and v.__module__ == module.__name__)
-        node_params = dict(params)
+        # Background threads would make runs nondeterministic
+        node_params = {'jacobian_thread': False}
+        node_params.update(params)
         node_params.update(per_node.get(name, {}))
         sim.add(cls(node_params))
     return sim

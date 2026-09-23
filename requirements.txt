@@ -12,8 +12,9 @@ mujoco>=3.0.0
 # Optimization and control
 cvxpy>=1.3.0
 
-# Messaging for the cross-platform node runtime (spirob_zmq/)
+# Cross-platform node runtime (spirob_zmq/): messaging and the dense QP solver
 pyzmq>=25.0
+daqp>=0.5
 
 # Optional: Commercial QP solver for better performance
 # gurobipy>=10.0.0

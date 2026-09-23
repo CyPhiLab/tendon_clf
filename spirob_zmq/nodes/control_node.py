@@ -1,27 +1,30 @@
 """Soft ID-CLF-QP controller: robot_state -> motor_command.
 
 The QP is the one from controllers/id_clf_qp.py on the claude/port-progress-shc9sv
-branch, including its speedups (56d96aa): the cvxpy problem is built once with
-Parameters for all per-tick data (DPP, canonicalized once). Solved with
-Clarabel by default (see qp_solver below).
-Per-robot settings (gains, task_dim, actuator handling) come from robots.py; the
-``spirob`` profile reproduces the original ROS control_node's objective.
+branch (with the dcmotor terms from its spirob_horz port). Per-robot settings
+come from robots.py; the ``spirob`` profile reproduces the original ROS
+control_node's objective.
 
     min  w_task |J qdd + Jdot dq - mu_des|^2 + reg_qdd |qdd|^2 + reg_u |u|^2
          + reg_dl dl^2 + reg_null |N qdd - qdd_ref|^2
     s.t. CLF:   dV <= -V/e + dl
-         ID:    pinv(B) (M qdd + h) = u
+         ID:    u = pinv(B) (M qdd + h)
          lo(v) <= u <= hi(v)
 
 with B = moment^T k_v and h = bias - passive + moment^T (k_e v_act)
-[- qfrc_constraint], so M qdd + h = B u is MuJoCo's own dynamics (the dcmotor's
-k_v gain and back-EMF, per SPIROB_HORZ_NOTES.md). lo/hi include the dcmotor's
-velocity-dependent force limit.
+[- qfrc_constraint], so M qdd + h = B u is MuJoCo's own dynamics (dcmotor gain
+and back-EMF). lo/hi include the dcmotor's velocity-dependent force limit.
+
+The ID equality defines u, so u is eliminated and the QP is solved densely in
+z = [qdd; dl] (nv + 1 variables, 1 + 2 nu inequality rows) with DAQP. That is
+the same problem the cvxpy version solved (same u to ~1e-10) at ~130 us instead
+of ~4.4 ms, most of which was cvxpy's per-call canonicalization.
 """
 
+import ctypes
 import time
 
-import cvxpy as cp
+import daqp
 import mujoco
 import numpy as np
 from scipy import linalg
@@ -69,16 +72,10 @@ class ControlNode(Node):
         self.u_min = self.declare_parameter('u_min', -12.0)
         self.u_max = self.declare_parameter('u_max', 0.0)
 
-        # QP solver. Clarabel (interior point) solves every tick of the spirob_horz
-        # QP to optimality in ~3 ms; OSQP is similar in median but reports
-        # "inaccurate" and occasionally fails on it (ill-conditioned: back-EMF
-        # dominates and distal inertias are ~1e-4).
-        self.qp_solver = self.declare_parameter('qp_solver', 'CLARABEL')
-
         # Motor ids, in the same order as the u vector
         self.motor_ids = self.declare_parameter('motor_ids', [0, 1, 2])
 
-        # Control loop rate (a tick takes ~4-5 ms, so 500 Hz as in the ROS node is not reachable)
+        # Control loop rate
         self.rate_hz = self.declare_parameter('rate_hz', 200.0)
 
         # Fixed task-space target
@@ -88,11 +85,22 @@ class ControlNode(Node):
         site_name = self.declare_parameter('site_name', 'ee')
         self.site_id = self.model.site(site_name).id
 
-        self._build_problem()
-        # Warm-start cache for the QP solver, carried across ticks
-        self.previous_solution = None
+        # Preallocated work arrays
+        nv, nu = self.model.nv, self.model.nu
+        self._jac6 = np.zeros((6, nv))
+        self._jdot6 = np.zeros((6, nv))
+        self._M = np.zeros((nv, nv))
+        self._H = np.zeros((nv + 1, nv + 1))
+        self._H[nv, nv] = 2.0 * self.reg_dl
+        self._g = np.zeros(nv + 1)
+        self._A = np.zeros((1 + 2 * nu, nv + 1))
+        self._A[0, nv] = -1.0
+        self._b = np.zeros(1 + 2 * nu)
+        self._blower = np.full(1 + 2 * nu, -1e30)
+        self._sense = np.zeros(1 + 2 * nu, dtype=ctypes.c_int)
+
         # Last command sent; used as ctrl when evaluating actuator/constraint forces
-        self.last_u = np.zeros(self.model.nu)
+        self.last_u = np.zeros(nu)
         self.solve_times = []
 
         # Set once a valid RobotState has been received
@@ -107,52 +115,6 @@ class ControlNode(Node):
         # Create a timer that runs the controller and publishes commands
         self.timer = self.create_timer(1.0 / self.rate_hz, self._tick)
 
-    def _build_problem(self):
-        """Build the cvxpy problem once. Every per-tick quantity is a Parameter and
-        every Parameter-matrix product is in an affine constraint (via auxiliary
-        variables), so the problem is DPP and is canonicalized only once."""
-        nu, nv, m = self.model.nu, self.model.nv, self.task_dim
-
-        u = cp.Variable(nu, name='u')
-        qdd = cp.Variable(nv, name='qdd')
-        dl = cp.Variable(1, name='dl')
-        y_task = cp.Variable(m, name='y_task')
-        y_null = cp.Variable(nv, name='y_null')
-        # N qdd = qdd - J^T w with JJ^T w = J qdd, which avoids an (nv, nv) projector
-        w = cp.Variable(m, name='w')
-
-        p = {
-            'jac': cp.Parameter((m, nv), name='jac'),
-            'task_const': cp.Parameter(m, name='task_const'),   # Jdot dq - mu_des
-            'JJT': cp.Parameter((m, m), name='JJT', symmetric=True),
-            'qdd_ref': cp.Parameter(nv, name='qdd_ref'),
-            'clf_coeff': cp.Parameter(nv, name='clf_coeff'),     # 2 eta^T Pe G J
-            'clf_rhs': cp.Parameter(1, name='clf_rhs'),          # -V/e - const
-            'pinvBM': cp.Parameter((nu, nv), name='pinvBM'),     # pinv(B) M
-            'pinvBh': cp.Parameter(nu, name='pinvBh'),           # -pinv(B) h
-            'lb': cp.Parameter(nu, name='lb'),
-            'ub': cp.Parameter(nu, name='ub'),
-        }
-        objective = cp.Minimize(
-            self.task_weight * cp.sum_squares(y_task)
-            + self.reg_qdd * cp.sum_squares(qdd)
-            + self.reg_u * cp.sum_squares(u)
-            + self.reg_dl * cp.sum_squares(dl)
-            + self.reg_null * cp.sum_squares(y_null)
-        )
-        constraints = [
-            y_task == p['jac'] @ qdd + p['task_const'],
-            y_null == qdd - p['jac'].T @ w - p['qdd_ref'],
-            p['JJT'] @ w == p['jac'] @ qdd,
-            p['clf_coeff'] @ qdd - dl <= p['clf_rhs'],
-            p['pinvBM'] @ qdd - u == p['pinvBh'],
-            p['lb'] <= u,
-            u <= p['ub'],
-        ]
-        self.prob = cp.Problem(objective, constraints)
-        self.u_var, self.qdd_var, self.dl_var = u, qdd, dl
-        self.params = p
-
     def _on_state(self, msg):
         if not msg['is_valid']:
             return
@@ -165,7 +127,7 @@ class ControlNode(Node):
             return
 
         model, data = self.model, self.data
-        nu, m = model.nu, self.task_dim
+        nv, m = model.nv, self.task_dim
 
         # Refresh kinematics/dynamics at the current estimated state, with the
         # last command applied (actuator velocity terms and constraint forces)
@@ -173,16 +135,14 @@ class ControlNode(Node):
         mujoco.mj_forward(model, data)
 
         # End-effector Jacobian and its time derivative (task rows only)
-        jac6 = np.zeros((6, model.nv))
-        jdot6 = np.zeros((6, model.nv))
         point = data.site_xpos[self.site_id]
-        body = model.site_bodyid[self.site_id]
-        mujoco.mj_jacSite(model, data, jac6[:3], jac6[3:], self.site_id)
-        mujoco.mj_jacDot(model, data, jdot6[:3], jdot6[3:], point, body)
-        jac, dJ_dt = jac6[:m], jdot6[:m]
+        mujoco.mj_jacSite(model, data, self._jac6[:3], self._jac6[3:], self.site_id)
+        mujoco.mj_jacDot(model, data, self._jdot6[:3], self._jdot6[3:], point,
+                         model.site_bodyid[self.site_id])
+        J, dJ_dt = self._jac6[:m], self._jdot6[:m]
 
         # Mass matrix
-        M = np.zeros((model.nv, model.nv))
+        M = self._M
         mujoco.mj_fullM(model, data, M)
 
         # M qdd + h = B u, exactly as MuJoCo computes it
@@ -194,59 +154,58 @@ class ControlNode(Node):
         h = data.qfrc_bias - data.qfrc_passive + moment.T @ (self.law.k_e * act_vel)
         if self.include_constraint_forces:
             h = h - data.qfrc_constraint
+        # u = P qdd + p
+        P = pinv_B @ M
+        p = pinv_B @ h
 
         # Task-space error (twist; orientation rows, if any, are zero)
         dq = data.qvel
         twist = np.zeros(m)
-        twist[:3] = self.target_pos - data.site_xpos[self.site_id]
-        Jdq = jac @ dq
+        twist[:3] = self.target_pos - point
+        Jdq = J @ dq
         mu_des = self.K * twist - self.Kd * Jdq
+        task_const = dJ_dt @ dq - mu_des
 
-        # Lyapunov function and the qdd-independent part of its derivative
+        # Lyapunov function and its derivative: dV = clf_a qdd + clf_const
         eta = np.concatenate((-twist, Jdq))
         V = float(eta @ self.Pe @ eta)
         eta_T_PeG = eta @ self.PeG
+        clf_a = 2.0 * eta_T_PeG @ J
         clf_const = float(eta @ self.FTPe_PeF @ eta + 2.0 * eta_T_PeG @ (dJ_dt @ dq))
 
-        # Null-space damping reference: -null_gain * N dq
-        JJT = jac @ jac.T
-        qdd_ref = -self.null_gain * (dq - jac.T @ np.linalg.solve(JJT, Jdq))
+        # Null-space projector and damping reference qdd_ref = -null_gain N dq
+        N = np.eye(nv) - J.T @ np.linalg.solve(J @ J.T, J)
+        qdd_ref = -self.null_gain * (N @ dq)
 
         lb, ub = self.law.ctrl_bounds(self.u_min, self.u_max, act_vel)
 
-        p = self.params
-        p['jac'].value = jac
-        p['task_const'].value = dJ_dt @ dq - mu_des
-        p['JJT'].value = JJT
-        p['qdd_ref'].value = qdd_ref
-        p['clf_coeff'].value = 2.0 * eta_T_PeG @ jac
-        p['clf_rhs'].value = np.array([-V / self.e - clf_const])
-        p['pinvBM'].value = pinv_B @ M
-        p['pinvBh'].value = -(pinv_B @ h)
-        p['lb'].value = lb
-        p['ub'].value = ub
-
-        if self.previous_solution is not None:
-            self.u_var.value, self.qdd_var.value, self.dl_var.value = self.previous_solution
+        # Dense QP in z = [qdd; dl]: min 1/2 z'Hz + g'z  s.t.  A z <= b
+        # (N is a symmetric projector, so |N qdd - qdd_ref|^2 has Hessian N)
+        H, g, A, b = self._H, self._g, self._A, self._b
+        H[:nv, :nv] = 2.0 * (self.task_weight * J.T @ J + self.reg_u * P.T @ P + self.reg_null * N)
+        H[np.arange(nv), np.arange(nv)] += 2.0 * self.reg_qdd
+        g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p
+                        - self.reg_null * qdd_ref)
+        nu = model.nu
+        A[0, :nv] = clf_a                     # dV + V/e <= dl
+        A[1:1 + nu, :nv] = P                  # u <= ub
+        A[1 + nu:, :nv] = -P                  # u >= lb
+        b[0] = -V / self.e - clf_const
+        b[1:1 + nu] = ub - p
+        b[1 + nu:] = p - lb
 
         t_start = time.perf_counter()
-        try:
-            self.prob.solve(solver=self.qp_solver, warm_start=True, verbose=False)
-        except Exception as exc:
-            self.get_logger().warn(f'QP solve raised an exception: {exc}')
-            return
+        z, _, exitflag, _ = daqp.solve(H, g, A, b, self._blower, self._sense)
         t_solve = time.perf_counter() - t_start
         self.solve_times.append(t_solve)
-        self.get_logger().debug(f'QP = {t_solve*1000:.2f} ms  V={V:.4g}  |e|={np.linalg.norm(twist[:3]):.4f}')
+        self.get_logger().debug(f'QP = {t_solve*1e6:.0f} us  V={V:.4g}  |e|={np.linalg.norm(twist[:3]):.4f}')
 
-        if self.u_var.value is None:
-            self.get_logger().warn('QP failed to converge -- no solution, skipping this tick')
+        if exitflag < 1:
+            self.get_logger().warn(f'QP failed (DAQP exitflag {exitflag}) -- skipping this tick',
+                                   throttle_duration_sec=1.0)
             return
 
-        self.previous_solution = (self.u_var.value.copy(), self.qdd_var.value.copy(),
-                                  self.dl_var.value.copy())
-
-        u_ctrl = np.clip(self.u_var.value, lb, ub)
+        u_ctrl = np.clip(P @ z[:nv] + p, lb, ub)
         self.last_u = u_ctrl
 
         # Publish the motor command to hardware_node

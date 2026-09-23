@@ -25,9 +25,10 @@ start pose, target, ctrl limits and controller gains; any `-p` override wins.
 | `spirob` | `mujoco_models/spirob/spirob_control.xml` | the original vertical model and ROS controller objective |
 
 Nodes step the model at its own timestep, several substeps per tick, instead
-of overwriting it with 1/rate_hz. For the horizontal arm that is 10 steps of
-~0.6 ms per 100 Hz tick, so the full simulated stack (plant + EKF + controller)
-does not keep up in real time on a 4-core machine. Use `lockstep` to evaluate it.
+of overwriting it with 1/rate_hz. On the horizontal arm a step costs ~0.6 ms,
+~60% of it mesh-mesh collision between adjacent segments (the model disables
+`filterparent`), so the simulated plant runs at ~0.6x real time on a 4-core
+machine. Use `lockstep` for accurate evaluation.
 
 ## Run (from the repo root)
 
@@ -78,18 +79,19 @@ python -m spirob_zmq.lockstep --duration 3 --out run.jsonl -p noise_std=1e-4 -p 
 python -m spirob_zmq.ekf_report run.jsonl --plot ekf.png
 ```
 
-EKF parameters of note: `jacobian=analytic|fd` (analytic is the default, 3-4 ms
-per tick on the horizontal arm; `fd` is the original `mjd_transitionFD` path at
-about 30 ms) and `position_jacobian_every`. The analytic F linearizes MuJoCo's
-Euler or implicitfast step, including the probed actuator law (dcmotor back-EMF,
-force saturation). It matches `mjd_transitionFD` on the constraint-free model to
-about 2%. Constraint forces (tendon frictionloss, contacts) are not linearized.
+The EKF is measurement-driven: each `site_measurement` triggers predict,
+update and publish over the interval since the previous measurement's `stamp`
+(the virtual plant stamps its simulated time). The prediction is `mj_step` at
+`prediction_timestep` (default: the model's), and the covariance uses
+`mjd_transitionFD`, refreshed every `jacobian_every` updates (default 10) on a
+background thread (`jacobian_thread`, off in lockstep for determinism). About
+7 ms per measurement on the horizontal arm, almost all of it the 10 `mj_step`s.
 
-The controller builds its QP once, with cvxpy Parameters, and solves it with
-Clarabel (`qp_solver`); a tick takes about 4-5 ms. `hardware_node` maps ctrl to
-motor current through the same actuator law, clamped to `max_current`. **Its
-non-dry-run path (feedback units, pole pairs, sign convention) has not been
-checked on hardware yet.**
+The controller eliminates u through the ID constraint and solves a dense
+49-variable QP with DAQP: ~0.1 ms solve, ~1.3 ms tick (0.6 ms of that is
+`mj_forward`). `hardware_node` maps ctrl to motor current through the same
+actuator law, clamped to `max_current`. **Its non-dry-run path (feedback units,
+pole pairs, sign convention) has not been checked on hardware yet.**
 
 ### Differences from the ROS nodes (bug fixes)
 
@@ -100,7 +102,8 @@ checked on hardware yet.**
   controller used 0.3 stiffness while the plant and EKF used 0.
 - The virtual plant is driven by `/spirob/motor_state` (the applied input, which
   is also what the EKF uses) instead of `/spirob/motor_command`.
-- EKF update uses a linear solve and the Joseph-form covariance update.
+- EKF update uses a linear solve and the Joseph-form covariance update, and is
+  driven by measurement stamps instead of its own timer.
 
 ## How it maps to ROS
 
