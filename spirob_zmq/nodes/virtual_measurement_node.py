@@ -3,7 +3,7 @@
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import MOTOR_STATE, SITE_MEASUREMENT, TRUE_STATE, load_model
+from spirob_zmq.common import MOTOR_STATE, SITE_MEASUREMENT, TRUE_STATE, load_model, rest_state, substeps
 from spirob_zmq.core import Node, run_node
 
 
@@ -14,6 +14,7 @@ class VirtualMeasurementNode(Node):
         # Model used as the simulated "real" plant
         self.model = load_model(self)
         self.data = mujoco.MjData(self.model)
+        rest_state(self, self.model, self.data)
 
         self.motor_ids = list(self.declare_parameter('motor_ids', [0, 1, 2]))
 
@@ -25,7 +26,7 @@ class VirtualMeasurementNode(Node):
         # Simulation / publish rate
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
         self.dt = 1.0 / self.rate_hz
-        self.model.opt.timestep = self.dt
+        self.n_substeps = substeps(self.model, self.dt)
 
         # Measurement noise (meters, per xyz component, iid Gaussian)
         self.noise_std = self.declare_parameter('noise_std', 1e-10)
@@ -50,9 +51,10 @@ class VirtualMeasurementNode(Node):
             self.ctrl_u[self.motor_ids.index(msg['motor_id'])] = msg['app_ctrl']
 
     def _tick(self):
-        # Forward dynamics for one step
+        # Forward dynamics for one tick, at the model's own timestep
         self.data.ctrl[:] = self.ctrl_u
-        mujoco.mj_step(self.model, self.data)
+        for _ in range(self.n_substeps):
+            mujoco.mj_step(self.model, self.data)
         # mj_step leaves xpos at the pre-step configuration; refresh it so the
         # measurement matches the current qpos.
         mujoco.mj_kinematics(self.model, self.data)

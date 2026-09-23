@@ -3,7 +3,7 @@
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import MOTOR_COMMAND, ROBOT_STATE, command_to_u, load_model
+from spirob_zmq.common import MOTOR_COMMAND, ROBOT_STATE, command_to_u, load_model, rest_state, substeps
 from spirob_zmq.core import Node, run_node
 
 
@@ -12,13 +12,9 @@ class GetStateNode(Node):
         super().__init__('get_state_node', params)
         self.model = load_model(self)
 
-        # Initialize state to zero
+        # Initial state: straight, or gravity-settled if the robot profile says so
         self.data = mujoco.MjData(self.model)
-        self.data.qpos[:] = 0.0
-        self.data.qvel[:] = 0.0
-
-        # Forward kinematics
-        mujoco.mj_forward(self.model, self.data)
+        rest_state(self, self.model, self.data)
 
         # Get the number of generalized coordinates, velocities, and controls
         self.nq = self.model.nq
@@ -26,7 +22,7 @@ class GetStateNode(Node):
         self.nu = self.model.nu
         rate_hz = self.declare_parameter('rate_hz', 500.0)
         self.dt = 1.0 / rate_hz
-        self.model.opt.timestep = self.dt
+        self.n_substeps = substeps(self.model, self.dt)
         self.motor_ids = list(self.declare_parameter('motor_ids', [0, 1, 2]))
 
         # Latest commanded control
@@ -43,8 +39,12 @@ class GetStateNode(Node):
     def _tick(self):
         self.data.ctrl[:] = self.ctrl_u
 
-        # Forward dynamics for one step
-        mujoco.mj_step(self.model, self.data)
+        # Forward dynamics for one tick, at the model's own timestep
+        for _ in range(self.n_substeps):
+            mujoco.mj_step(self.model, self.data)
+        # mj_step leaves xpos/Jacobians at the pre-step configuration
+        mujoco.mj_kinematics(self.model, self.data)
+        mujoco.mj_comPos(self.model, self.data)
 
         # Get the current generalized coordinates and velocities
         q = self.data.qpos.copy()

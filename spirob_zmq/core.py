@@ -21,12 +21,10 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 
 import zmq
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL_PATH = str(REPO_ROOT / 'mujoco_models' / 'spirob' / 'spirob_control.xml')
+from spirob_zmq.robots import DEFAULT_ROBOT, REPO_ROOT, ROBOTS
 
 # Nodes publish to PUB_ADDR (broker XSUB side), subscribe from SUB_ADDR (broker XPUB side).
 PUB_ADDR = os.environ.get('SPIROB_ZMQ_PUB', 'tcp://127.0.0.1:5555')
@@ -94,6 +92,11 @@ class Node:
     def __init__(self, name, params=None):
         self.name = name
         self._params = dict(params or {})
+        robot = self._params.get('robot', DEFAULT_ROBOT)
+        if robot not in ROBOTS:
+            raise ValueError(f'unknown robot {robot!r}; choose from {sorted(ROBOTS)}')
+        self.robot = robot
+        self._profile = ROBOTS[robot]
         self._logger = Logger(name)
         self._ctx = zmq.Context.instance()
 
@@ -113,9 +116,10 @@ class Node:
     def get_logger(self):
         return self._logger
 
-    def declare_parameter(self, name, default):
-        """Return the override for ``name`` if given, else ``default``."""
-        value = self._params.get(name, default)
+    def declare_parameter(self, name, default=None):
+        """Return the ``-p`` override for ``name``, else the robot profile's
+        value (see robots.py), else ``default``."""
+        value = self._params.get(name, self._profile.get(name, default))
         if isinstance(default, float) and isinstance(value, int) and not isinstance(value, bool):
             value = float(value)
         return value

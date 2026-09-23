@@ -7,8 +7,27 @@ The node code mirrors the ROS nodes line for line. Only the plumbing changed.
 ## Install
 
 ```bash
-pip install -r requirements.txt   # includes pyzmq
+git submodule update --init external/spirob_mujoco   # the robot model
+pip install -r requirements.txt                      # includes pyzmq
 ```
+
+Tested with mujoco 3.14. It needs 3.10 or newer: it uses `MjSpec`, `mj_jacDot`,
+and the 3.10 `mj_fullM` signature.
+
+## Robots
+
+`-p robot=...` selects a profile from `robots.py`. The profile sets the model,
+start pose, target, ctrl limits and controller gains; any `-p` override wins.
+
+| robot | model | notes |
+|---|---|---|
+| `spirob_horz` (default) | `external/spirob_mujoco` via `mujoco_models/spirob/spirob_horz_control.xml` | dcmotor (ctrl in volts, back-EMF, 12 N m limit), implicitfast at 1 ms, base raised to 0.55 m, starts gravity-settled. Settings follow SPIROB_HORZ_NOTES.md on `claude/port-progress-shc9sv`. |
+| `spirob` | `mujoco_models/spirob/spirob_control.xml` | the original vertical model and ROS controller objective |
+
+Nodes step the model at its own timestep, several substeps per tick, instead
+of overwriting it with 1/rate_hz. For the horizontal arm that is 10 steps of
+~0.6 ms per 100 Hz tick, so the full simulated stack (plant + EKF + controller)
+does not keep up in real time on a 4-core machine. Use `lockstep` to evaluate it.
 
 ## Run (from the repo root)
 
@@ -59,8 +78,18 @@ python -m spirob_zmq.lockstep --duration 3 --out run.jsonl -p noise_std=1e-4 -p 
 python -m spirob_zmq.ekf_report run.jsonl --plot ekf.png
 ```
 
-EKF parameters of note: `jacobian=analytic|fd` (analytic ~1 ms and the default;
-`fd` is the original `mjd_transitionFD` path at ~20 ms) and `position_jacobian_every`.
+EKF parameters of note: `jacobian=analytic|fd` (analytic is the default, 3-4 ms
+per tick on the horizontal arm; `fd` is the original `mjd_transitionFD` path at
+about 30 ms) and `position_jacobian_every`. The analytic F linearizes MuJoCo's
+Euler or implicitfast step, including the probed actuator law (dcmotor back-EMF,
+force saturation). It matches `mjd_transitionFD` on the constraint-free model to
+about 2%. Constraint forces (tendon frictionloss, contacts) are not linearized.
+
+The controller builds its QP once, with cvxpy Parameters, and solves it with
+Clarabel (`qp_solver`); a tick takes about 4-5 ms. `hardware_node` maps ctrl to
+motor current through the same actuator law, clamped to `max_current`. **Its
+non-dry-run path (feedback units, pole pairs, sign convention) has not been
+checked on hardware yet.**
 
 ### Differences from the ROS nodes (bug fixes)
 

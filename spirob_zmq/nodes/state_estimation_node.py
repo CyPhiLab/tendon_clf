@@ -3,7 +3,8 @@
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT, load_model
+from spirob_zmq.common import (MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT, ActuatorLaw,
+                               actuator_moment, load_model, rest_state, substeps)
 from spirob_zmq.core import Node, run_node
 
 
@@ -33,7 +34,8 @@ class StateEstimationNode(Node):
         # Control loop rate
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
         self.dt = 1.0 / self.rate_hz
-        self.model.opt.timestep = self.dt
+        # Predict at the model's own timestep, n substeps per tick
+        self.n_substeps = substeps(self.model, self.dt)
 
         # EKF noise parameters (meters and meters/sec, per xyz component, iid Gaussian)
         pos_noise = self.declare_parameter('process_pos_noise', 1e-5)
@@ -46,32 +48,37 @@ class StateEstimationNode(Node):
         self.Q = np.diag([pos_noise ** 2] * self.nq + [vel_noise ** 2] * self.nv)
         self.R = (meas_noise ** 2) * np.eye(self.site_meas)
 
-        # Discrete-time linearization of the dynamics, x_{k+1} = F_k x_k + B_k u_k
+        # Discrete-time linearization of the dynamics over one tick, x_{k+1} ~ F_k x_k
         self.F = np.eye(nx)
         self.F[:self.nq, self.nq:] = self.dt * np.eye(self.nq, self.nv)
 
-        # How F is computed:
-        #   'analytic' (default): linearize MuJoCo's Euler step of the smooth
-        #       dynamics (~1 ms). Ignores constraints (joint frictionloss, contacts).
-        #   'fd': mjd_transitionFD on the full model, constraints included (~20 ms).
+        # How F is computed (both are for one model step, then raised to the
+        # number of substeps per tick):
+        #   'analytic' (default): linearize MuJoCo's Euler/implicitfast step of the
+        #       smooth dynamics. Ignores constraints (frictionloss, contacts).
+        #   'fd': mjd_transitionFD on the full model, constraints included.
         self.jacobian_mode = self.declare_parameter('jacobian', 'analytic')
         # d(gravity + tendon force)/dq is the expensive part of the analytic F and
         # changes slowly with configuration, so it is only refreshed every N ticks.
         self.position_jacobian_every = self.declare_parameter('position_jacobian_every', 10)
         m = self.model
+        self.law = ActuatorLaw(m)
+        integrators = (mujoco.mjtIntegrator.mjINT_EULER, mujoco.mjtIntegrator.mjINT_IMPLICITFAST)
         if self.jacobian_mode == 'analytic' and (
-                m.opt.integrator != mujoco.mjtIntegrator.mjINT_EULER
-                or m.actuator_gaintype.any() or m.actuator_biastype.any() or m.actuator_dyntype.any()):
+                m.opt.integrator not in integrators or m.na or not self.law.affine):
             self.get_logger().warn(
-                "analytic jacobian assumes the Euler integrator and plain motor actuators; using 'fd'")
+                "analytic jacobian needs the Euler or implicitfast integrator and actuators "
+                "affine in ctrl and velocity; using 'fd'")
             self.jacobian_mode = 'fd'
         self.lin_data = mujoco.MjData(self.model)
         self._dfdq = None
         self._ticks = 0
 
-        # EKF state and covariance, x = [q; dq]
-        self.x = np.zeros(nx)
-        self.P = np.eye(nx) * 1e-8
+        # EKF state and covariance, x = [q; dq]. The robot starts at rest in the
+        # same state as the plant (straight, or gravity-settled).
+        rest_state(self, self.model, self.data)
+        self.x = np.concatenate([self.data.qpos, self.data.qvel])
+        self.P = np.eye(nx) * self.declare_parameter('initial_covariance', 1e-8)
 
         # Latest applied control (from hardware_node), defaults to zero until the first MotorState arrives.
         self.app_u = np.zeros(self.model.nu)
@@ -108,11 +115,12 @@ class StateEstimationNode(Node):
     def _tick(self):
         nq, nv = self.nq, self.nv
 
-        # F_k computed at x_k-1, u_k-1
+        # F_k computed at x_k-1, u_k-1: one model step, raised to the substep count
         if self.jacobian_mode == 'fd':
-            self.F = self.discrete_jacobian(self.x, self.app_u)[0]
+            F_step = self.discrete_jacobian(self.x, self.app_u)[0]
         else:
-            self.F = self.analytic_jacobian(self.x, self.app_u)
+            F_step = self.analytic_jacobian(self.x, self.app_u)
+        self.F = np.linalg.matrix_power(F_step, self.n_substeps)
         self._ticks += 1
 
         # States at k-1
@@ -121,7 +129,8 @@ class StateEstimationNode(Node):
         self.data.ctrl[:] = self.app_u
 
         # Predicted states at k
-        mujoco.mj_step(self.model, self.data)
+        for _ in range(self.n_substeps):
+            mujoco.mj_step(self.model, self.data)
         x_pred = np.concatenate([self.data.qpos, self.data.qvel])
 
         # mj_step leaves xpos/Jacobians at the pre-step configuration; refresh
@@ -178,44 +187,62 @@ class StateEstimationNode(Node):
         })
 
     def analytic_jacobian(self, x, u, eps=1e-6):
-        """Linearize MuJoCo's Euler step of the smooth dynamics at (x, u).
+        """Linearize one MuJoCo step of the smooth dynamics at (x, u).
 
-        With implicit joint damping D (what MuJoCo's Euler integrator does):
-            v' = v + h (M + hD)^-1 (f(q) - D v),   q' = q + h v'
-        where f(q) = actuator (tendon) force - gravity - joint stiffness. Hence
-            dv'/dq = h (M + hD)^-1 df/dq,  dv'/dv = I - h (M + hD)^-1 D,
-            dq'/dq = I + h dv'/dq,         dq'/dv = h dv'/dv.
-        M, D and the stiffness are exact; df/dq for gravity and tendon moment
-        arms uses cheap position-only passes (no collision or constraint solve).
-        Agrees with mjd_transitionFD on the constraint-free model to <1% (the
-        rest is Coriolis and dM/dq at nonzero velocity). Constraint forces
-        (joint frictionloss, contacts) are not included.
+        Both integrators the models use take the form
+            v' = v + h A^-1 f(q, v, u),   q' = q + h v'
+        with f = actuator force - bias - stiffness - damping (constraints aside),
+            Euler:        A = M + h D                 (implicit joint damping only)
+            implicitfast: A = M - h df/dv             (damping and actuator velocity
+                                                       terms, Coriolis ignored)
+        so, holding A fixed,
+            dv'/dq = h A^-1 df/dq,  dv'/dv = I + h A^-1 df/dv,
+            dq'/dq = I + h dv'/dq,  dq'/dv = h dv'/dv.
+        The actuator law (motor, or dcmotor with back-EMF and force saturation)
+        is probed from the model, so df/dv = -D - moment^T diag(k_e) moment over
+        unsaturated actuators is exact. df/dq (gravity, tendon moment arms,
+        back-EMF through the moment arms) uses cheap position-only passes: no
+        collision or constraint solve. Constraint forces (frictionloss,
+        contacts) are not linearized.
         """
         m, d = self.model, self.lin_data
         nq, nv, h = m.nq, m.nv, m.opt.timestep
+        q, v = x[:nq], x[nq:]
 
-        d.qpos[:] = x[:nq]
-        d.qvel[:] = 0.0
         if self._dfdq is None or self._ticks % self.position_jacobian_every == 0:
-            f0 = self._position_forces(u)
+            f0 = self._position_forces(q, v, u)
             dfdq = np.zeros((nv, nv))
             for j in range(nv):
-                d.qpos[:] = x[:nq]
-                d.qpos[j] += eps
-                dfdq[:, j] = (self._position_forces(u) - f0) / eps
+                qj = q.copy()
+                qj[j] += eps
+                dfdq[:, j] = (self._position_forces(qj, v, u) - f0) / eps
             self._dfdq = dfdq
-            d.qpos[:] = x[:nq]
+
+        d.qpos[:] = q
+        d.qvel[:] = v
         mujoco.mj_kinematics(m, d)
         mujoco.mj_comPos(m, d)
-        mujoco.mj_crb(m, d)
+        mujoco.mj_tendon(m, d)
+        mujoco.mj_transmission(m, d)
+        # mj_makeM, not mj_crb: joint and actuator armature are added there
+        mujoco.mj_makeM(m, d)
         M = np.zeros((nv, nv))
         mujoco.mj_fullM(m, d, M)
+        moment = actuator_moment(m, d)
 
         dfdq = self._dfdq - np.diag(m.jnt_stiffness[m.dof_jntid])
-        damping = m.dof_damping
-        MhD = M + h * np.diag(damping)
-        dv_dq = h * np.linalg.solve(MhD, dfdq)
-        dv_dv = np.eye(nv) - h * np.linalg.solve(MhD, np.diag(damping))
+        damping = np.diag(m.dof_damping)
+        act_vel = moment @ v
+        raw = self.law.k_v * u - self.law.k_e * act_vel
+        unsat = (raw > self.law.f_min) & (raw < self.law.f_max)
+        dfdv = -damping - moment.T @ np.diag(self.law.k_e * unsat) @ moment
+
+        if m.opt.integrator == mujoco.mjtIntegrator.mjINT_EULER:
+            A = M + h * damping
+        else:
+            A = M - h * dfdv
+        dv_dq = h * np.linalg.solve(A, dfdq)
+        dv_dv = np.eye(nv) + h * np.linalg.solve(A, dfdv)
 
         F = np.empty((2 * nv, 2 * nv))
         F[nv:, :nv] = dv_dq
@@ -224,19 +251,20 @@ class StateEstimationNode(Node):
         F[:nv, nv:] = h * dv_dv
         return F
 
-    def _position_forces(self, u):
-        """Actuator force minus gravity at lin_data.qpos with zero velocity."""
+    def _position_forces(self, q, v, u):
+        """Actuator force minus gravity at configuration q (velocity v enters
+        only through the actuator's back-EMF)."""
         m, d = self.model, self.lin_data
+        d.qpos[:] = q
+        d.qvel[:] = 0.0
         mujoco.mj_kinematics(m, d)
         mujoco.mj_comPos(m, d)
         mujoco.mj_tendon(m, d)
         mujoco.mj_transmission(m, d)
         gravity = np.zeros(m.nv)
         mujoco.mj_rne(m, d, 0, gravity)
-        moment = np.zeros((m.nu, m.nv))
-        mujoco.mju_sparse2dense(moment, d.actuator_moment, d.moment_rownnz,
-                                d.moment_rowadr, d.moment_colind)
-        return moment.T @ (m.actuator_gainprm[:, 0] * u) - gravity
+        moment = actuator_moment(m, d)
+        return moment.T @ self.law.force(u, moment @ v) - gravity
 
     def discrete_jacobian(self, x, u):
         """
@@ -251,18 +279,20 @@ class StateEstimationNode(Node):
         Nx = 2 * nv
         Nu = self.model.nu
 
-        # Set the state for this linearization point
-        self.data.qpos[:] = x[:nq]
-        self.data.qvel[:] = x[nq:nq+nv]
-        mujoco.mj_forward(self.model, self.data)
-        self.data.ctrl[:] = u
+        # Set the state for this linearization point (on lin_data, so the
+        # prediction's solver warmstart in self.data is left untouched)
+        d = self.lin_data
+        d.qpos[:] = x[:nq]
+        d.qvel[:] = x[nq:nq+nv]
+        d.ctrl[:] = u
+        mujoco.mj_forward(self.model, d)
 
         # We now call mjd_transitionFD
         A = np.zeros((Nx, Nx))
         B = np.zeros((Nx, Nu))
         eps = 1e-5
         flg_centered = 1
-        mujoco.mjd_transitionFD(self.model, self.data, eps, flg_centered, A, B, None, None)
+        mujoco.mjd_transitionFD(self.model, d, eps, flg_centered, A, B, None, None)
         return A, B
 
 
