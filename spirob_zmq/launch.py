@@ -98,6 +98,8 @@ def main(argv=None):
         cmd = [python, '-m', f'spirob_zmq.nodes.{name}']
         node_cfg = {k: v for k, v in config.items() if not isinstance(v, dict)}
         node_cfg.update(config.get(name, {}))
+        if name == 'control_node' and not args.headless:
+            cmd += ['-p', 'start_delay_s=2.0']
         for key, value in node_cfg.items():
             cmd += ['-p', f'{key}={json.dumps(value)}']
         for item in shared + per_node.get(name, []):

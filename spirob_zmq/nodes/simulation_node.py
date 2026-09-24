@@ -19,6 +19,9 @@ class SimulationNode(Node):
         self.model = load_model(self)
         self.data = mujoco.MjData(self.model)
         self.nq = self.model.nq
+        target = self.declare_parameter('target_pos')
+        if target is not None and self.model.body('target').mocapid[0] >= 0:
+            self.data.mocap_pos[self.model.body('target').mocapid[0]] = target
         self.have_state = False
         viewer_rate_hz = self.declare_parameter('viewer_rate_hz', 50.0)
 

@@ -115,6 +115,8 @@ class ControlNode(Node):
 
         # Set once a valid RobotState has been received
         self.have_state = False
+        self.start_delay_s = self.declare_parameter('start_delay_s', 0.0)
+        self.start_time = None
 
         # Subscribe to the fused state from state_estimation_node
         self.create_subscription(ROBOT_STATE, self._on_state, latest_only=True)
@@ -134,6 +136,10 @@ class ControlNode(Node):
 
     def _tick(self):
         if not self.have_state:
+            return
+        if self.start_time is None:
+            self.start_time = self.now()
+        if self.now() - self.start_time < self.start_delay_s:
             return
 
         model, data = self.model, self.data

@@ -38,7 +38,7 @@ ROBOTS = {
         # Controller, as tuned on the branch.
         'task_dim': 3,
         'K': 200.0,
-        'e': 0.01,
+        'e': 0.02,
         'task_weight': 1.0,
         'reg_qdd': 0.2,
         'reg_u': 0.5,
