@@ -2,7 +2,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 
-MODEL_PATH = '/home/zach/huy/tendon_clf/mujoco_models/spirob/spirob_control.xml'
+MODEL_PATH = '/home/zach/huy/tendon_clf/spirob_mujoco/models/scenes/clf_scene.xml'
 
 
 def generate_launch_description():
