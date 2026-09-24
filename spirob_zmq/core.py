@@ -1,20 +1,4 @@
-"""Minimal rclpy-like node runtime on top of ZeroMQ.
-
-Topology
---------
-All nodes talk through a single XSUB/XPUB forwarder (``spirob_zmq.broker``):
-
-    node PUB --connect--> [XSUB  broker  XPUB] <--connect-- node SUB
-
-so any node can publish or subscribe to any topic without knowing who else is
-running (same as ROS topics). Addresses default to localhost TCP, which works
-on every OS (``ipc://`` does not exist on Windows). Override them with the
-``SPIROB_ZMQ_PUB`` / ``SPIROB_ZMQ_SUB`` environment variables to run nodes on
-different machines.
-
-Messages are sent as two frames: ``[topic, json_payload]``. Payloads are plain
-dicts using the same field names as the ROS ``spirob_interfaces`` messages.
-"""
+"""Minimal rclpy-like node runtime on ZeroMQ."""
 
 import argparse
 import json
@@ -26,7 +10,6 @@ import zmq
 
 from spirob_zmq.robots import DEFAULT_ROBOT, REPO_ROOT, ROBOTS
 
-# Nodes publish to PUB_ADDR (broker XSUB side), subscribe from SUB_ADDR (broker XPUB side).
 PUB_ADDR = os.environ.get('SPIROB_ZMQ_PUB', 'tcp://127.0.0.1:5555')
 SUB_ADDR = os.environ.get('SPIROB_ZMQ_SUB', 'tcp://127.0.0.1:5556')
 
@@ -83,8 +66,6 @@ class _Timer:
 
 
 class _Stats:
-    """Wall-clock cost of one callback, and for timers how late they fired."""
-
     def __init__(self, name, period=None):
         self.name = name
         self.period = period
@@ -95,8 +76,8 @@ class _Stats:
         self.total = 0.0
         self.worst = 0.0
         self.worst_late = 0.0
-        self.overruns = 0   # timer callbacks that took longer than their period
-        self.skipped = 0    # timer periods skipped because we fell behind
+        self.overruns = 0
+        self.skipped = 0
 
     def add(self, duration, late=0.0):
         self.n += 1
@@ -116,12 +97,6 @@ class _Stats:
 
 
 class Node:
-    """Single-threaded node: subscriptions and timers are serviced by ``spin()``.
-
-    Mirrors the subset of the rclpy API the spirob nodes use, so the ported
-    node code reads almost line-for-line like the ROS version.
-    """
-
     def __init__(self, name, params=None):
         self.name = name
         self._params = dict(params or {})
@@ -141,21 +116,17 @@ class Node:
         self._sub.setsockopt(zmq.LINGER, 0)
         self._sub.connect(SUB_ADDR)
 
-        self._subs = {}      # topic -> list of (callback, latest_only)
+        self._subs = {}
         self._timers = []
         self._running = True
-        # Real-time bookkeeping: summary at shutdown, and every timing_report_s if > 0
         self._stats = {}
         self._timing_report_s = self._params.get('timing_report_s', 0)
         self._last_report = time.monotonic()
 
-    # --- rclpy-like API -------------------------------------------------
     def get_logger(self):
         return self._logger
 
     def declare_parameter(self, name, default=None):
-        """Return the ``-p`` override for ``name``, else the robot profile's
-        value (see robots.py), else ``default``."""
         value = self._params.get(name, self._profile.get(name, default))
         if isinstance(default, float) and isinstance(value, int) and not isinstance(value, bool):
             value = float(value)
@@ -165,12 +136,6 @@ class Node:
         return _Publisher(self, topic)
 
     def create_subscription(self, topic, callback, latest_only=False):
-        """Subscribe to ``topic``.
-
-        ``latest_only=True`` behaves like a ROS queue depth of 1: if several
-        messages arrived since the last spin iteration only the newest is
-        delivered. Otherwise every message is delivered in order.
-        """
         if topic not in self._subs:
             self._sub.setsockopt(zmq.SUBSCRIBE, topic.encode())
             self._subs[topic] = []
@@ -203,12 +168,10 @@ class Node:
             if stats.n:
                 self._logger.info(stats.line())
 
-    # --- event loop -------------------------------------------------------
     def _publish(self, topic, msg):
         self._pub.send_multipart(encode(topic, msg))
 
     def _drain(self):
-        """Receive everything currently queued and dispatch it."""
         pending = []
         while True:
             try:
@@ -216,7 +179,7 @@ class Node:
             except zmq.Again:
                 break
             topic, msg = decode(frames)
-            if topic in self._subs:   # ZMQ filters by prefix; require exact match
+            if topic in self._subs:
                 pending.append((topic, msg))
         if not pending:
             return
@@ -258,8 +221,6 @@ class Node:
                     timer.callback()
                     timer.stats.add(time.perf_counter() - t0, late)
                     timer.next_t += timer.period
-                    # If we fell more than a period behind (slow callback), skip
-                    # missed ticks instead of bursting to catch up (as rclpy does).
                     if timer.next_t < time.monotonic():
                         timer.stats.skipped += int((time.monotonic() - timer.next_t) / timer.period) + 1
                         timer.next_t = time.monotonic() + timer.period
@@ -280,11 +241,6 @@ class _Publisher:
 
 
 def parse_params(argv=None, description=None):
-    """Parse ``--param key=value`` / ``--config file.json`` into a dict.
-
-    Values are parsed as JSON when possible (``rate_hz=100``, ``motor_ids=[0,1,2]``,
-    ``dry_run=false``) and kept as strings otherwise (``model_path=foo.xml``).
-    """
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--config', help='JSON file with parameter overrides')
     parser.add_argument('-p', '--param', action='append', default=[], metavar='KEY=VALUE',
@@ -306,7 +262,6 @@ def parse_params(argv=None, description=None):
 
 
 def run_node(node_cls, argv=None):
-    """Standard ``main()`` body: build the node from CLI params and spin it."""
     params = parse_params(argv, description=node_cls.__doc__)
     node = node_cls(params)
     try:
