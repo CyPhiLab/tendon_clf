@@ -38,3 +38,12 @@ MJMODEL.TXT
 python/dist/
 
 .DS_Store
+
+# ROS 2 generated files
+install/
+log/
+build/
+
+# ROS logs
+ros/log/build_*
+ros/log/latest_build
