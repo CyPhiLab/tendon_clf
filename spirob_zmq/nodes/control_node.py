@@ -11,9 +11,11 @@ control_node's objective.
          ID:    u = pinv(B) (M qdd + h)
          lo(v) <= u <= hi(v)
 
-with B = moment^T k_v and h = bias - passive + moment^T (k_e v_act)
-[- qfrc_constraint], so M qdd + h = B u is MuJoCo's own dynamics (dcmotor gain
-and back-EMF). lo/hi include the dcmotor's velocity-dependent force limit.
+with B = moment^T k_v and h = bias - passive [+ moment^T (k_e v_act)]
+[- qfrc_constraint]. With both bracketed terms M qdd + h = B u is MuJoCo's own
+dynamics; the back-EMF term is off by default (compensate_back_emf) so the
+motor's damping stays in the loop. lo/hi include the dcmotor's
+velocity-dependent force limit.
 
 The ID equality defines u, so u is eliminated and the QP is solved densely in
 z = [qdd; dl] (nv + 1 variables, 1 + 2 nu inequality rows) with DAQP. That is
@@ -67,6 +69,13 @@ class ControlNode(Node):
         # Model handling
         self.pinv_rcond = self.declare_parameter('pinv_rcond')
         self.include_constraint_forces = self.declare_parameter('include_constraint_forces', False)
+        # Cancelling the motor's back-EMF in h makes M qdd + h = B u exact but
+        # also removes the motor's own damping from the closed loop. With the
+        # AK dcmotor model (back-EMF damping ~14x lower than the previous
+        # model's) that loop limit-cycles once the estimate is ~20 ms old, as
+        # it is in real time. Off by default; the force-limit bounds still
+        # account for back-EMF.
+        self.compensate_back_emf = self.declare_parameter('compensate_back_emf', False)
 
         # Control input bounds (ctrl units: volts for a dcmotor); None uses the
         # model's ctrlrange
@@ -157,7 +166,9 @@ class ControlNode(Node):
         B = moment.T * self.law.k_v
         pinv_B = (np.linalg.pinv(B) if self.pinv_rcond is None
                   else np.linalg.pinv(B, rcond=self.pinv_rcond))
-        h = data.qfrc_bias - data.qfrc_passive + moment.T @ (self.law.k_e * act_vel)
+        h = data.qfrc_bias - data.qfrc_passive
+        if self.compensate_back_emf:
+            h = h + moment.T @ (self.law.k_e * act_vel)
         if self.include_constraint_forces:
             h = h - data.qfrc_constraint
         # u = P qdd + p
