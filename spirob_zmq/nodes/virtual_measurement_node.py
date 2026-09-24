@@ -20,7 +20,7 @@ class VirtualMeasurementNode(Node):
 
         # Sites to measure, match state_estimation_node's site_names
         site_names = self.declare_parameter(
-            'site_names', ['ee_seg5', 'ee_seg10', 'ee_seg15', 'ee_seg20', 'ee'])
+            'site_names')
         self.site_ids = [self.model.site(name).id for name in site_names]
 
         # Simulation / publish rate
@@ -72,7 +72,9 @@ class VirtualMeasurementNode(Node):
             'stamp': stamp,
             'q': self.data.qpos,
             'dq': self.data.qvel,
+            'act': self.data.act,
             'site_pos': true_pos,
+            'ee_pos': self.data.site_xpos[self.ee_site_id],
         })
 
 

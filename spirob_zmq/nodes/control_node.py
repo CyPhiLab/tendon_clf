@@ -68,9 +68,10 @@ class ControlNode(Node):
         self.pinv_rcond = self.declare_parameter('pinv_rcond')
         self.include_constraint_forces = self.declare_parameter('include_constraint_forces', False)
 
-        # Control input bounds (ctrl units: volts for a dcmotor)
-        self.u_min = self.declare_parameter('u_min', -12.0)
-        self.u_max = self.declare_parameter('u_max', 0.0)
+        # Control input bounds (ctrl units: volts for a dcmotor); None uses the
+        # model's ctrlrange
+        self.u_min = self.declare_parameter('u_min')
+        self.u_max = self.declare_parameter('u_max')
 
         # Motor ids, in the same order as the u vector
         self.motor_ids = self.declare_parameter('motor_ids', [0, 1, 2])
@@ -130,9 +131,14 @@ class ControlNode(Node):
         nv, m = model.nv, self.task_dim
 
         # Refresh kinematics/dynamics at the current estimated state, with the
-        # last command applied (actuator velocity terms and constraint forces)
+        # last command applied (actuator velocity terms and constraint forces).
+        # A motor-current state is set to its steady state for that command,
+        # then only the acceleration stage is recomputed.
         data.ctrl[:] = self.last_u
         mujoco.mj_forward(model, data)
+        if self.law.has_act:
+            data.act[:] = self.law.steady_act(self.last_u, data.actuator_velocity)
+            mujoco.mj_forwardSkip(model, data, mujoco.mjtStage.mjSTAGE_VEL, 0)
 
         # End-effector Jacobian and its time derivative (task rows only)
         point = data.site_xpos[self.site_id]

@@ -21,7 +21,7 @@ start pose, target, ctrl limits and controller gains; any `-p` override wins.
 
 | robot | model | notes |
 |---|---|---|
-| `spirob_horz` (default) | `external/spirob_mujoco` via `mujoco_models/spirob/spirob_horz_control.xml` | dcmotor (ctrl in volts, back-EMF, 12 N m limit), implicitfast at 1 ms, base raised to 0.55 m, starts gravity-settled. Settings follow SPIROB_HORZ_NOTES.md. |
+| `spirob_horz` (default) | `external/spirob_mujoco` via `mujoco_models/spirob/spirob_horz_control.xml` | AK motor as a dcmotor: ctrl in volts (pull-only, 0 V max), motor current is an actuator state, rotor torque limited to the 5 A peak (0.635 N m; the model's own limit is the rated 1.9 A). implicitfast at 1 ms, base raised to 0.55 m, starts gravity-settled, EKF measures the six mocap markers. |
 
 Nodes step the model at its own timestep, several substeps per tick, instead
 of overwriting it with 1/rate_hz. A step of the horizontal arm costs ~0.17 ms.

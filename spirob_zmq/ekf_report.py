@@ -50,7 +50,8 @@ def pair(est, truth):
                 continue
             tr = truth[i]
         m, tr = r['msg'], tr['msg']
-        rows.append((r['t'], m['q'], m['dq'], m['task_pos'], tr['q'], tr['dq'], tr['site_pos'][-3:]))
+        ee_true = tr['ee_pos'] if 'ee_pos' in tr else tr['site_pos'][-3:]
+        rows.append((r['t'], m['q'], m['dq'], m['task_pos'], tr['q'], tr['dq'], ee_true))
     cols = list(zip(*rows))
     return [np.asarray(c, dtype=float) for c in cols]
 

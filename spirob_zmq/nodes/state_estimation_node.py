@@ -37,6 +37,8 @@ class StateEstimationNode(Node):
         self.data = mujoco.MjData(self.model)
         self.nq = self.model.nq
         self.nv = self.model.nv
+        # Actuator activations (a dcmotor's current) are part of the state
+        self.na = self.model.na
         if self.nq != self.nv:
             self.get_logger().warn(
                 'nq != nv  the constant-velocity, covariance model used here assumes nq == nv.')
@@ -46,7 +48,7 @@ class StateEstimationNode(Node):
 
         # Sites used as EKF measurements
         site_names = self.declare_parameter(
-            'site_names', ['ee_seg5', 'ee_seg10', 'ee_seg15', 'ee_seg20', 'ee'])
+            'site_names')
         self.site_ids = [self.model.site(name).id for name in site_names]
         self.ee_site_id = self.model.site('ee').id
         self.site_meas = 3 * len(self.site_ids)
@@ -68,16 +70,18 @@ class StateEstimationNode(Node):
         # EKF noise parameters (meters and meters/sec, per xyz component, iid Gaussian)
         pos_noise = self.declare_parameter('process_pos_noise', 1e-5)
         vel_noise = self.declare_parameter('process_vel_noise', 1e-5)
+        act_noise = self.declare_parameter('process_act_noise', 1e-3)
         meas_noise = self.declare_parameter('measurement_noise', 1e-5)
 
-        nx = self.nq + self.nv
+        nx = self.nq + self.nv + self.na
 
         # Process noise covariance Q (per nominal period) and measurement noise covariance R
-        self.Q = np.diag([pos_noise ** 2] * self.nq + [vel_noise ** 2] * self.nv)
+        self.Q = np.diag([pos_noise ** 2] * self.nq + [vel_noise ** 2] * self.nv
+                         + [act_noise ** 2] * self.na)
         self.R = (meas_noise ** 2) * np.eye(self.site_meas)
 
-        # EKF state and covariance, x = [q; dq]
-        self.x = np.concatenate([self.data.qpos, self.data.qvel])
+        # EKF state and covariance, x = [q; dq; act]
+        self.x = self._get_state(self.data)
         self.P = np.eye(nx) * self.declare_parameter('initial_covariance', 1e-8)
 
         # Linearization of one prediction step, refreshed every jacobian_every
@@ -146,28 +150,26 @@ class StateEstimationNode(Node):
         """Propagate x and P over n prediction steps with the latest applied control."""
         if n == 0:
             return
-        nq = self.nq
         if self.n_updates % self.jacobian_every == 0:
             self.request_jacobian()
         F = np.linalg.matrix_power(self.F_step, n)
 
-        self.data.qpos[:] = self.x[:nq]
-        self.data.qvel[:] = self.x[nq:]
+        self._set_state(self.data, self.x)
         self.data.ctrl[:] = self.app_u
         for _ in range(n):
             mujoco.mj_step(self.model, self.data)
-        self.x = np.concatenate([self.data.qpos, self.data.qvel])
+        self.x = self._get_state(self.data)
         self.P = F @ self.P @ F.T + self.Q * (n * self.h * self.rate_hz)
 
     def update(self, z):
         nq, nv = self.nq, self.nv
         # Kinematics at the predicted state (mj_step leaves xpos at the pre-step state)
-        self.data.qpos[:] = self.x[:nq]
+        self._set_state(self.data, self.x)
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
         z_pred = np.concatenate([self.data.site_xpos[site_id] for site_id in self.site_ids])
 
-        H = np.zeros((self.site_meas, nq + nv))
+        H = np.zeros((self.site_meas, len(self.x)))
         jac = np.zeros((3, nv))
         for i, site_id in enumerate(self.site_ids):
             mujoco.mj_jacSite(self.model, self.data, jac, None, site_id)
@@ -179,15 +181,14 @@ class StateEstimationNode(Node):
         K = np.linalg.solve(S, H @ self.P).T
         self.x = self.x + K @ y
         # Joseph form keeps P symmetric positive semi-definite despite round-off
-        I_KH = np.eye(nq + nv) - K @ H
+        I_KH = np.eye(len(self.x)) - K @ H
         self.P = I_KH @ self.P @ I_KH.T + K @ self.R @ K.T
         self.n_updates += 1
         self.have_estimate = True
 
     def publish(self, stamp):
         nq, nv = self.nq, self.nv
-        self.data.qpos[:] = self.x[:nq]
-        self.data.qvel[:] = self.x[nq:]
+        self._set_state(self.data, self.x)
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
         jac = np.zeros((3, nv))
@@ -197,11 +198,20 @@ class StateEstimationNode(Node):
         self.state_pub.publish({
             'stamp': stamp,
             'q': self.x[:nq],
-            'dq': self.x[nq:],
+            'dq': self.x[nq:nq + nv],
             'task_pos': self.data.site_xpos[self.ee_site_id],
-            'task_vel': jac @ self.x[nq:],
+            'task_vel': jac @ self.x[nq:nq + nv],
             'is_valid': self.have_estimate,
         })
+
+    def _get_state(self, d):
+        return np.concatenate([d.qpos, d.qvel, d.act])
+
+    def _set_state(self, d, x):
+        nq, nv = self.nq, self.nv
+        d.qpos[:] = x[:nq]
+        d.qvel[:] = x[nq:nq + nv]
+        d.act[:] = x[nq + nv:]
 
     def request_jacobian(self):
         """Refresh F_step at the current estimate: inline, or by handing a
@@ -239,13 +249,12 @@ class StateEstimationNode(Node):
         mjd_transitionFD (finite differences of mj_step, constraints included).
         Uses its own MjData so the prediction's solver warmstart is untouched."""
         m, d = self.lin_model, self.lin_data
-        d.qpos[:] = x[:self.nq]
-        d.qvel[:] = x[self.nq:]
+        self._set_state(d, x)
         d.ctrl[:] = u
         if warmstart is not None:
             d.qacc_warmstart[:] = warmstart
         mujoco.mj_forward(m, d)
-        A = np.zeros((2 * m.nv, 2 * m.nv))
+        A = np.zeros((2 * m.nv + m.na, 2 * m.nv + m.na))
         mujoco.mjd_transitionFD(m, d, self.fd_eps, int(self.fd_centered), A, None, None, None)
         return A
 

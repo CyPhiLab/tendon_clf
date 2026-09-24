@@ -51,8 +51,10 @@ class HardwareNode(Node):
         model = load_model(self)
         self.law = ActuatorLaw(model)
         self.gear_model = model.actuator_gear[:, 0].copy()
-        self.u_min = self.declare_parameter('u_min', -12.0)
-        self.u_max = self.declare_parameter('u_max', 0.0)
+        # ctrl range; None uses the model's ctrlrange
+        u_min, u_max = self.declare_parameter('u_min'), self.declare_parameter('u_max')
+        self.u_min = self.law.u_min if u_min is None else np.full(model.nu, float(u_min))
+        self.u_max = self.law.u_max if u_max is None else np.full(model.nu, float(u_max))
 
         # Rate at which motor feedback is published (the motors' CAN status
         # frames are configured for 100 Hz); commands are sent as they arrive
@@ -106,11 +108,12 @@ class HardwareNode(Node):
         currents = self.ctrl_to_current(self.cmd_u, self.shaft_speed)
         if self.dry_run:
             # No hardware: the command is what gets applied
+            applied = np.clip(self.cmd_u, self.u_min, self.u_max)
             self._publish_states([{
                 'position': 0.0,
                 'velocity': 0.0,
                 'current': float(currents[i]),
-                'app_ctrl': float(np.clip(self.cmd_u[i], self.u_min, self.u_max)),
+                'app_ctrl': float(applied[i]),
                 'fault_code': 0,
             } for i in range(len(self.motor_ids))])
             return
