@@ -43,11 +43,11 @@ python run.py --robot tendon --control impedance --experiment tracking --headles
 python run_all.py
 ```
 
-**Real-time stack (estimator + controller + hardware, cross-platform):**
+**Real-time stack:**
 ```bash
-python -m spirob_zmq.launch            # simulated SpiRob, EKF, controller, viewer
+python -m spirob_zmq.launch
 ```
-See [`spirob_zmq/README.md`](spirob_zmq/README.md) for simulation, hardware, and evaluation.
+See [`spirob_zmq/README.md`](spirob_zmq/README.md).
 
 ## Architecture
 

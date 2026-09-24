@@ -1,12 +1,4 @@
-"""Inspect topics while the system runs (``ros2 topic echo/hz`` equivalent).
-
-    python -m spirob_zmq.topic echo /spirob/robot_state
-    python -m spirob_zmq.topic hz /spirob/motor_command
-    python -m spirob_zmq.topic record out.jsonl              # all topics
-    python -m spirob_zmq.topic record out.jsonl /spirob/robot_state /spirob/site_measurement
-
-``record`` writes one JSON object per line: {"t": recv_time, "topic": ..., "msg": {...}}.
-"""
+"""echo / hz / record topics."""
 
 import argparse
 import json

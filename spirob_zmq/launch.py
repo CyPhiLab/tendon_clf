@@ -1,14 +1,4 @@
-"""Cross-platform replacement for ``ros2 launch spirob_ros ...``.
-
-    python -m spirob_zmq.launch                  # EKF architecture (spirob.launch.py)
-    python -m spirob_zmq.launch --mode no_ekf    # spirob_no_ekf.launch.py
-    python -m spirob_zmq.launch --headless --duration 10
-    python -m spirob_zmq.launch -p model_path=/path/to/model.xml -p control_node.K=300
-
-Starts the broker plus one subprocess per node. ``-p key=value`` is passed to
-every node; ``-p node_name.key=value`` only to that node. When any node exits
-(e.g. the viewer window is closed) everything else is shut down.
-"""
+"""Launch the broker and nodes. -p key=value for all nodes, -p node.key=value for one."""
 
 import argparse
 import json
@@ -31,7 +21,6 @@ VIEWER_NODES = {'simulation_node'}
 
 
 def _viewer_python():
-    """On macOS the MuJoCo passive viewer only works under ``mjpython``."""
     if sys.platform != 'darwin':
         return sys.executable
     candidate = Path(sys.executable).with_name('mjpython')

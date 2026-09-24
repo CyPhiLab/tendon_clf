@@ -1,4 +1,4 @@
-"""Simulated plant publishing the true state (no-EKF architecture)."""
+"""Simulated plant publishing the true state."""
 
 import mujoco
 import numpy as np
@@ -12,7 +12,7 @@ class GetStateNode(Node):
         super().__init__('get_state_node', params)
         self.model = load_model(self)
 
-        # Initial state: straight, or gravity-settled if the robot profile says so
+        # Initial state
         self.data = mujoco.MjData(self.model)
         rest_state(self, self.model, self.data)
 
@@ -39,10 +39,9 @@ class GetStateNode(Node):
     def _tick(self):
         self.data.ctrl[:] = self.ctrl_u
 
-        # Forward dynamics for one tick, at the model's own timestep
+        # Forward dynamics for one tick
         for _ in range(self.n_substeps):
             mujoco.mj_step(self.model, self.data)
-        # mj_step leaves xpos/Jacobians at the pre-step configuration
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
 

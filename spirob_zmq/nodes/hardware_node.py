@@ -1,23 +1,4 @@
-"""Converts ctrl commands to AK motor currents and publishes motor feedback.
-
-The conversion follows the MuJoCo actuator law, probed from the model
-(common.ActuatorLaw), so the same code serves the vertical model's plain
-``motor`` (ctrl = actuator force) and the horizontal model's ``dcmotor``
-(ctrl = volts, with back-EMF and a force limit):
-
-    actuator force  f   = clip(k_v u - k_e v_act, forcerange)
-    tendon tension      = gear f
-    motor torque    tau = gear f r_spool           (= f for the dcmotor, gear = 1/r_spool)
-    current         I   = tau / (k_t gear_motor),  clipped to +-max_current
-
-v_act, the actuator velocity, is gear * r_spool * shaft speed. For feedback,
-``app_ctrl`` is the ctrl that would produce the measured current at the
-measured speed, which is what the plant and the EKF consume.
-
-!! Not yet verified on hardware: the feedback units (servo-mode position in
-!! degrees, speed in electrical RPM, converted with pole_pairs), the sign
-!! convention, and the torque constant. dry_run (the default) is unaffected.
-"""
+"""Sends ctrl commands to the AK motors as currents and publishes motor feedback."""
 
 import math
 import threading
@@ -47,17 +28,14 @@ class HardwareNode(Node):
         self.current_rated = self.declare_parameter('current_rated', 1.9)
         self.max_current = self.declare_parameter('max_current', self.current_rated)
 
-        # Actuator law and gear, from the same model the plant and EKF use
         model = load_model(self)
         self.law = ActuatorLaw(model)
         self.gear_model = model.actuator_gear[:, 0].copy()
-        # ctrl range; None uses the model's ctrlrange
         u_min, u_max = self.declare_parameter('u_min'), self.declare_parameter('u_max')
         self.u_min = self.law.u_min if u_min is None else np.full(model.nu, float(u_min))
         self.u_max = self.law.u_max if u_max is None else np.full(model.nu, float(u_max))
 
-        # Rate at which motor feedback is published (the motors' CAN status
-        # frames are configured for 100 Hz); commands are sent as they arrive
+        # Feedback publish rate (CAN status frames are at 100 Hz)
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
         self.dry_run = self.declare_parameter('dry_run', True)
         self.cmd_u = None
@@ -89,11 +67,6 @@ class HardwareNode(Node):
         else:
             self.get_logger().warn('hardware_node running in dry_run mode -- no CAN bus opened')
 
-        # Commands go out as soon as they arrive (set_current is a non-blocking CAN
-        # send). Holding them for a fixed-rate timer added up to one period of
-        # delay, which was enough to make the closed loop oscillate. Feedback
-        # arrives as periodic status frames and reading it blocks, so a reader
-        # thread collects it and a timer publishes it at rate_hz.
         self._fb_lock = threading.Lock()
         self._latest_fb = [None] * len(self.motor_ids)
         self._fb_fresh = False
@@ -107,7 +80,6 @@ class HardwareNode(Node):
         self.cmd_u = command_to_u(msg, self.motor_ids)
         currents = self.ctrl_to_current(self.cmd_u, self.shaft_speed)
         if self.dry_run:
-            # No hardware: the command is what gets applied
             applied = np.clip(self.cmd_u, self.u_min, self.u_max)
             self._publish_states([{
                 'position': 0.0,
@@ -133,7 +105,6 @@ class HardwareNode(Node):
         return (force + self.law.k_e * act_vel) / self.law.k_v
 
     def _feedback_loop(self):
-        """Reader thread: block on the bus for status frames, keep the latest."""
         while self.ok():
             feedbacks = self.controller.get_feedback_all_motors(timeout=0.05)
             with self._fb_lock:
@@ -153,7 +124,7 @@ class HardwareNode(Node):
             if fb is None:
                 states.append(None)
                 continue
-            # AK servo-mode feedback: position in degrees, speed in electrical RPM
+            # position in degrees, speed in ERPM
             speed = fb['speed'] / self.pole_pairs / self.gear * 2.0 * math.pi / 60.0
             self.shaft_speed[i] = speed
             states.append({

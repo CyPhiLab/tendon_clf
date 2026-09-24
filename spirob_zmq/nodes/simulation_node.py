@@ -1,8 +1,4 @@
-"""MuJoCo viewer showing the published robot state.
-
-On macOS the passive viewer must run under ``mjpython`` (installed with the
-``mujoco`` pip package); the launcher does this automatically.
-"""
+"""MuJoCo viewer showing the estimated robot state."""
 
 import mujoco
 import mujoco.viewer

@@ -1,14 +1,4 @@
-"""Run the nodes deterministically in simulated time, without sockets.
-
-Every node's timers fire at their nominal simulated rate, callbacks take zero
-simulated time, and published messages are delivered immediately. Runs are
-reproducible and usually faster than real time, which makes this the tool for
-measuring the estimator. Output is the same JSONL format as
-``python -m spirob_zmq.topic record``, so ``spirob_zmq.ekf_report`` reads both.
-
-    python -m spirob_zmq.lockstep --duration 5 --out run.jsonl
-    python -m spirob_zmq.lockstep -p noise_std=1e-4 -p control_node.rate_hz=50
-"""
+"""Run the nodes deterministically in simulated time."""
 
 import argparse
 import heapq
@@ -26,10 +16,10 @@ class Lockstep:
     def __init__(self):
         self.time = 0.0
         self.nodes = []
-        self._queue = []   # (due_time, seq, timer)
+        self._queue = []
         self._seq = 0
         self.records = []
-        self.record_topics = None   # None = record everything
+        self.record_topics = None
 
     def add(self, node):
         node._publish = lambda topic, msg, _n=node: self._deliver(topic, msg)
@@ -44,7 +34,6 @@ class Lockstep:
         self._seq += 1
 
     def _deliver(self, topic, msg):
-        # Round-trip through JSON so nodes see exactly what they'd get over ZMQ.
         msg = json.loads(json.dumps(msg, default=_to_jsonable))
         if self.record_topics is None or topic in self.record_topics:
             self.records.append({'t': self.time, 'topic': topic, 'msg': msg})
@@ -68,7 +57,6 @@ def build(mode, params, per_node, skip=()):
         module = importlib.import_module(f'spirob_zmq.nodes.{name}')
         cls = next(v for k, v in vars(module).items()
                    if isinstance(v, type) and k.endswith('Node') and v.__module__ == module.__name__)
-        # Background threads would make runs nondeterministic
         node_params = {'jacobian_thread': False}
         node_params.update(params)
         node_params.update(per_node.get(name, {}))

@@ -1,27 +1,4 @@
-"""Soft ID-CLF-QP controller: robot_state -> motor_command.
-
-The QP is the one from controllers/id_clf_qp.py on the claude/port-progress-shc9sv
-branch (with the dcmotor terms from its spirob_horz port). Per-robot settings
-come from robots.py; the ``spirob`` profile reproduces the original ROS
-control_node's objective.
-
-    min  w_task |J qdd + Jdot dq - mu_des|^2 + reg_qdd |qdd|^2 + reg_u |u|^2
-         + reg_dl dl^2 + reg_null |N qdd - qdd_ref|^2
-    s.t. CLF:   dV <= -V/e + dl
-         ID:    u = pinv(B) (M qdd + h)
-         lo(v) <= u <= hi(v)
-
-with B = moment^T k_v and h = bias - passive [+ moment^T (k_e v_act)]
-[- qfrc_constraint]. With both bracketed terms M qdd + h = B u is MuJoCo's own
-dynamics; the back-EMF term is off by default (compensate_back_emf) so the
-motor's damping stays in the loop. lo/hi include the dcmotor's
-velocity-dependent force limit.
-
-The ID equality defines u, so u is eliminated and the QP is solved densely in
-z = [qdd; dl] (nv + 1 variables, 1 + 2 nu inequality rows) with DAQP. That is
-the same problem the cvxpy version solved (same u to ~1e-10) at ~130 us instead
-of ~4.4 ms, most of which was cvxpy's per-call canonicalization.
-"""
+"""ID-CLF-QP controller."""
 
 import ctypes
 import time
@@ -66,19 +43,11 @@ class ControlNode(Node):
         self.reg_dl = self.declare_parameter('reg_dl', 1000.0)
         self.null_gain = self.declare_parameter('null_gain', 50.0)
 
-        # Model handling
         self.pinv_rcond = self.declare_parameter('pinv_rcond')
         self.include_constraint_forces = self.declare_parameter('include_constraint_forces', False)
-        # Cancelling the motor's back-EMF in h makes M qdd + h = B u exact but
-        # also removes the motor's own damping from the closed loop. With the
-        # AK dcmotor model (back-EMF damping ~14x lower than the previous
-        # model's) that loop limit-cycles once the estimate is ~20 ms old, as
-        # it is in real time. Off by default; the force-limit bounds still
-        # account for back-EMF.
         self.compensate_back_emf = self.declare_parameter('compensate_back_emf', False)
 
-        # Control input bounds (ctrl units: volts for a dcmotor); None uses the
-        # model's ctrlrange
+        # Control input bounds; None uses the model's ctrlrange
         self.u_min = self.declare_parameter('u_min')
         self.u_max = self.declare_parameter('u_max')
 
@@ -95,7 +64,6 @@ class ControlNode(Node):
         site_name = self.declare_parameter('site_name', 'ee')
         self.site_id = self.model.site(site_name).id
 
-        # Preallocated work arrays
         nv, nu = self.model.nv, self.model.nu
         self._jac6 = np.zeros((6, nv))
         self._jdot6 = np.zeros((6, nv))
@@ -109,7 +77,6 @@ class ControlNode(Node):
         self._blower = np.full(1 + 2 * nu, -1e30)
         self._sense = np.zeros(1 + 2 * nu, dtype=ctypes.c_int)
 
-        # Last command sent; used as ctrl when evaluating actuator/constraint forces
         self.last_u = np.zeros(nu)
         self.solve_times = []
 
@@ -145,17 +112,14 @@ class ControlNode(Node):
         model, data = self.model, self.data
         nv, m = model.nv, self.task_dim
 
-        # Refresh kinematics/dynamics at the current estimated state, with the
-        # last command applied (actuator velocity terms and constraint forces).
-        # A motor-current state is set to its steady state for that command,
-        # then only the acceleration stage is recomputed.
+        # Refresh kinematics/dynamics at the current estimated state
         data.ctrl[:] = self.last_u
         mujoco.mj_forward(model, data)
         if self.law.has_act:
             data.act[:] = self.law.steady_act(self.last_u, data.actuator_velocity)
             mujoco.mj_forwardSkip(model, data, mujoco.mjtStage.mjSTAGE_VEL, 0)
 
-        # End-effector Jacobian and its time derivative (task rows only)
+        # End-effector Jacobian and its time derivative
         point = data.site_xpos[self.site_id]
         mujoco.mj_jacSite(model, data, self._jac6[:3], self._jac6[3:], self.site_id)
         mujoco.mj_jacDot(model, data, self._jdot6[:3], self._jdot6[3:], point,
@@ -166,7 +130,6 @@ class ControlNode(Node):
         M = self._M
         mujoco.mj_fullM(model, data, M)
 
-        # M qdd + h = B u, exactly as MuJoCo computes it
         moment = actuator_moment(model, data)
         act_vel = data.actuator_velocity
         B = moment.T * self.law.k_v
@@ -177,11 +140,10 @@ class ControlNode(Node):
             h = h + moment.T @ (self.law.k_e * act_vel)
         if self.include_constraint_forces:
             h = h - data.qfrc_constraint
-        # u = P qdd + p
         P = pinv_B @ M
         p = pinv_B @ h
 
-        # Task-space error (twist; orientation rows, if any, are zero)
+        # Task-space error (twist)
         dq = data.qvel
         twist = np.zeros(m)
         twist[:3] = self.target_pos - point
@@ -189,30 +151,28 @@ class ControlNode(Node):
         mu_des = self.K * twist - self.Kd * Jdq
         task_const = dJ_dt @ dq - mu_des
 
-        # Lyapunov function and its derivative: dV = clf_a qdd + clf_const
+        # Lyapunov function and its derivative
         eta = np.concatenate((-twist, Jdq))
         V = float(eta @ self.Pe @ eta)
         eta_T_PeG = eta @ self.PeG
         clf_a = 2.0 * eta_T_PeG @ J
         clf_const = float(eta @ self.FTPe_PeF @ eta + 2.0 * eta_T_PeG @ (dJ_dt @ dq))
 
-        # Null-space projector and damping reference qdd_ref = -null_gain N dq
         N = np.eye(nv) - J.T @ np.linalg.solve(J @ J.T, J)
         qdd_ref = -self.null_gain * (N @ dq)
 
         lb, ub = self.law.ctrl_bounds(self.u_min, self.u_max, act_vel)
 
-        # Dense QP in z = [qdd; dl]: min 1/2 z'Hz + g'z  s.t.  A z <= b
-        # (N is a symmetric projector, so |N qdd - qdd_ref|^2 has Hessian N)
+        # QP in z = [qdd; dl]: min 1/2 z'Hz + g'z  s.t.  A z <= b
         H, g, A, b = self._H, self._g, self._A, self._b
         H[:nv, :nv] = 2.0 * (self.task_weight * J.T @ J + self.reg_u * P.T @ P + self.reg_null * N)
         H[np.arange(nv), np.arange(nv)] += 2.0 * self.reg_qdd
         g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p
                         - self.reg_null * qdd_ref)
         nu = model.nu
-        A[0, :nv] = clf_a                     # dV + V/e <= dl
-        A[1:1 + nu, :nv] = P                  # u <= ub
-        A[1 + nu:, :nv] = -P                  # u >= lb
+        A[0, :nv] = clf_a
+        A[1:1 + nu, :nv] = P
+        A[1 + nu:, :nv] = -P
         b[0] = -V / self.e - clf_const
         b[1:1 + nu] = ub - p
         b[1 + nu:] = p - lb

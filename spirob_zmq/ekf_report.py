@@ -1,12 +1,4 @@
-"""Score the estimator against ground truth from a recorded run.
-
-    python -m spirob_zmq.ekf_report run.jsonl
-    python -m spirob_zmq.ekf_report run.jsonl --plot ekf.png
-
-Each ``robot_state`` estimate is paired with the ``true_state`` carrying the
-same stamp (else the latest one received before it). Works on ``lockstep``
-output and on ``topic record`` output from a real-time run.
-"""
+"""Score the estimator against ground truth from a recorded run."""
 
 import argparse
 import bisect
@@ -32,11 +24,6 @@ def load(path):
 
 
 def pair(est, truth):
-    """Return aligned arrays (t, q_est, dq_est, ee_est, q_true, dq_true, ee_true).
-
-    An estimate is matched to the truth with the same stamp (the EKF stamps its
-    estimate with the measurement's time, the plant stamps truth the same way);
-    failing that, to the latest truth received before it."""
     truth_t = [r['t'] for r in truth]
     by_stamp = {round(r['msg']['stamp'], 6): r for r in truth}
     rows = []

@@ -1,21 +1,4 @@
-"""EKF fusing applied motor control (prediction) with site positions (update).
-
-Measurement-driven: each /spirob/site_measurement triggers predict + update +
-publish. The prediction spans the time since the previous measurement, taken
-from the measurements' ``stamp`` (the time the measurement refers to; the
-virtual plant stamps its simulated time), so the estimate stays aligned with
-the measurements however the processes are scheduled, and a dropped
-measurement just means a longer prediction.
-
-Everything model-related comes from MuJoCo: the prediction is ``mj_step`` at
-``prediction_timestep``, and the covariance is propagated with
-``mjd_transitionFD``. A finite-difference Jacobian costs ~30 ms on the
-horizontal arm (every position perturbation re-runs collision), but the
-estimate is insensitive to how fresh it is (lockstep: refreshing every update,
-every 50, or never all give ~0.02 mm ee error), so it is refreshed every
-``jacobian_every`` updates on a background thread (MuJoCo releases the GIL),
-and predictions use the latest one available.
-"""
+"""EKF: MuJoCo prediction, mocap marker update, run once per measurement."""
 
 import copy
 import threading
@@ -37,7 +20,6 @@ class StateEstimationNode(Node):
         self.data = mujoco.MjData(self.model)
         self.nq = self.model.nq
         self.nv = self.model.nv
-        # Actuator activations (a dcmotor's current) are part of the state
         self.na = self.model.na
         if self.nq != self.nv:
             self.get_logger().warn(
@@ -53,18 +35,13 @@ class StateEstimationNode(Node):
         self.ee_site_id = self.model.site('ee').id
         self.site_meas = 3 * len(self.site_ids)
 
-        # The robot starts at rest in the same state as the plant (straight, or
-        # gravity-settled), computed at the model's own timestep
         rest_state(self, self.model, self.data)
 
-        # Prediction timestep. Defaults to the model's; a coarser step makes
-        # each prediction cheaper at some cost in accuracy.
         h = self.declare_parameter('prediction_timestep')
         if h is not None:
             self.model.opt.timestep = h
         self.h = self.model.opt.timestep
 
-        # Nominal measurement rate; process noise is specified per 1/rate_hz
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
 
         # EKF noise parameters (meters and meters/sec, per xyz component, iid Gaussian)
@@ -75,7 +52,7 @@ class StateEstimationNode(Node):
 
         nx = self.nq + self.nv + self.na
 
-        # Process noise covariance Q (per nominal period) and measurement noise covariance R
+        # Process noise covariance Q and measurement noise covariance R
         self.Q = np.diag([pos_noise ** 2] * self.nq + [vel_noise ** 2] * self.nv
                          + [act_noise ** 2] * self.na)
         self.R = (meas_noise ** 2) * np.eye(self.site_meas)
@@ -84,15 +61,10 @@ class StateEstimationNode(Node):
         self.x = self._get_state(self.data)
         self.P = np.eye(nx) * self.declare_parameter('initial_covariance', 1e-8)
 
-        # Linearization of one prediction step, refreshed every jacobian_every
-        # updates; on a background thread unless jacobian_thread is false
-        # (lockstep turns it off so runs are deterministic)
         self.jacobian_every = self.declare_parameter('jacobian_every', 10)
         self.jacobian_thread = self.declare_parameter('jacobian_thread', True)
         self.fd_eps = self.declare_parameter('fd_eps', 1e-6)
         self.fd_centered = self.declare_parameter('fd_centered', False)
-        # The linearization gets its own model and data, so a background
-        # refresh never shares mutable MuJoCo state with the prediction
         self.lin_model = copy.deepcopy(self.model)
         self.lin_data = mujoco.MjData(self.lin_model)
         self.F_step = self.discrete_jacobian(self.x, np.zeros(self.model.nu))
@@ -132,7 +104,6 @@ class StateEstimationNode(Node):
             return
         stamp = float(msg['stamp'])
         if self.last_stamp is None:
-            # First measurement: the robot is at rest, nothing to predict yet
             n = 0
         else:
             dt = stamp - self.last_stamp
@@ -147,7 +118,6 @@ class StateEstimationNode(Node):
         self.publish(stamp)
 
     def predict(self, n):
-        """Propagate x and P over n prediction steps with the latest applied control."""
         if n == 0:
             return
         if self.n_updates % self.jacobian_every == 0:
@@ -163,7 +133,6 @@ class StateEstimationNode(Node):
 
     def update(self, z):
         nq, nv = self.nq, self.nv
-        # Kinematics at the predicted state (mj_step leaves xpos at the pre-step state)
         self._set_state(self.data, self.x)
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
@@ -177,10 +146,8 @@ class StateEstimationNode(Node):
 
         y = z - z_pred
         S = H @ self.P @ H.T + self.R
-        # K = P H^T S^-1, via a solve instead of an explicit inverse (S is symmetric)
         K = np.linalg.solve(S, H @ self.P).T
         self.x = self.x + K @ y
-        # Joseph form keeps P symmetric positive semi-definite despite round-off
         I_KH = np.eye(len(self.x)) - K @ H
         self.P = I_KH @ self.P @ I_KH.T + K @ self.R @ K.T
         self.n_updates += 1
@@ -194,7 +161,6 @@ class StateEstimationNode(Node):
         jac = np.zeros((3, nv))
         mujoco.mj_jacSite(self.model, self.data, jac, None, self.ee_site_id)
 
-        # Stamped with the measurement's time: this is the estimate at that time
         self.state_pub.publish({
             'stamp': stamp,
             'q': self.x[:nq],
@@ -214,8 +180,6 @@ class StateEstimationNode(Node):
         d.act[:] = x[nq + nv:]
 
     def request_jacobian(self):
-        """Refresh F_step at the current estimate: inline, or by handing a
-        snapshot to the worker (dropped if it is still busy with the last one)."""
         snapshot = (self.x.copy(), self.app_u.copy(), self.data.qacc_warmstart.copy())
         if self._jac_worker is None:
             self.F_step = self.discrete_jacobian(*snapshot)
@@ -245,9 +209,6 @@ class StateEstimationNode(Node):
             self._jac_worker.join(timeout=1.0)
 
     def discrete_jacobian(self, x, u, warmstart=None):
-        """d x_{k+1} / d x_k of one prediction step at (x, u), from MuJoCo's
-        mjd_transitionFD (finite differences of mj_step, constraints included).
-        Uses its own MjData so the prediction's solver warmstart is untouched."""
         m, d = self.lin_model, self.lin_data
         self._set_state(d, x)
         d.ctrl[:] = u
