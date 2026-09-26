@@ -23,7 +23,7 @@ class HardwareNode(Node):
         # Motor parameters
         self.k_t = self.declare_parameter('k_t', 0.127)             # N m / A, before the motor's gearbox
         self.gear = self.declare_parameter('gear', 10.0)            # motor's internal gearbox
-        self.pole_pairs = self.declare_parameter('pole_pairs', 21)  # for ERPM -> rad/s
+        self.pole_pairs = self.declare_parameter('pole_pairs', 14)  # for ERPM -> rad/s
         self.r_spool = self.declare_parameter('r_spool', 0.05)
         self.current_rated = self.declare_parameter('current_rated', 1.9)
         self.max_current = self.declare_parameter('max_current', self.current_rated)
