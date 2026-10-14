@@ -10,7 +10,7 @@
         <rgba haze="1 1 1 1" />
         <global azimuth="160" elevation="-20" offwidth="1920" offheight="1080" />
     </visual>
-
+ 
     <asset>
         <texture type="skybox" builtin="flat" rgb1="1 1 1" rgb2="1 1 1" width="512"
             height="512" />
@@ -19,106 +19,27 @@
         <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5"
             reflectance="0.1" />
     </asset>
-
+ 
     <worldbody>
         <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
         <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
-
-        <!-- <body name="cube_body" pos="0 0 0">
-            <freejoint/>
-            <inertial pos="0 0 0" mass="0.3" diaginertia="8.33e-4 8.33e-4 8.33e-4"/>
-            <geom name="cube" type="box" size="0.04 0.04 0.05" pos="0 0 0"
-                  rgba="0.8 0.2 0.2 1" 
-                  friction="1.0 0.1 0.01" contype="1" conaffinity="2"/>
-        </body>  -->
-<!-- 
-        <body name="sphere_body" pos="0 0 0">
-            <freejoint/>
-            <inertial pos="0 0 0" mass="1e0" diaginertia="1e-3 1e-3 1e-3"/>
-            <geom name="sphere" type="sphere" size="0.05" pos="0 0 0"
-                  rgba="0.8 0.2 0.2 1" 
-                  friction="0.5 0.1 0.01" contype="1" conaffinity="2"/>
-        </body> -->
-        
-        <!-- <body name="crossbar_body" pos="0 0 0">
-            <freejoint/>
-            <inertial pos="0 0 0" mass="0.4" diaginertia="1e-2 1e-2 1e-2"/>
-            <geom name="crossbar" type="cylinder" size="0.03 0.05" pos="0 0 0"
-                  quat="1.0 0 0 0" rgba="0.8 0.2 0.2 1"
-                  friction="0.6 0.1 0.01" contype="1" conaffinity="2"/>
-        </body> -->
-
-        <!-- <geom name="crossbar_2" type="cylinder" size="0.02 0.05" pos="-0.3 0.1 0.025" 
-              quat="1.0 0.0 0 0" rgba="0.8 0.2 0.2 1" 
-              friction="0.8 0.02 0.001" contype="1" conaffinity="2"/> -->
-
-        <!-- Wall with hole at x=-0.15, hole center (y=0, z=0.1), hole half-size 0.07m.       -->
-        <!-- Wall spans y in [-0.3, 0.3] and z in [0, 0.5], thickness 0.015m (half=0.015).   -->
-        <!-- Hole spans z=[0.03, 0.17], y=[-0.07, 0.07].                                      -->
-        <!-- Top piece: z from 0.17 to 0.5 -->
-        <!-- <geom name="wall_top" type="box" size="0.015 0.3 0.165"
-              pos="-0.15 0 0.335" rgba="0.55 0.55 0.55 1"
-              contype="1" conaffinity="1"/> -->
-        <!-- Bottom piece: z from 0 to 0.03 -->
-        <!-- <geom name="wall_bottom" type="box" size="0.015 0.3 0.015"
-              pos="-0.15 0 0.015" rgba="0.55 0.55 0.55 1"
-              contype="1" conaffinity="1"/> -->
-        <!-- Left piece: left of hole (z=[0.03,0.17]) -->
-        <!-- <geom name="wall_left" type="box" size="0.015 0.115 0.07"
-              pos="-0.15 -0.185 0.1" rgba="0.55 0.55 0.55 1"
-              contype="1" conaffinity="1"/> -->
-        <!-- Right piece: right of hole -->
-        <!-- <geom name="wall_right" type="box" size="0.015 0.115 0.07"
-              pos="-0.15 0.185 0.1" rgba="0.55 0.55 0.55 1"
-              contype="1" conaffinity="1"/> -->
-      <body name="target" mocap="true" pos="0.2 0.0 0.2">
+ 
+        <!-- target -->
+        <body name="target" mocap="true" pos="0.0 0.25 0.25">
             <geom name="target_vis"
                   type="sphere"
                   size="0.02"
                   rgba="1 0.2 0.2 0.9"
                   contype="0"
                   conaffinity="0"/>
-      </body>
-
-        <!-- Framed for the horizontal arm with its base raised to z = 0.55 by
-             Robot.initialize_simulation_state(); the arm reaches into -x. -->
-        <camera name="ortho_side"
-            mode="fixed"
-            projection="orthographic"
-            pos="-0.25 -1.5 0.5"
-            xyaxes="1 0 0  0 0 1"
-            fovy="0.8"/>
+        </body>
+ 
     </worldbody>
+
     <keyframe>
-        <!-- Robot pre-bent into hole approach position; cylinder resting on floor -->
-        <key name="init_right"
-             qpos="0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2
-                   0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.3 0.3
-                   0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2  0.4 -0.2
-                   "/>
-
-        <key name="init_up_r"
-             qpos="0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4
-                   0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4
-                   0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4  0.2 0.4
-                   "/>
-
-        <key name="init_up_l"
-             qpos="-0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4
-                   -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4
-                   -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4  -0.2 0.4
-                   "/>
-        <!-- Robot pre-bent to the left (mirror of init); cylinder resting on floor -->
-        <key name="init_left"
-             qpos="-0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2
-                   -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.3 -0.3
-                   -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2  -0.4 -0.2
-                   "/>
-        <!-- All robot joints zeroed (fully straight); cylinder resting on floor -->
-        <key name="zero"
-             qpos="0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0
-                   0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0
-                   0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0  0.0 0.0
-                   "/>
+        <key name="init" qpos="
+            -0.000146 -0.392 2.12e-05 -0.179 0.000107 -0.0522 0.00015 0.0243 0.000164 0.0696 0.00016 0.0932 0.000142 0.1 0.000116 0.0955 8.71e-05 0.082 5.92e-05 0.0628 3.06e-05 0.0402 1.29e-05 0.0167 -3.35e-05 0.00185 -3.22e-05 -0.0011 -2.21e-05 -0.000766 -1.71e-05 -0.000355 -1.31e-05 -7.15e-05 -9.32e-06 5.7e-05 -6.01e-06 9.01e-05 -3.5e-06 4.18e-05 -1.84e-06 -2.06e-05 -8.62e-07 -2.74e-05 -2.97e-07 -1.51e-05 3.46e-09 -2.7e-06
+        "/>
     </keyframe>
+
 </mujoco>

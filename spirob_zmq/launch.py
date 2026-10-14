@@ -15,6 +15,8 @@ from spirob_zmq.core import REPO_ROOT
 LAUNCHES = {
     'ekf': ['virtual_measurement_node', 'state_estimation_node', 'control_node',
             'simulation_node', 'hardware_node'],
+    'real_ekf': ['real_measurement_node', 'state_estimation_node', 'control_node',
+                 'simulation_node', 'hardware_node'],
     'no_ekf': ['get_state_node', 'control_node', 'simulation_node'],
 }
 VIEWER_NODES = {'simulation_node'}

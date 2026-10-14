@@ -38,3 +38,4 @@ MJMODEL.TXT
 python/dist/
 
 .DS_Store
+spirob_zmq/.venv/

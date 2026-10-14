@@ -16,7 +16,7 @@ class VirtualMeasurementNode(Node):
         self.data = mujoco.MjData(self.model)
         rest_state(self, self.model, self.data)
 
-        self.motor_ids = list(self.declare_parameter('motor_ids', [0, 1, 2]))
+        self.motor_ids = list(self.declare_parameter('motor_ids', [10, 1, 2]))
 
         # Sites to measure, match state_estimation_node's site_names
         site_names = self.declare_parameter(
@@ -29,7 +29,9 @@ class VirtualMeasurementNode(Node):
         self.n_substeps = substeps(self.model, self.dt)
 
         # Measurement noise (meters, per xyz component, iid Gaussian)
-        self.noise_std = self.declare_parameter('noise_std', 1e-10)
+        self.noise_std = self.declare_parameter('noise_std', 1e-4)
+        # Noise mean/bias (meters): scalar, or [x, y, z] applied to every site
+        self.noise_mean = np.asarray(self.declare_parameter('noise_mean', 0.02), dtype=float)
         seed = self.declare_parameter('seed', 0)
         self.rng = np.random.default_rng(seed if seed != 0 else None)
 
@@ -53,10 +55,20 @@ class VirtualMeasurementNode(Node):
         mujoco.mj_kinematics(self.model, self.data)
 
         # True site positions + additive Gaussian noise
-        true_pos = np.concatenate([self.data.site(sid).xpos.copy() for sid in self.site_ids])
-        noisy_pos = true_pos + self.rng.normal(0.0, self.noise_std, size=true_pos.shape)
+        true_pos = np.concatenate([self.data.site(site_id).xpos.copy() for site_id in self.site_ids])
+        mean = np.resize(self.noise_mean, true_pos.shape)  # broadcast scalar or tile [x, y, z]
+        noisy_pos = true_pos + self.rng.normal(mean, self.noise_std, size=true_pos.shape)
+        
+        # Randomly set up to 3 sites as missing (NaN) to simulate occlusion
+        noisy_pos_with_missing = noisy_pos.copy()
+        if len(self.site_ids) > 0 and self.rng.random() < 0.5:  # 50% chance each step
+            n_missing = self.rng.integers(1, min(4, len(self.site_ids) + 1))  # 1-3 missing markers
+            missing_ids = self.rng.choice(len(self.site_ids), size=n_missing, replace=False)
+            for missing_id in missing_ids:
+                noisy_pos_with_missing[3*missing_id:3*missing_id+3] = np.nan
+         
         stamp = self.data.time
-        self.meas_pub.publish({'stamp': stamp, 'data': noisy_pos})
+        self.meas_pub.publish({'stamp': stamp, 'data': noisy_pos_with_missing})
 
         # Ground truth
         self.truth_pub.publish({

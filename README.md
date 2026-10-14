@@ -95,3 +95,64 @@ See [`spirob_zmq/README.md`](spirob_zmq/README.md).
 2. Add robot configuration in `robot.py` initialization
 3. Update choices in `run.py` argument parser
 
+## Hardware Debugging
+
+### PCAN CAN Bus Setup (AK Motor Control)
+
+If using PCAN USB adapters for motor control, follow these steps to verify and troubleshoot the setup:
+
+1. **Check PCANBasic library installation:**
+   ```bash
+   find /usr /usr/local /opt -iname 'libpcanbasic.so*' 2>/dev/null
+   ```
+
+2. **Verify PCANBasic Python binding:**
+   ```bash
+   python3 -c "from can.interfaces.pcan.basic import PCANBasic; print('pcanbasic ok')"
+   python3 -c "from can.interfaces.pcan.basic import PCANBasic; PCANBasic(); print('init ok')"
+   ```
+
+3. **Confirm PCAN device is connected:**
+   ```bash
+   lsusb | grep -i -E 'peak|pcan'
+   ```
+
+4. **Check PCAN driver installation:**
+   ```bash
+   sudo find / -type f \( -name 'pcan.ko' -o -name 'pcan.ko.*' \) 2>/dev/null
+   ```
+
+5. **Test CAN bus opening (try different channels if needed: PCAN_USBBUS1, PCAN_USBBUS2, etc.):**
+   ```bash
+   python3 -c "import can; b=can.Bus(interface='pcan', channel='PCAN_USBBUS1', bitrate=1000000); print('open ok'); b.shutdown()"
+   ```
+
+6. **If driver fails to load:** Check that the PCAN driver kernel version matches the current running kernel:
+   ```bash
+   uname -r
+   ```
+   If kernel versions differ, rebuild the PCAN driver:
+   ```bash
+   # 1) Install build tools
+   sudo apt update
+   sudo apt install -y build-essential linux-headers-$(uname -r)
+   
+   # 2) Rebuild PEAK driver (adjust path to your PEAK driver source)
+   cd ~/peak-linux-driver-9.2.0
+   make clean && make
+   sudo make install
+   
+   # 3) Refresh module map and load
+   sudo depmod -a
+   sudo modprobe pcan
+   
+   # 4) Verify driver is loaded
+   modinfo pcan | grep -E 'filename|vermagic'
+   lsmod | grep pcan
+   cat /proc/pcan
+   ```
+
+7. **Test motor control:**
+   ```bash
+   python3 motor_control/ak_motor/test.py --motor_id 10 --command current --value 0.5 --duration 2
+   ```

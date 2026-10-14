@@ -2,6 +2,7 @@
 
 import ctypes
 import time
+from xml.parsers.expat import model
 
 import daqp
 import mujoco
@@ -27,7 +28,7 @@ class ControlNode(Node):
         self.F[:m, m:] = np.eye(m)
         self.G = np.zeros((2 * m, m))
         self.G[m:, :] = np.eye(m)
-        self.e = self.declare_parameter('e', 0.01)
+        self.e = self.declare_parameter('e', 0.1)
         scale = linalg.block_diag(np.eye(m) / self.e, np.eye(m))
         self.Pe = scale.T @ linalg.solve_continuous_are(self.F, self.G, np.eye(2 * m), np.eye(m)) @ scale
         self.PeG = self.Pe @ self.G
@@ -37,8 +38,8 @@ class ControlNode(Node):
         self.K = self.declare_parameter('K', 200.0)
         self.Kd = 2.0 * np.sqrt(self.K)
         self.task_weight = self.declare_parameter('task_weight', 1.0)
-        self.reg_qdd = self.declare_parameter('reg_qdd', 0.2)
-        self.reg_u = self.declare_parameter('reg_u', 0.5)
+        self.reg_qdd = self.declare_parameter('reg_qdd', 2.0)
+        self.reg_u = self.declare_parameter('reg_u', 5.0)
         self.reg_null = self.declare_parameter('reg_null', 0.1)
         self.reg_dl = self.declare_parameter('reg_dl', 1000.0)
         self.null_gain = self.declare_parameter('null_gain', 50.0)
@@ -50,9 +51,10 @@ class ControlNode(Node):
         # Control input bounds; None uses the model's ctrlrange
         self.u_min = self.declare_parameter('u_min')
         self.u_max = self.declare_parameter('u_max')
+        self.u_step_max = self.declare_parameter('u_step_max', 0.02)
 
         # Motor ids, in the same order as the u vector
-        self.motor_ids = self.declare_parameter('motor_ids', [0, 1, 2])
+        self.motor_ids = self.declare_parameter('motor_ids', [10, 1, 2])
 
         # Control loop rate
         self.rate_hz = self.declare_parameter('rate_hz', 200.0)
@@ -71,11 +73,11 @@ class ControlNode(Node):
         self._H = np.zeros((nv + 1, nv + 1))
         self._H[nv, nv] = 2.0 * self.reg_dl
         self._g = np.zeros(nv + 1)
-        self._A = np.zeros((1 + 2 * nu, nv + 1))
+        self._A = np.zeros((1 + 4 * nu, nv + 1))
         self._A[0, nv] = -1.0
-        self._b = np.zeros(1 + 2 * nu)
-        self._blower = np.full(1 + 2 * nu, -1e30)
-        self._sense = np.zeros(1 + 2 * nu, dtype=ctypes.c_int)
+        self._b = np.zeros(1 + 4 * nu)
+        self._blower = np.full(1 + 4 * nu, -1e30)
+        self._sense = np.zeros(1 + 4 * nu, dtype=ctypes.c_int)
 
         self.last_u = np.zeros(nu)
         self.solve_times = []
@@ -146,6 +148,9 @@ class ControlNode(Node):
         # Task-space error (twist)
         dq = data.qvel
         twist = np.zeros(m)
+        mocap_name = "target"
+        mocap_id = self.model.body(mocap_name).mocapid[0]
+        twist[:3] = data.mocap_pos[mocap_id] - point
         twist[:3] = self.target_pos - point
         Jdq = J @ dq
         mu_des = self.K * twist - self.Kd * Jdq
@@ -163,19 +168,30 @@ class ControlNode(Node):
 
         lb, ub = self.law.ctrl_bounds(self.u_min, self.u_max, act_vel)
 
+        # Per-step control change limit: |u - last_u| <= u_step_max (component-wise).
+        du = self.u_step_max
+        u_prev = self.last_u
+
         # QP in z = [qdd; dl]: min 1/2 z'Hz + g'z  s.t.  A z <= b
         H, g, A, b = self._H, self._g, self._A, self._b
         H[:nv, :nv] = 2.0 * (self.task_weight * J.T @ J + self.reg_u * P.T @ P + self.reg_null * N)
         H[np.arange(nv), np.arange(nv)] += 2.0 * self.reg_qdd
-        g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p
-                        - self.reg_null * qdd_ref)
+        # g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+        g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+
         nu = model.nu
         A[0, :nv] = clf_a
         A[1:1 + nu, :nv] = P
-        A[1 + nu:, :nv] = -P
+        A[1 + nu:1 + 2 * nu, :nv] = -P
         b[0] = -V / self.e - clf_const
         b[1:1 + nu] = ub - p
-        b[1 + nu:] = p - lb
+        b[1 + nu:1 + 2 * nu] = p - lb
+
+        # Additional box constraints on the commanded control increment.
+        A[1 + 2 * nu:1 + 3 * nu, :nv] = P
+        A[1 + 3 * nu:1 + 4 * nu, :nv] = -P
+        b[1 + 2 * nu:1 + 3 * nu] = (u_prev + du) - p
+        b[1 + 3 * nu:1 + 4 * nu] = -u_prev + du + p
 
         t_start = time.perf_counter()
         z, _, exitflag, _ = daqp.solve(H, g, A, b, self._blower, self._sense)

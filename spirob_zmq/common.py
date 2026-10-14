@@ -36,10 +36,16 @@ def load_model(node):
 
 def rest_state(node, model, data):
     settle_time = node.declare_parameter('settle_time', 0.0)
+    key_name = node.declare_parameter('init_key', 'init')
     mujoco.mj_resetData(model, data)
+    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, key_name)
+    if key_id < 0:
+        raise ValueError(f"Keyframe '{key_name}' not found")
+
+    data.qpos[:] = model.key_qpos[key_id]
+    data.qvel[:] = 0.0
     for _ in range(int(round(settle_time / model.opt.timestep))):
         mujoco.mj_step(model, data)
-    data.qvel[:] = 0.0
     data.time = 0.0
     mujoco.mj_forward(model, data)
 

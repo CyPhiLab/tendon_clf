@@ -1,6 +1,8 @@
 """Sends ctrl commands to the AK motors as currents and publishes motor feedback."""
 
 import math
+import signal
+import time
 import threading
 
 import numpy as np
@@ -14,7 +16,7 @@ class HardwareNode(Node):
         super().__init__('hardware_node', params)
 
         # Motor ids in the same order u_ctrl
-        self.motor_ids = list(self.declare_parameter('motor_ids', [0, 1, 2]))
+        self.motor_ids = list(self.declare_parameter('motor_ids', [10, 1, 2]))
 
         # CAN bus settings
         self.channel = self.declare_parameter('channel', 'PCAN_USBBUS1')
@@ -36,7 +38,7 @@ class HardwareNode(Node):
         self.u_max = self.law.u_max if u_max is None else np.full(model.nu, float(u_max))
 
         # Feedback publish rate (CAN status frames are at 100 Hz)
-        self.rate_hz = self.declare_parameter('rate_hz', 100.0)
+        self.rate_hz = self.declare_parameter('rate_hz', 500.0)
         self.dry_run = self.declare_parameter('dry_run', True)
         self.cmd_u = None
 
@@ -49,6 +51,7 @@ class HardwareNode(Node):
         # Open the motor controller (servo/current mode)
         self.controller = None
         self.shaft_speed = np.zeros(len(self.motor_ids))   # rad/s, from the last feedback
+        self.commanded_current = np.zeros(len(self.motor_ids))
         if not self.dry_run:
             # Imported lazily so dry runs don't need python-can installed
             from motor_control.ak_motor.motor_can import AKController
@@ -79,19 +82,19 @@ class HardwareNode(Node):
     def _on_command(self, msg):
         self.cmd_u = command_to_u(msg, self.motor_ids)
         currents = self.ctrl_to_current(self.cmd_u, self.shaft_speed)
+        self.commanded_current = currents.copy()
         if self.dry_run:
             applied = np.clip(self.cmd_u, self.u_min, self.u_max)
             self._publish_states([{
                 'position': 0.0,
                 'velocity': 0.0,
                 'current': float(currents[i]),
+                'commanded_current': float(currents[i]),
                 'app_ctrl': float(applied[i]),
                 'fault_code': 0,
             } for i in range(len(self.motor_ids))])
             return
         self.controller.set_current(currents.tolist())
-        motors_relaxed = [self.controller.motors[i] for i, current in enumerate(currents) if current == 0.0]
-        self.controller.disable(motors_relaxed)
 
     def ctrl_to_current(self, u, shaft_speed):
         u = np.clip(u, self.u_min, self.u_max)
@@ -131,6 +134,7 @@ class HardwareNode(Node):
                 'position': math.radians(fb['position']),
                 'velocity': speed,
                 'current': fb['current'],
+                'commanded_current': float(self.commanded_current[i]),
                 'app_ctrl': float(self.current_to_ctrl(fb['current'], speed)[i]),
                 'fault_code': fb['error_code'],
             })
@@ -146,15 +150,23 @@ class HardwareNode(Node):
             self.state_pub.publish(state)
 
     def destroy_node(self):
+        # Further Ctrl+C must not abort the motor shutdown.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.shutdown()
         if self._reader is not None:
-            self._reader.join(timeout=0.2)
+            self._reader.join(timeout=0.2)  # stop feedback reads using the bus
         if self.controller is not None:
             try:
+                self.controller.set_current(0.0)
                 self.controller.disable(self.controller.motors)
-                self.controller.close()
-            except Exception as exc:
-                self.get_logger().warn(f'Error while shutting down motor controller: {exc}')
+                time.sleep(0.05)  # let TX queue flush before closing the bus
+            except BaseException as exc:
+                self.get_logger().warn(f'Error while disabling motors: {exc}')
+            finally:
+                try:
+                    self.controller.close()
+                except BaseException as exc:
+                    self.get_logger().warn(f'Error while closing bus: {exc}')
         super().destroy_node()
 
 

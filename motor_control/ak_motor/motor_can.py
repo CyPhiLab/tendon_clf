@@ -457,9 +457,16 @@ class AKController:
         for m in self.motors:
             if isinstance(m, AKMotorCAN): m.set_origin(permanent)
 
-    def disable(self, motors):
-        for m in motors:
-            if isinstance(m, AKMotorCAN): m.disable()
+    def disable(self, motors, repeats: int = 3, gap_s: float = 0.01):
+        # Send several times per motor, and never let one failure skip the rest.
+        for _ in range(repeats):
+            for m in motors:
+                if not isinstance(m, AKMotorCAN): continue
+                try:
+                    m.disable()
+                except Exception as exc:
+                    print(f"[ERROR] AKController: disable failed for motor id={m.motor_id}: {exc}")
+            time.sleep(gap_s)
 
     def receive_feedbacks(self, timeout: float = 0.05) -> "list[dict | None]":
         return [m.receive_feedback(timeout=timeout)
@@ -529,11 +536,11 @@ class AKController:
             print(f"\n=== Motor {i} (id={m.motor_id}) ===")
             m.print_state()
 
-    # @staticmethod
-    # def _bc(val, n: int) -> list:
-    #     if isinstance(val, (int, float)):
-    #         return [val] * n
-    #     val = list(val)
-    #     if len(val) < n:
-    #         val += [val[-1]] * (n - len(val))
-    #     return val[:n]
+    @staticmethod
+    def _bc(val, n: int) -> list:
+        if isinstance(val, (int, float)):
+            return [val] * n
+        val = list(val)
+        if len(val) < n:
+            val += [val[-1]] * (n - len(val))
+        return val[:n]

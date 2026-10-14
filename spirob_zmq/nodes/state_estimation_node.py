@@ -26,7 +26,7 @@ class StateEstimationNode(Node):
                 'nq != nv  the constant-velocity, covariance model used here assumes nq == nv.')
 
         # Motor ids, in the same order as MotorState.app_ctrl
-        self.motor_ids = list(self.declare_parameter('motor_ids', [0, 1, 2]))
+        self.motor_ids = list(self.declare_parameter('motor_ids', [10, 1, 2]))
 
         # Sites used as EKF measurements
         site_names = self.declare_parameter(
@@ -48,7 +48,7 @@ class StateEstimationNode(Node):
         pos_noise = self.declare_parameter('process_pos_noise', 1e-5)
         vel_noise = self.declare_parameter('process_vel_noise', 1e-5)
         act_noise = self.declare_parameter('process_act_noise', 1e-3)
-        meas_noise = self.declare_parameter('measurement_noise', 1e-5)
+        meas_noise = self.declare_parameter('measurement_noise', 2e-2)
 
         nx = self.nq + self.nv + self.na
 
@@ -89,6 +89,23 @@ class StateEstimationNode(Node):
         # Publisher
         self.state_pub = self.create_publisher(ROBOT_STATE)
 
+    def _filter_valid_measurements(self, z, site_ids):
+        """Filter out NaN measurements, returning valid z and site_ids.
+        
+        Returns:
+            (z_valid, valid_site_ids) or (None, None) if all measurements are NaN.
+        """
+        z_reshaped = z.reshape(len(site_ids), 3)
+        valid_mask = ~np.any(np.isnan(z_reshaped), axis=1)
+        
+        if not np.any(valid_mask):
+            return None, None
+        
+        valid_site_ids = [site_ids[i] for i in np.where(valid_mask)[0]]
+        z_valid = z_reshaped[valid_mask].reshape(-1)
+        
+        return z_valid, valid_site_ids
+
     def _on_command(self, msg):
         motor_id = msg['motor_id']
         if motor_id not in self.motor_ids:
@@ -102,6 +119,13 @@ class StateEstimationNode(Node):
             self.get_logger().warn(
                 f'site_measurement has {z.shape[0]} entries, expected {self.site_meas}; ignoring')
             return
+        
+        # Filter out NaN measurements
+        z_valid, valid_site_ids = self._filter_valid_measurements(z, self.site_ids)
+        if z_valid is None:
+            self.get_logger().warn('All site measurements are NaN; ignoring')
+            return
+        
         stamp = float(msg['stamp'])
         if self.last_stamp is None:
             n = 0
@@ -114,7 +138,7 @@ class StateEstimationNode(Node):
             n = max(1, int(round(dt / self.h)))
         self.last_stamp = stamp
         self.predict(n)
-        self.update(z)
+        self.update(z_valid, valid_site_ids)
         self.publish(stamp)
 
     def predict(self, n):
@@ -129,27 +153,61 @@ class StateEstimationNode(Node):
         for _ in range(n):
             mujoco.mj_step(self.model, self.data)
         self.x = self._get_state(self.data)
-        self.P = F @ self.P @ F.T + self.Q * (n * self.h * self.rate_hz)
+        
+        # Cap process noise scaling to prevent unbounded covariance growth during measurement gaps
+        # Prevents divergence when measurements are delayed or missing for extended periods
+        Q_scale = min(n * self.h * self.rate_hz, 10.0)  # Cap at 10x base uncertainty
+        self.P = F @ self.P @ F.T + self.Q * Q_scale
+        
+        # Clamp covariance diagonal to reasonable bounds (max allowed uncertainty)
+        # Prevents uncontrolled growth and ensures Kalman gain remains effective
+        P_max_diag = 10.0  # meters^2 for position, (m/s)^2 for velocity, actuator state
+        P_diag = np.diag(self.P)
+        P_diag_clamped = np.minimum(P_diag, P_max_diag)
+        np.fill_diagonal(self.P, P_diag_clamped)
 
-    def update(self, z):
+    def update(self, z, site_ids):
         nq, nv = self.nq, self.nv
         self._set_state(self.data, self.x)
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
-        z_pred = np.concatenate([self.data.site_xpos[site_id] for site_id in self.site_ids])
-
-        H = np.zeros((self.site_meas, len(self.x)))
+        
+        # Compute predicted measurement
+        z_pred = np.concatenate([self.data.site_xpos[site_id] for site_id in site_ids])
+        
+        # Build Jacobian H for the sites
+        n_sites = len(site_ids)
+        meas_size = 3 * n_sites
+        H = np.zeros((meas_size, len(self.x)))
         jac = np.zeros((3, nv))
-        for i, site_id in enumerate(self.site_ids):
+        
+        for j, site_id in enumerate(site_ids):
             mujoco.mj_jacSite(self.model, self.data, jac, None, site_id)
-            H[3 * i:3 * i + 3, :nq] = jac
-
+            H[3 * j:3 * j + 3, :nq] = jac
+        
+        # Measurement covariance for the sites
+        R = self.R[np.ix_(np.arange(3 * len(site_ids)), np.arange(3 * len(site_ids)))]
+        
         y = z - z_pred
-        S = H @ self.P @ H.T + self.R
-        K = np.linalg.solve(S, H @ self.P).T
+        S = H @ self.P @ H.T + R
+        # Regularization for numerical stability to prevent ill-conditioning
+        S_reg = S + 1e-4 * np.eye(S.shape[0])
+        K = np.linalg.solve(S_reg, H @ self.P).T
         self.x = self.x + K @ y
         I_KH = np.eye(len(self.x)) - K @ H
-        self.P = I_KH @ self.P @ I_KH.T + K @ self.R @ K.T
+        self.P = I_KH @ self.P @ I_KH.T + K @ R @ K.T
+        
+        # Enforce covariance symmetry: numerical errors can make P slightly asymmetric
+        # Symmetric matrices are mathematically required for positive-definiteness
+        self.P = (self.P + self.P.T) / 2.0
+        
+        # Clamp covariance diagonal to reasonable bounds (safety ceiling on uncertainty)
+        # Prevents divergence by limiting how much the filter can distrust measurements
+        P_max_diag = 10.0  # meters^2 for position, (m/s)^2 for velocity, actuator state
+        P_diag = np.diag(self.P)
+        P_diag_clamped = np.minimum(P_diag, P_max_diag)
+        np.fill_diagonal(self.P, P_diag_clamped)
+        
         self.n_updates += 1
         self.have_estimate = True
 
