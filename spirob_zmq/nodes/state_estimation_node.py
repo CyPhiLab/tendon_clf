@@ -45,10 +45,10 @@ class StateEstimationNode(Node):
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
 
         # EKF noise parameters (meters and meters/sec, per xyz component, iid Gaussian)
-        pos_noise = self.declare_parameter('process_pos_noise', 1e-5)
-        vel_noise = self.declare_parameter('process_vel_noise', 1e-5)
+        pos_noise = self.declare_parameter('process_pos_noise', 1e-2)
+        vel_noise = self.declare_parameter('process_vel_noise', 1e-1)
         act_noise = self.declare_parameter('process_act_noise', 1e-3)
-        meas_noise = self.declare_parameter('measurement_noise', 2e-2)
+        meas_noise = self.declare_parameter('measurement_noise', 1e-3)
 
         nx = self.nq + self.nv + self.na
 
@@ -59,7 +59,7 @@ class StateEstimationNode(Node):
 
         # EKF state and covariance, x = [q; dq; act]
         self.x = self._get_state(self.data)
-        self.P = np.eye(nx) * self.declare_parameter('initial_covariance', 1e-8)
+        self.P = np.eye(nx) * self.declare_parameter('initial_covariance', 1e-6)
 
         self.jacobian_every = self.declare_parameter('jacobian_every', 10)
         self.jacobian_thread = self.declare_parameter('jacobian_thread', True)
@@ -174,6 +174,8 @@ class StateEstimationNode(Node):
         
         # Compute predicted measurement
         z_pred = np.concatenate([self.data.site_xpos[site_id] for site_id in site_ids])
+        # MuJoCo-predicted (prior) positions of all markers, before the Vicon correction
+        self.site_pred = self.data.site_xpos[self.site_ids].reshape(-1).copy()
         
         # Build Jacobian H for the sites
         n_sites = len(site_ids)
@@ -191,7 +193,7 @@ class StateEstimationNode(Node):
         y = z - z_pred
         S = H @ self.P @ H.T + R
         # Regularization for numerical stability to prevent ill-conditioning
-        S_reg = S + 1e-4 * np.eye(S.shape[0])
+        S_reg = S + 1e-8 * np.eye(S.shape[0])
         K = np.linalg.solve(S_reg, H @ self.P).T
         self.x = self.x + K @ y
         I_KH = np.eye(len(self.x)) - K @ H
@@ -225,6 +227,9 @@ class StateEstimationNode(Node):
             'dq': self.x[nq:nq + nv],
             'task_pos': self.data.site_xpos[self.ee_site_id],
             'task_vel': jac @ self.x[nq:nq + nv],
+            # Estimated marker positions (same order as site_names), for plotting vs Vicon
+            'site_pos': self.data.site_xpos[self.site_ids].reshape(-1),
+            'site_pos_pred': getattr(self, 'site_pred', self.data.site_xpos[self.site_ids].reshape(-1)),
             'is_valid': self.have_estimate,
         })
 

@@ -37,8 +37,8 @@ class HardwareNode(Node):
         self.u_min = self.law.u_min if u_min is None else np.full(model.nu, float(u_min))
         self.u_max = self.law.u_max if u_max is None else np.full(model.nu, float(u_max))
 
-        # Feedback publish rate (CAN status frames are at 100 Hz)
-        self.rate_hz = self.declare_parameter('rate_hz', 500.0)
+        # Feedback publish rate (CAN status frames are at 1000 Hz)
+        self.rate_hz = self.declare_parameter('rate_hz', 1000.0)
         self.dry_run = self.declare_parameter('dry_run', True)
         self.cmd_u = None
 
@@ -96,16 +96,17 @@ class HardwareNode(Node):
             return
         self.controller.set_current(currents.tolist())
 
-    def ctrl_to_current(self, u, shaft_speed):
+    # No back-EMF term: the AK drivers regulate current, so feeding back sampled
+    # shaft speed here forms a discrete damping loop that is unstable (b*Ts/J > 2).
+    # shaft_speed is kept in the signature but intentionally unused.
+    def ctrl_to_current(self, u, shaft_speed=None):
         u = np.clip(u, self.u_min, self.u_max)
-        act_vel = self.gear_model * self.r_spool * shaft_speed
-        torque = self.gear_model * self.law.force(u, act_vel) * self.r_spool
+        torque = self.gear_model * self.law.force(u, 0.0) * self.r_spool
         return np.clip(torque / (self.k_t * self.gear), -self.max_current, self.max_current)
 
-    def current_to_ctrl(self, current, shaft_speed):
-        act_vel = self.gear_model * self.r_spool * shaft_speed
+    def current_to_ctrl(self, current, shaft_speed=None):
         force = current * self.k_t * self.gear / (self.gear_model * self.r_spool)
-        return (force + self.law.k_e * act_vel) / self.law.k_v
+        return force / self.law.k_v
 
     def _feedback_loop(self):
         while self.ok():

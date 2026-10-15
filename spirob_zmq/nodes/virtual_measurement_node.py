@@ -31,7 +31,7 @@ class VirtualMeasurementNode(Node):
         # Measurement noise (meters, per xyz component, iid Gaussian)
         self.noise_std = self.declare_parameter('noise_std', 1e-4)
         # Noise mean/bias (meters): scalar, or [x, y, z] applied to every site
-        self.noise_mean = np.asarray(self.declare_parameter('noise_mean', 0.02), dtype=float)
+        self.noise_mean = np.asarray(self.declare_parameter('noise_mean', 0.03), dtype=float)
         seed = self.declare_parameter('seed', 0)
         self.rng = np.random.default_rng(seed if seed != 0 else None)
 

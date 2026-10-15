@@ -21,6 +21,10 @@ LAUNCHES = {
 }
 VIEWER_NODES = {'simulation_node'}
 
+# Where each mode's recordings and plots go
+RESULTS_DIR = REPO_ROOT / 'ekf_results'
+RESULTS_SUBDIR = {'ekf': 'sim', 'no_ekf': 'sim', 'real_ekf': 'real'}
+
 
 def _viewer_python():
     if sys.platform != 'darwin':
@@ -57,6 +61,8 @@ def main(argv=None):
     parser.add_argument('--no-broker', action='store_true', help='a broker is already running')
     parser.add_argument('-p', '--param', action='append', default=[], metavar='[NODE.]KEY=VALUE')
     parser.add_argument('--config', help='JSON file: {"key": v, "node_name": {"key": v}}')
+    parser.add_argument('--no-record', action='store_true', help='do not record topics or plot')
+    parser.add_argument('--name', help='run name (default: timestamp)')
     args = parser.parse_args(argv)
 
     shared, per_node = _split_params(args.param)
@@ -81,6 +87,14 @@ def main(argv=None):
     if not args.no_broker:
         spawn('broker', [sys.executable, '-m', 'spirob_zmq.broker'])
         time.sleep(0.2)
+
+    record_path = None
+    if not args.no_record:
+        out_dir = RESULTS_DIR / RESULTS_SUBDIR[args.mode]
+        out_dir.mkdir(parents=True, exist_ok=True)
+        record_path = out_dir / f'{args.name or time.strftime("%Y%m%d_%H%M%S")}.jsonl'
+        spawn('recorder', [sys.executable, '-m', 'spirob_zmq.topic', 'record', str(record_path)])
+        time.sleep(0.2)  # subscribe before nodes start publishing
 
     for name in LAUNCHES[args.mode]:
         if name in VIEWER_NODES and args.headless:
@@ -125,6 +139,15 @@ def main(argv=None):
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 proc.kill()
+
+    if record_path is not None and record_path.exists() and record_path.stat().st_size > 0:
+        plot_path = record_path.with_suffix('.png')
+        print(f'[launch] recorded {record_path}; plotting {plot_path}', flush=True)
+        try:
+            subprocess.run([sys.executable, '-m', 'spirob_zmq.ekf_report', str(record_path),
+                            '--plot', str(plot_path)], **popen_kw)
+        except KeyboardInterrupt:
+            pass
     return exit_code
 
 

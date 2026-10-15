@@ -84,7 +84,7 @@ class ControlNode(Node):
 
         # Set once a valid RobotState has been received
         self.have_state = False
-        self.start_delay_s = self.declare_parameter('start_delay_s', 0.0)
+        self.start_delay_s = self.declare_parameter('start_delay_s', 2.0)
         self.start_time = None
 
         # Subscribe to the fused state from state_estimation_node

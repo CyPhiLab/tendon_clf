@@ -15,8 +15,9 @@ ROBOTS = {
         'vicon_ip': '172.20.54.13',
         'vicon_rate_hz': 100.0,
         'base_height': 0.125,
-        'settle_time': 3.0,
-        'target_pos': [0.0,0.15,0.21],
+        'settle_time': 5.0,
+        'target_pos': [0.0,0.2,0.1],
+        'site_name': 'marker_2_seg_8',  # site tracked by control_node (default 'ee')
         'u_max': 0.0,
         'site_names': ['marker_1_seg_2', 'marker_2_seg_2', 'marker_3_seg_2',
                        'marker_1_seg_5', 'marker_2_seg_5', 'marker_3_seg_5',
@@ -35,7 +36,7 @@ ROBOTS = {
         'include_constraint_forces': True,
         # 5 A peak current
         'motor_torque_limit': 0.127 * 5.0,
-        'max_current': 5.0,
+        'max_current': 1.9,
         'r_spool': 10.0 / 250.0,
     },
 }

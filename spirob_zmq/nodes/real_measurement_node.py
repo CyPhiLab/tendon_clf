@@ -50,7 +50,9 @@ class RealMeasurementNode(Node):
         self.warmup_frames = self.declare_parameter('warmup_frames', 100)
         self.dbscan_eps = self.declare_parameter('dbscan_eps', 1.5e-3)  # 1.5 mm
         self.dbscan_min_samples = self.declare_parameter('dbscan_min_samples', 10)
-        self.max_match_distance = self.declare_parameter('max_match_distance', 0.003)  # 3 mm
+        self.max_match_distance = self.declare_parameter('max_match_distance', 0.03)  # 3 cm
+        # Reject any Vicon marker at or beyond this distance from the origin (m)
+        self.max_marker_radius = self.declare_parameter('max_marker_radius', 0.45)
 
         # Vicon client.
         self.client = ViconDataStream.Client()
@@ -89,7 +91,7 @@ class RealMeasurementNode(Node):
         """
         n_ref = ref_xyz.shape[0]
         matched = np.full((n_ref, 3), np.nan, dtype=float)
-        max_match_distance = 0.035  # 3.5 cm in meters
+        max_match_distance = self.max_match_distance  # 3.5 cm in meters
 
         if markers_xyz.shape[0] == 0:
             return matched
@@ -143,6 +145,14 @@ class RealMeasurementNode(Node):
 
         return matched
 
+    def _read_markers(self, unlabeled):
+        """Vicon unlabeled markers in meters, shape (N, 3), dropping any with |p| >= max_marker_radius."""
+        pts = np.array([
+            [marker[0][0] / 1000.0, marker[0][1] / 1000.0, marker[0][2] / 1000.0]
+            for marker in unlabeled
+        ], dtype=float).reshape(-1, 3)
+        return pts[np.linalg.norm(pts, axis=1) < self.max_marker_radius]
+
     def _warmup_initial_measurements(self):
         """Collect a short Vicon burst and use DBSCAN to estimate initial marker centers."""
         self.get_logger().info(f'Running DBSCAN warmup for {self.warmup_frames} frames...')
@@ -156,10 +166,7 @@ class RealMeasurementNode(Node):
             except ViconDataStream.DataStreamException:
                 continue
 
-            raw = np.array([
-                [marker[0][0] / 1000.0, marker[0][1] / 1000.0, marker[0][2] / 1000.0]
-                for marker in unlabeled
-            ], dtype=float)
+            raw = self._read_markers(unlabeled)
 
             if raw.size > 0:
                 warmup_points.append(raw)
@@ -218,10 +225,7 @@ class RealMeasurementNode(Node):
         except ViconDataStream.DataStreamException:
             return
 
-        current_markers = np.array([
-            [marker[0][0] / 1000.0, marker[0][1] / 1000.0, marker[0][2] / 1000.0]
-            for marker in unlabeled
-        ], dtype=float)
+        current_markers = self._read_markers(unlabeled)
 
         smoothed = self._match_current_frame_to_previous(current_markers)
         self.last_measurements = smoothed

@@ -22,6 +22,7 @@ VIEWER_DURATION_SEC = 10.0
 INIT_FRAMES = 100
 DBSCAN_EPS = 1.5e-3  # 1.5 mm
 DBSCAN_MIN_SAMPLES = 10
+MAX_MARKER_RADIUS = 0.45  # m; drop markers at or beyond this distance from the Vicon origin
 
 MODEL_PATH = REPO_ROOT / "mujoco_models" / "spirob" / "spirob_horz_control.xml"
 REFERENCE_MARKER_NAMES = [
@@ -177,7 +178,8 @@ def collect_initial_clusters(client):
         points = np.array([
             [marker[0][0] / 1000.0, marker[0][1] / 1000.0, marker[0][2] / 1000.0]
             for marker in unlabeled
-        ], dtype=float)
+        ], dtype=float).reshape(-1, 3)
+        points = points[np.linalg.norm(points, axis=1) < MAX_MARKER_RADIUS]
 
         if len(points) > 0:
             collected_points.append(points)
