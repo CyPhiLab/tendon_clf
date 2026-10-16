@@ -1,4 +1,4 @@
-"""Sends ctrl commands to the AK motors as currents and publishes motor feedback."""
+"""Sends motor-current commands to the AK motors and publishes motor feedback."""
 
 import math
 import signal
@@ -26,13 +26,18 @@ class HardwareNode(Node):
         self.k_t = self.declare_parameter('k_t', 0.127)             # N m / A, before the motor's gearbox
         self.gear = self.declare_parameter('gear', 10.0)            # motor's internal gearbox
         self.pole_pairs = self.declare_parameter('pole_pairs', 14)  # for ERPM -> rad/s
-        self.r_spool = self.declare_parameter('r_spool', 0.05)
+        self.r_spool = self.declare_parameter('r_spool', 0.04)
         self.current_rated = self.declare_parameter('current_rated', 1.9)
         self.max_current = self.declare_parameter('max_current', self.current_rated)
 
         model = load_model(self)
         self.law = ActuatorLaw(model)
-        self.gear_model = model.actuator_gear[:, 0].copy()
+        # The model's actuators are current sources: gear = gearbox / r_spool * k_t, ctrl in amps
+        gear_model = model.actuator_gear[:, 0]
+        expected = self.gear / self.r_spool * self.k_t
+        if not np.allclose(gear_model, expected, rtol=1e-3):
+            raise ValueError(f'model actuator gear {gear_model} != gear / r_spool * k_t = {expected:.4f}; '
+                             'model and hardware parameters disagree')
         u_min, u_max = self.declare_parameter('u_min'), self.declare_parameter('u_max')
         self.u_min = self.law.u_min if u_min is None else np.full(model.nu, float(u_min))
         self.u_max = self.law.u_max if u_max is None else np.full(model.nu, float(u_max))
@@ -42,6 +47,9 @@ class HardwareNode(Node):
         self.dry_run = self.declare_parameter('dry_run', True)
         self.cmd_u = None
 
+        # Current [A] held on every motor from startup until the first command, to take up tendon slack
+        self.pretension_current = self.declare_parameter('pretension_current', 0.0)
+
         # Publisher for per-motor state
         self.state_pub = self.create_publisher(MOTOR_STATE)
 
@@ -50,17 +58,10 @@ class HardwareNode(Node):
 
         # Open the motor controller (servo/current mode)
         self.controller = None
-        self.shaft_speed = np.zeros(len(self.motor_ids))   # rad/s, from the last feedback
         self.commanded_current = np.zeros(len(self.motor_ids))
         if not self.dry_run:
             # Imported lazily so dry runs don't need python-can installed
             from motor_control.ak_motor.motor_can import AKController
-            f_max = np.max(np.abs(self.law.force(np.full(len(self.motor_ids), self.u_min), 0.0)))
-            i_needed = f_max * np.max(self.gear_model) * self.r_spool / (self.k_t * self.gear)
-            if i_needed > self.max_current:
-                self.get_logger().warn(
-                    f'model can ask for {i_needed:.1f} A but max_current is {self.max_current:.1f} A; '
-                    'commands beyond that will be clipped')
             self.controller = AKController.make_servo(
                 motor_ids=self.motor_ids,
                 channel=self.channel,
@@ -78,35 +79,36 @@ class HardwareNode(Node):
             self._reader = threading.Thread(target=self._feedback_loop, daemon=True)
             self._reader.start()
             self.timer = self.create_timer(1.0 / self.rate_hz, self._publish_feedback)
+        if self.pretension_current != 0.0:
+            self.pretension_timer = self.create_timer(0.02, self._hold_pretension)
 
     def _on_command(self, msg):
         self.cmd_u = command_to_u(msg, self.motor_ids)
-        currents = self.ctrl_to_current(self.cmd_u, self.shaft_speed)
+        self._send(self.ctrl_to_current(self.cmd_u))
+
+    def _hold_pretension(self):
+        if self.cmd_u is None:
+            self._send(self.ctrl_to_current(np.full(len(self.motor_ids), self.pretension_current)))
+
+    def _send(self, currents):
         self.commanded_current = currents.copy()
         if self.dry_run:
-            applied = np.clip(self.cmd_u, self.u_min, self.u_max)
             self._publish_states([{
                 'position': 0.0,
                 'velocity': 0.0,
                 'current': float(currents[i]),
                 'commanded_current': float(currents[i]),
-                'app_ctrl': float(applied[i]),
+                'app_ctrl': float(currents[i]),
                 'fault_code': 0,
             } for i in range(len(self.motor_ids))])
             return
         self.controller.set_current(currents.tolist())
 
-    # No back-EMF term: the AK drivers regulate current, so feeding back sampled
-    # shaft speed here forms a discrete damping loop that is unstable (b*Ts/J > 2).
-    # shaft_speed is kept in the signature but intentionally unused.
-    def ctrl_to_current(self, u, shaft_speed=None):
+    # u is the motor current. No back-EMF term: the AK drives regulate current themselves, and
+    # feeding back sampled shaft speed here forms a discrete damping loop that is unstable.
+    def ctrl_to_current(self, u):
         u = np.clip(u, self.u_min, self.u_max)
-        torque = self.gear_model * self.law.force(u, 0.0) * self.r_spool
-        return np.clip(torque / (self.k_t * self.gear), -self.max_current, self.max_current)
-
-    def current_to_ctrl(self, current, shaft_speed=None):
-        force = current * self.k_t * self.gear / (self.gear_model * self.r_spool)
-        return force / self.law.k_v
+        return np.clip(u, -self.max_current, self.max_current)
 
     def _feedback_loop(self):
         while self.ok():
@@ -130,13 +132,13 @@ class HardwareNode(Node):
                 continue
             # position in degrees, speed in ERPM
             speed = fb['speed'] / self.pole_pairs / self.gear * 2.0 * math.pi / 60.0
-            self.shaft_speed[i] = speed
             states.append({
                 'position': math.radians(fb['position']),
                 'velocity': speed,
                 'current': fb['current'],
                 'commanded_current': float(self.commanded_current[i]),
-                'app_ctrl': float(self.current_to_ctrl(fb['current'], speed)[i]),
+                # The drive tracks the command within ~0.02 A; the command is the less noisy input
+                'app_ctrl': float(self.commanded_current[i]),
                 'fault_code': fb['error_code'],
             })
         self._publish_states(states)

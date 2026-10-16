@@ -6,8 +6,8 @@ import threading
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import (MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT, load_model,
-                               rest_state)
+from spirob_zmq.common import (INITIAL_STATE, MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT, VoltageLimit,
+                               load_model, rest_state, step_current)
 from spirob_zmq.core import Node, run_node
 
 
@@ -49,6 +49,8 @@ class StateEstimationNode(Node):
         vel_noise = self.declare_parameter('process_vel_noise', 1e-1)
         act_noise = self.declare_parameter('process_act_noise', 1e-3)
         meas_noise = self.declare_parameter('measurement_noise', 1e-3)
+        # Per-marker chi-square gate on the innovation (3 dof, 99.9 %); 0 disables it
+        self.innovation_gate = self.declare_parameter('innovation_gate', 16.27)
 
         nx = self.nq + self.nv + self.na
 
@@ -76,15 +78,24 @@ class StateEstimationNode(Node):
             self._jac_worker = threading.Thread(target=self._jacobian_loop, daemon=True)
             self._jac_worker.start()
 
-        # Latest applied control (from hardware_node), defaults to zero until the first MotorState arrives.
+        # Latest applied motor current (from hardware_node), zero until the first MotorState arrives.
         self.app_u = np.zeros(self.model.nu)
+        self.vlimit = VoltageLimit(self)
 
         self.last_stamp = None
         self.have_estimate = False
 
+        # 'measurement': start from the pose fitted to the first still Vicon snapshot (INITIAL_STATE),
+        # ignoring measurements until it arrives. 'keyframe': start from the settled init keyframe.
+        self.init_from = self.declare_parameter('init_from', 'measurement')
+        self.init_q_std = self.declare_parameter('init_q_std', 0.05)
+        self.init_dq_std = self.declare_parameter('init_dq_std', 0.05)
+        self.initialized = self.init_from == 'keyframe'
+
         # Subscriptions
         self.create_subscription(MOTOR_STATE, self._on_command)
         self.create_subscription(SITE_MEASUREMENT, self._on_measurement)
+        self.create_subscription(INITIAL_STATE, self._on_initial_state)
 
         # Publisher
         self.state_pub = self.create_publisher(ROBOT_STATE)
@@ -113,7 +124,22 @@ class StateEstimationNode(Node):
         i = self.motor_ids.index(motor_id)
         self.app_u[i] = msg['app_ctrl']
 
+    def _on_initial_state(self, msg):
+        if self.initialized:
+            return
+        nq, nv, na = self.nq, self.nv, self.na
+        self.x = np.concatenate([np.asarray(msg['q'], dtype=float), np.zeros(nv), np.zeros(na)])
+        self.P = np.diag([self.init_q_std ** 2] * nq + [self.init_dq_std ** 2] * nv
+                         + [self.P[i, i] for i in range(nq + nv, nq + nv + na)])
+        self.last_stamp = None
+        self.F_step = self.discrete_jacobian(self.x, self.app_u)
+        self.initialized = True
+        self.get_logger().info(f'initialized from measured pose (fit rms {1e3 * msg.get("rms", float("nan")):.1f} mm)')
+
     def _on_measurement(self, msg):
+        if not self.initialized:
+            self.get_logger().info('waiting for the initial state', throttle_duration_sec=2.0)
+            return
         z = np.array(msg['data'], dtype=float)
         if z.shape[0] != self.site_meas:
             self.get_logger().warn(
@@ -149,9 +175,7 @@ class StateEstimationNode(Node):
         F = np.linalg.matrix_power(self.F_step, n)
 
         self._set_state(self.data, self.x)
-        self.data.ctrl[:] = self.app_u
-        for _ in range(n):
-            mujoco.mj_step(self.model, self.data)
+        step_current(self.model, self.data, self.app_u, n, self.vlimit)
         self.x = self._get_state(self.data)
         
         # Cap process noise scaling to prevent unbounded covariance growth during measurement gaps
@@ -192,6 +216,19 @@ class StateEstimationNode(Node):
         
         y = z - z_pred
         S = H @ self.P @ H.T + R
+
+        # Drop markers whose innovation is implausible for this S (wrong Vicon match, reflection).
+        # If most markers disagree, the state is off rather than the markers, so keep them all.
+        if self.innovation_gate:
+            d2 = np.array([y[3 * j:3 * j + 3] @ np.linalg.solve(S[3 * j:3 * j + 3, 3 * j:3 * j + 3],
+                                                                 y[3 * j:3 * j + 3]) for j in range(n_sites)])
+            bad = d2 > self.innovation_gate
+            if bad.any() and bad.sum() <= n_sites // 2:
+                keep = np.repeat(~bad, 3)
+                H, R, y = H[keep], R[np.ix_(keep, keep)], y[keep]
+                S = H @ self.P @ H.T + R
+                self.get_logger().warn(f'rejected {int(bad.sum())} marker(s) with innovation d2 '
+                                       f'{np.round(d2[bad], 1)}', throttle_duration_sec=1.0)
         # Regularization for numerical stability to prevent ill-conditioning
         S_reg = S + 1e-8 * np.eye(S.shape[0])
         K = np.linalg.solve(S_reg, H @ self.P).T

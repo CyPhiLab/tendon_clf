@@ -2,14 +2,13 @@
 
 import ctypes
 import time
-from xml.parsers.expat import model
 
 import daqp
 import mujoco
 import numpy as np
 from scipy import linalg
 
-from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, ActuatorLaw, actuator_moment,
+from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, ActuatorLaw, VoltageLimit, actuator_moment,
                                load_model)
 from spirob_zmq.core import Node, run_node
 
@@ -20,6 +19,7 @@ class ControlNode(Node):
         self.model = load_model(self)
         self.data = mujoco.MjData(self.model)
         self.law = ActuatorLaw(self.model)
+        self.vlimit = VoltageLimit(self)
 
         # CLF invariants
         self.task_dim = self.declare_parameter('task_dim', 3)
@@ -39,19 +39,18 @@ class ControlNode(Node):
         self.Kd = 2.0 * np.sqrt(self.K)
         self.task_weight = self.declare_parameter('task_weight', 1.0)
         self.reg_qdd = self.declare_parameter('reg_qdd', 2.0)
-        self.reg_u = self.declare_parameter('reg_u', 5.0)
+        self.reg_u = self.declare_parameter('reg_u', 24.2)
         self.reg_null = self.declare_parameter('reg_null', 0.1)
         self.reg_dl = self.declare_parameter('reg_dl', 1000.0)
         self.null_gain = self.declare_parameter('null_gain', 50.0)
 
         self.pinv_rcond = self.declare_parameter('pinv_rcond')
         self.include_constraint_forces = self.declare_parameter('include_constraint_forces', False)
-        self.compensate_back_emf = self.declare_parameter('compensate_back_emf', False)
 
-        # Control input bounds; None uses the model's ctrlrange
+        # Motor current bounds [A]; None uses the model's ctrlrange
         self.u_min = self.declare_parameter('u_min')
         self.u_max = self.declare_parameter('u_max')
-        self.u_step_max = self.declare_parameter('u_step_max', 0.02)
+        self.u_step_max = self.declare_parameter('u_step_max', 0.1)
 
         # Motor ids, in the same order as the u vector
         self.motor_ids = self.declare_parameter('motor_ids', [10, 1, 2])
@@ -117,9 +116,6 @@ class ControlNode(Node):
         # Refresh kinematics/dynamics at the current estimated state
         data.ctrl[:] = self.last_u
         mujoco.mj_forward(model, data)
-        if self.law.has_act:
-            data.act[:] = self.law.steady_act(self.last_u, data.actuator_velocity)
-            mujoco.mj_forwardSkip(model, data, mujoco.mjtStage.mjSTAGE_VEL, 0)
 
         # End-effector Jacobian and its time derivative
         point = data.site_xpos[self.site_id]
@@ -138,8 +134,6 @@ class ControlNode(Node):
         pinv_B = (np.linalg.pinv(B) if self.pinv_rcond is None
                   else np.linalg.pinv(B, rcond=self.pinv_rcond))
         h = data.qfrc_bias - data.qfrc_passive
-        if self.compensate_back_emf:
-            h = h + moment.T @ (self.law.k_e * act_vel)
         if self.include_constraint_forces:
             h = h - data.qfrc_constraint
         P = pinv_B @ M
@@ -148,9 +142,6 @@ class ControlNode(Node):
         # Task-space error (twist)
         dq = data.qvel
         twist = np.zeros(m)
-        mocap_name = "target"
-        mocap_id = self.model.body(mocap_name).mocapid[0]
-        twist[:3] = data.mocap_pos[mocap_id] - point
         twist[:3] = self.target_pos - point
         Jdq = J @ dq
         mu_des = self.K * twist - self.Kd * Jdq
@@ -166,7 +157,11 @@ class ControlNode(Node):
         N = np.eye(nv) - J.T @ np.linalg.solve(J @ J.T, J)
         qdd_ref = -self.null_gain * (N @ dq)
 
+        # Current bounds: ctrlrange / u_min / u_max, intersected with what the 24 V bus can drive
         lb, ub = self.law.ctrl_bounds(self.u_min, self.u_max, act_vel)
+        v_lo, v_hi = self.vlimit.bounds(act_vel)
+        lb = np.maximum(lb, v_lo)
+        ub = np.maximum(np.minimum(ub, v_hi), lb)
 
         # Per-step control change limit: |u - last_u| <= u_step_max (component-wise).
         du = self.u_step_max
