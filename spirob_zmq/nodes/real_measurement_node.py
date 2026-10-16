@@ -1,237 +1,135 @@
 """Real Vicon measurement node.
 
-Initializes MuJoCo from the model's init keyframe to obtain reference marker positions,
-pulls unlabeled Vicon markers, matches them by nearest position via Hungarian algorithm,
-and publishes the ordered measurement vector on SITE_MEASUREMENT.
+Startup works from any robot pose (spirob_zmq.pose_init): wait until the markers are still, map
+them into the MuJoCo frame (static base markers, or a saved frame from spirob_zmq.calibrate_frame),
+find each segment's marker triangle by shape, label the markers by fitting the pose, and publish
+that pose on INITIAL_STATE for the estimator. After that each frame is tracked
+(spirob_zmq.marker_tracking) and published on SITE_MEASUREMENT in the MuJoCo frame, with NaN for
+markers not seen in that frame.
 """
 
 import time
 
 import mujoco
 import numpy as np
-from scipy.optimize import linear_sum_assignment
-from sklearn.cluster import DBSCAN
-from vicon_dssdk import ViconDataStream
 
-from spirob_zmq.common import SITE_MEASUREMENT, load_model
-from spirob_zmq.core import Node, run_node
+from spirob_zmq.common import INITIAL_STATE, ROBOT_STATE, SITE_MEASUREMENT, load_model
+from spirob_zmq.core import REPO_ROOT, Node, run_node
+from spirob_zmq.marker_tracking import MarkerTracker
+from spirob_zmq.pose_init import (MarkerModel, load_frame, register_base_markers, stationary_clusters,
+                                  transform)
+from spirob_zmq.vicon import ViconClient
 
 
 class RealMeasurementNode(Node):
     def __init__(self, params=None):
         super().__init__('real_measurement_node', params)
+        log = self.get_logger()
 
-        # Marker order used by the estimator.
-        site_names = self.declare_parameter('site_names')
-        self.site_names = list(site_names)
-        self.site_meas = 3 * len(self.site_names)
-
-        # Load MuJoCo model and get reference positions from init keyframe.
+        # Marker order used by the estimator
+        self.site_names = list(self.declare_parameter('site_names'))
         self.model = load_model(self)
-        self.data = mujoco.MjData(self.model)
-        self.site_ids = [self.model.site(name).id for name in self.site_names]
+        key = self.model.key(self.declare_parameter('init_key', 'init')).id
+        self.markers = MarkerModel(self.model, self.site_names, self.model.key_qpos[key])
 
-        # Set to init keyframe and compute reference positions
-        init_key_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_KEY, 'init')
-        self.data.qpos[:] = self.model.key_qpos[init_key_id]
-        mujoco.mj_forward(self.model, self.data)
-
-        # Extract reference site positions from the init configuration
-        self.ref_pos = np.array([
-            self.data.site(site_id).xpos.copy() for site_id in self.site_ids], dtype=float)
-        self.get_logger().info(f'Loaded reference positions from init keyframe: {self.ref_pos.shape}')
-
-        # Vicon configuration.
-        self.vicon_ip = self.declare_parameter('vicon_ip', '172.20.52.190')
         self.rate_hz = self.declare_parameter('vicon_rate_hz', 100.0)
-        self.dt = 1.0 / self.rate_hz
-
-        # Warmup / DBSCAN configuration.
         self.warmup_frames = self.declare_parameter('warmup_frames', 100)
-        self.dbscan_eps = self.declare_parameter('dbscan_eps', 1.5e-3)  # 1.5 mm
-        self.dbscan_min_samples = self.declare_parameter('dbscan_min_samples', 10)
-        self.max_match_distance = self.declare_parameter('max_match_distance', 0.03)  # 3 cm
-        # Reject any Vicon marker at or beyond this distance from the origin (m)
+        self.startup_attempts = self.declare_parameter('startup_attempts', 10)
+        # Markers farther than this from the MuJoCo origin are ignored (m)
         self.max_marker_radius = self.declare_parameter('max_marker_radius', 0.45)
+        self.max_frame_rms = self.declare_parameter('max_frame_rms', 2e-3)
+        self.max_init_rms = self.declare_parameter('max_init_rms', 5e-3)
+        # Static markers on the base mount: site names in the model (preferred frame reference)
+        self.base_marker_sites = list(self.declare_parameter('base_marker_sites', []) or [])
+        self.frame_path = self.declare_parameter('vicon_frame_path',
+                                                 str(REPO_ROOT / 'ekf_results' / 'vicon_frame.json'))
 
-        # Vicon client.
-        self.client = ViconDataStream.Client()
-        self._connect_vicon()
-
-        # Publishers.
+        self.vicon = ViconClient(self.declare_parameter('vicon_ip', '172.20.52.190'), log, self.rate_hz)
         self.meas_pub = self.create_publisher(SITE_MEASUREMENT)
+        self.init_pub = self.create_publisher(INITIAL_STATE)
 
-        # Initial ordered marker estimate from warmup. After that, each new frame is
-        # matched against the previous ordered positions, with missing detections
-        # carried forward.
-        self.last_measurements = np.full((len(self.site_names), 3), np.nan, dtype=float)
-        self._warmup_initial_measurements()
+        stamp, points, result = self._startup()
+        self.initial = {'q': result.q, 'rms': result.rms}
+        self.tracker = MarkerTracker(self.site_names, points[[result.labels[n] for n in self.site_names]],
+                                     stamp, gate=self.declare_parameter('track_gate', 0.015),
+                                     reacquire_gate=self.declare_parameter('reacquire_gate', 0.025),
+                                     triangle_tol=self.declare_parameter('triangle_tol', 0.004))
 
-        # Run at the Vicon rate.
-        self.timer = self.create_timer(self.dt, self._tick)
+        # The estimator's site positions, used to find markers again after they were lost
+        self.predicted = None
+        self.create_subscription(ROBOT_STATE, self._on_state, latest_only=True)
 
-    def _connect_vicon(self):
-        self.get_logger().info(f'Connecting to Vicon at {self.vicon_ip}...')
-        while not self.client.IsConnected():
-            try:
-                self.client.Connect(self.vicon_ip)
-            except ViconDataStream.DataStreamException:
-                self.get_logger().warn('Vicon connect failed; retrying...', throttle_duration_sec=1.0)
-                time.sleep(1)
+        # No latched topics: repeat the initial state so a late estimator still gets it
+        self.init_timer = self.create_timer(0.5, self._publish_initial)
+        self._publish_initial()
+        self.timer = self.create_timer(1.0 / self.rate_hz, self._tick)
 
-        self.get_logger().info('Connected to Vicon.')
-        self.client.EnableMarkerData()
-        self.client.EnableUnlabeledMarkerData()
-        self.client.SetStreamMode(ViconDataStream.Client.StreamMode.EClientPull)
+    def _frame(self, centres):
+        """Vicon -> MuJoCo frame as (R, t)."""
+        log = self.get_logger()
+        if self.base_marker_sites:
+            data = mujoco.MjData(self.model)
+            mujoco.mj_kinematics(self.model, data)
+            ref = np.array([data.site(n).xpos.copy() for n in self.base_marker_sites])
+            got = register_base_markers(centres, ref)
+            if got is None:
+                raise RuntimeError(f'base markers {self.base_marker_sites} not found among {len(centres)} '
+                                   'Vicon markers')
+            R, t, res = got
+            if np.sqrt(np.mean(res ** 2)) > self.max_frame_rms:
+                raise RuntimeError(f'base marker fit residual {np.round(1e3 * res, 1)} mm is too large')
+            log.info(f'Vicon frame from base markers, residual {np.round(1e3 * res, 1)} mm')
+            return R, t
+        try:
+            R, t, info = load_frame(self.frame_path)
+        except FileNotFoundError:
+            raise RuntimeError(f'no Vicon frame at {self.frame_path}: put the robot at rest and run '
+                               '`python -m spirob_zmq.calibrate_frame`, or set base_marker_sites') from None
+        log.info(f'Vicon frame from {self.frame_path} ({info["method"]}, {info["created"]}, '
+                 f'residual {info["residual_mm"]} mm). Recalibrate if the Vicon origin or the base moved.')
+        return R, t
 
-    def _match_markers(self, ref_xyz, markers_xyz):
-        """Match unlabeled markers to reference positions via Hungarian assignment.
-
-        Rejects matches where distance exceeds max_match_distance (3.5 cm).
-        """
-        n_ref = ref_xyz.shape[0]
-        matched = np.full((n_ref, 3), np.nan, dtype=float)
-        max_match_distance = self.max_match_distance  # 3.5 cm in meters
-
-        if markers_xyz.shape[0] == 0:
-            return matched
-
-        # If Vicon reports more markers than MuJoCo has sites, keep only the
-        # detected markers that are closest to the reference set overall.
-        if markers_xyz.shape[0] > n_ref:
-            diff_all = ref_xyz[:, None, :] - markers_xyz[None, :, :]
-            cost_all = np.linalg.norm(diff_all, axis=2)
-            keep_idx = np.argsort(np.min(cost_all, axis=0))[:n_ref]
-            markers_xyz = markers_xyz[keep_idx]
-
-        # Cost matrix of pairwise Euclidean distances.
-        diff = ref_xyz[:, None, :] - markers_xyz[None, :, :]
-        cost = np.linalg.norm(diff, axis=2)
-        row_ind, col_ind = linear_sum_assignment(cost)
-
-        for r, c in zip(row_ind, col_ind):
-            if cost[r, c] <= max_match_distance:
-                matched[r] = markers_xyz[c]
-
-        return matched
-
-    def _match_current_frame_to_previous(self, current_markers):
-        """Assign current-frame unlabeled detections to the previous ordered markers.
-
-        Strategy:
-            - keep the previous marker positions as the reference ordering
-            - greedily match each expected marker to the nearest unused current-point
-              within max_match_distance
-            - if a marker is not seen this frame, keep the previous value
-        """
-        n_markers = len(self.site_names)
-        matched = self.last_measurements.copy()
-        if current_markers.size == 0:
-            return matched
-
-        used = np.zeros(len(current_markers), dtype=bool)
-        for i in range(n_markers):
-            prev = self.last_measurements[i]
-            if np.any(np.isnan(prev)):
+    def _startup(self):
+        log = self.get_logger()
+        for attempt in range(1, self.startup_attempts + 1):
+            stamps, frames = self.vicon.collect(self.warmup_frames)
+            centres, still = stationary_clusters(frames)
+            if not still:
+                log.warn(f'startup {attempt}: markers are moving; waiting for the robot to be still')
                 continue
-            diffs = current_markers - prev[np.newaxis, :]
-            dists = np.linalg.norm(diffs, axis=1)
-            candidate_idx = np.where(~used & (dists <= self.max_match_distance))[0]
-            if len(candidate_idx) == 0:
+            frame = self._frame(centres)
+            points = transform(centres, frame)
+            points = points[np.linalg.norm(points, axis=1) < self.max_marker_radius]
+            result = self.markers.initialize(points)
+            if result is None:
+                log.warn(f'startup {attempt}: could not find all marker triangles among {len(points)} markers')
                 continue
-            j = candidate_idx[np.argmin(dists[candidate_idx])]
-            matched[i] = current_markers[j]
-            used[j] = True
-
-        return matched
-
-    def _read_markers(self, unlabeled):
-        """Vicon unlabeled markers in meters, shape (N, 3), dropping any with |p| >= max_marker_radius."""
-        pts = np.array([
-            [marker[0][0] / 1000.0, marker[0][1] / 1000.0, marker[0][2] / 1000.0]
-            for marker in unlabeled
-        ], dtype=float).reshape(-1, 3)
-        return pts[np.linalg.norm(pts, axis=1) < self.max_marker_radius]
-
-    def _warmup_initial_measurements(self):
-        """Collect a short Vicon burst and use DBSCAN to estimate initial marker centers."""
-        self.get_logger().info(f'Running DBSCAN warmup for {self.warmup_frames} frames...')
-
-        warmup_points = []
-        while len(warmup_points) < self.warmup_frames:
-            if not self.client.GetFrame():
+            per_marker = np.round([1e3 * result.residual[n] for n in self.site_names], 1)
+            if result.rms > self.max_init_rms:
+                log.warn(f'startup {attempt}: pose fit residual {1e3 * result.rms:.1f} mm too large {per_marker}')
                 continue
-            try:
-                unlabeled = self.client.GetUnlabeledMarkers()
-            except ViconDataStream.DataStreamException:
-                continue
+            log.info(f'startup: labelled {len(self.site_names)} markers, pose fit rms {1e3 * result.rms:.1f} mm '
+                     f'{per_marker}')
+            self.frame = frame
+            return stamps[-1], points, result
+        raise RuntimeError(f'startup failed after {self.startup_attempts} attempts')
 
-            raw = self._read_markers(unlabeled)
+    def _on_state(self, msg):
+        if msg.get('is_valid') and 'site_pos' in msg:
+            self.predicted = np.asarray(msg['site_pos'], dtype=float)
 
-            if raw.size > 0:
-                warmup_points.append(raw)
-
-        if not warmup_points:
-            self.get_logger().warn('DBSCAN warmup produced no Vicon points; falling back to MuJoCo init reference.')
-            self.last_measurements = self.ref_pos.copy()
-            return
-
-        all_points = np.vstack(warmup_points)
-        labels = DBSCAN(eps=self.dbscan_eps, min_samples=self.dbscan_min_samples).fit_predict(all_points)
-
-        cluster_centers = []
-        for cluster_id in sorted(set(labels)):
-            if cluster_id < 0:
-                continue
-            cluster_points = all_points[labels == cluster_id]
-            cluster_centers.append({
-                'cluster_id': int(cluster_id),
-                'count': int(len(cluster_points)),
-                'center': cluster_points.mean(axis=0),
-            })
-        cluster_centers.sort(key=lambda item: item['count'], reverse=True)
-
-        if not cluster_centers:
-            self.get_logger().warn('DBSCAN warmup found no valid clusters; falling back to MuJoCo init reference.')
-            self.last_measurements = self.ref_pos.copy()
-            return
-
-        cluster_xyz = np.array([entry['center'] for entry in cluster_centers], dtype=float)
-        matched = self._match_markers(self.ref_pos, cluster_xyz)
-        valid = ~np.any(np.isnan(matched), axis=1)
-        self.last_measurements = matched[valid]
-        if valid.sum() > 0:
-            # Fill missing markers with initial reference pose if some were not matched.
-            self.last_measurements = np.full((len(self.site_names), 3), np.nan, dtype=float)
-            for i in range(len(self.ref_pos)):
-                if not np.any(np.isnan(matched[i])):
-                    self.last_measurements[i] = matched[i]
-            if np.isnan(self.last_measurements).all():
-                self.last_measurements = self.ref_pos.copy()
-        else:
-            self.last_measurements = self.ref_pos.copy()
-
-        self.get_logger().info(
-            f'DBSCAN warmup complete: {len(cluster_centers)} clusters, '
-            f'initial marker estimate for {np.isfinite(self.last_measurements).sum() / 3:.0f} markers.'
-        )
+    def _publish_initial(self):
+        self.init_pub.publish({'stamp': time.time(), 'q': self.initial['q'], 'rms': self.initial['rms']})
 
     def _tick(self):
-        if not self.client.GetFrame():
+        got = self.vicon.read()
+        if got is None:
             return
-
-        try:
-            unlabeled = self.client.GetUnlabeledMarkers()
-        except ViconDataStream.DataStreamException:
-            return
-
-        current_markers = self._read_markers(unlabeled)
-
-        smoothed = self._match_current_frame_to_previous(current_markers)
-        self.last_measurements = smoothed
-
-        stamp = time.time()
-        self.meas_pub.publish({'stamp': stamp, 'data': smoothed.reshape(-1)})
+        frame_time, raw = got
+        points = transform(raw, self.frame)
+        points = points[np.linalg.norm(points, axis=1) < self.max_marker_radius]
+        measured = self.tracker.update(points, frame_time, self.predicted)
+        self.meas_pub.publish({'stamp': time.time(), 'data': measured.reshape(-1)})
 
 
 def main(argv=None):
@@ -240,5 +138,3 @@ def main(argv=None):
 
 if __name__ == '__main__':
     main()
-
-

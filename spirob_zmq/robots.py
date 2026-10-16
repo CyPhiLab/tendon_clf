@@ -11,7 +11,9 @@ ROBOTS = {
         'joint_damping': None,
         'init_key': 'init',
         'motor_ids': [10, 1, 2],
-        'u_step_max': 0.02,
+        # u is the motor current [A]. With the current-source model the slew limit must let the
+        # controller reverse within a few ticks: 0.05-0.5 A/tick settle in about 1 s with e=0.05 in sim
+        'u_step_max': 0.1,
         'vicon_ip': '172.20.54.13',
         'vicon_rate_hz': 100.0,
         'base_height': 0.125,
@@ -26,17 +28,18 @@ ROBOTS = {
                     #    'marker_1_seg_16', 'marker_2_seg_16', 'marker_3_seg_16'],
         'task_dim': 3,
         'K': 200.0,
-        'e': 0.02,
+        'e': 0.05,  # 0.02 oscillates and diverges with the current-source model unless u_step_max >= 0.5
         'task_weight': 1.0,
         'reg_qdd': 2.0,
-        'reg_u': 5.0,
+        'reg_u': 24.2,  # 5.0 when u was in volts; u in amps is 0.4545x smaller, so scale by 1/0.4545^2
         'reg_null': 0.1,
         'reg_dl': 1000.0,
         'pinv_rcond': 1e-2,
         'include_constraint_forces': True,
-        # 5 A peak current
-        'motor_torque_limit': 0.127 * 5.0,
         'max_current': 1.9,
         'r_spool': 10.0 / 250.0,
+        # AK drive bus voltage and winding resistance, for the voltage limit in current mode
+        'v_bus': 24.0,
+        'motor_resistance': 2.2,
     },
 }

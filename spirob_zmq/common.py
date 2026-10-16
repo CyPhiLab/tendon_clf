@@ -9,6 +9,26 @@ MOTOR_STATE = '/spirob/motor_state'
 ROBOT_STATE = '/spirob/robot_state'
 SITE_MEASUREMENT = '/spirob/site_measurement'
 TRUE_STATE = '/spirob/true_state'
+INITIAL_STATE = '/spirob/initial_state'
+
+class ProfileParams:
+    """Stands in for a Node outside the node graph: parameters come from a robot profile."""
+
+    def __init__(self, robot=None, **overrides):
+        from spirob_zmq.robots import DEFAULT_ROBOT, ROBOTS
+        self._profile = dict(ROBOTS[robot or DEFAULT_ROBOT], **overrides)
+
+    def declare_parameter(self, name, default=None):
+        return self._profile.get(name, default)
+
+    def get_logger(self):
+        return self
+
+    def info(self, text, **kw):
+        print(text)
+
+    warn = error = info
+
 
 def load_model(node):
     model_path = node.declare_parameter('model_path')
@@ -25,9 +45,6 @@ def load_model(node):
     if damping is not None:
         model.dof_damping[:] = damping
     model.opt.gravity[:] = node.declare_parameter('gravity', [0.0, 0.0, -9.81])
-    torque_limit = node.declare_parameter('motor_torque_limit')
-    if torque_limit is not None:
-        model.actuator_forcerange[:] = [-torque_limit, torque_limit]
     base_height = node.declare_parameter('base_height')
     if base_height is not None:
         model.body_pos[model.body('segment_1__configuration_default').id][2] = base_height
@@ -70,21 +87,21 @@ class ActuatorLaw:
         data = mujoco.MjData(model)
         f_u, _, act_u = self._steady(data, -1.0, 0.0)
         self.k_v = -f_u
-        self.a_u = -act_u
+        self.a_u = -act_u if self.has_act else np.zeros(nu)
         f_v, v, act_v = self._steady(data, 0.0, 0.01)
         safe_v = np.where(v == 0, 1.0, v)
         self.k_e = np.where(np.abs(v) > 1e-12, -f_v / safe_v, 0.0)
-        self.a_v = np.where(np.abs(v) > 1e-12, act_v / safe_v, 0.0)
+        self.a_v = np.where(np.abs(v) > 1e-12, act_v / safe_v, 0.0) if self.has_act else np.zeros(nu)
         limited = model.actuator_forcelimited.astype(bool)
         self.f_min = np.where(limited, model.actuator_forcerange[:, 0], -np.inf)
         self.f_max = np.where(limited, model.actuator_forcerange[:, 1], np.inf)
         ctrl_limited = model.actuator_ctrllimited.astype(bool)
         self.u_min = np.where(ctrl_limited, model.actuator_ctrlrange[:, 0], -np.inf)
         self.u_max = np.where(ctrl_limited, model.actuator_ctrlrange[:, 1], np.inf)
-        f, v, act = self._steady(data, -2.0, -0.005)
-        self.affine = bool(np.allclose(self.force(-2.0, v), f, atol=1e-9, rtol=1e-6)
+        f, v, act = self._steady(data, -1.0, -0.005)
+        self.affine = bool(np.allclose(self.force(-1.0, v), f, atol=1e-9, rtol=1e-6)
                            and (not self.has_act
-                                or np.allclose(self.steady_act(-2.0, v), act, atol=1e-9, rtol=1e-6)))
+                                or np.allclose(self.steady_act(-1.0, v), act, atol=1e-9, rtol=1e-6)))
 
     def _steady(self, data, ctrl, qvel):
         m = self.model
@@ -116,6 +133,32 @@ class ActuatorLaw:
             hi = np.minimum(hi, (self.f_max + kev) / self.k_v)
         hi = np.maximum(hi, lo)
         return lo, hi
+
+
+class VoltageLimit:
+    """Bus-voltage limit of the AK drives in current mode.
+
+    The drive can only hold current i while |R*i + back-EMF| <= v_bus. The model's actuator gear
+    is ratio*Kt (and Ke = Kt in SI units), so actuator_velocity is the back-EMF in volts.
+    """
+
+    def __init__(self, node):
+        self.v_bus = node.declare_parameter('v_bus', 24.0)
+        self.R = node.declare_parameter('motor_resistance', 2.2)
+
+    def bounds(self, actuator_velocity):
+        return ((-self.v_bus - actuator_velocity) / self.R,
+                (self.v_bus - actuator_velocity) / self.R)
+
+    def clip(self, current, actuator_velocity):
+        return np.clip(current, *self.bounds(actuator_velocity))
+
+
+def step_current(model, data, current, n, vlimit):
+    """Advance n physics steps holding the commanded current, re-applying the voltage limit each step."""
+    for _ in range(n):
+        data.ctrl[:] = vlimit.clip(current, data.actuator_velocity)
+        mujoco.mj_step(model, data)
 
 
 def actuator_moment(model, data):

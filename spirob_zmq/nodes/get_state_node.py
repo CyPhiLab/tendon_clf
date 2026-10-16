@@ -3,7 +3,8 @@
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import MOTOR_COMMAND, ROBOT_STATE, command_to_u, load_model, rest_state, substeps
+from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, VoltageLimit, command_to_u, load_model,
+                               rest_state, step_current, substeps)
 from spirob_zmq.core import Node, run_node
 
 
@@ -25,8 +26,9 @@ class GetStateNode(Node):
         self.n_substeps = substeps(self.model, self.dt)
         self.motor_ids = list(self.declare_parameter('motor_ids', [0, 1, 2]))
 
-        # Latest commanded control
+        # Latest commanded motor current
         self.ctrl_u = np.zeros(self.nu)
+        self.vlimit = VoltageLimit(self)
         self.ee_site_id = self.model.site('ee').id
         self.create_subscription(MOTOR_COMMAND, self._on_command)
         self.state_pub = self.create_publisher(ROBOT_STATE)
@@ -37,11 +39,8 @@ class GetStateNode(Node):
         self.ctrl_u = command_to_u(msg, self.motor_ids)
 
     def _tick(self):
-        self.data.ctrl[:] = self.ctrl_u
-
         # Forward dynamics for one tick
-        for _ in range(self.n_substeps):
-            mujoco.mj_step(self.model, self.data)
+        step_current(self.model, self.data, self.ctrl_u, self.n_substeps, self.vlimit)
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
 
