@@ -78,7 +78,7 @@ class ControlNode(Node):
         self._blower = np.full(1 + 4 * nu, -1e30)
         self._sense = np.zeros(1 + 4 * nu, dtype=ctypes.c_int)
 
-        self.last_u = np.zeros(nu)
+        self.last_u = np.ones(nu) * (-0.1) 
         self.solve_times = []
 
         # Set once a valid RobotState has been received
@@ -171,8 +171,8 @@ class ControlNode(Node):
         H, g, A, b = self._H, self._g, self._A, self._b
         H[:nv, :nv] = 2.0 * (self.task_weight * J.T @ J + self.reg_u * P.T @ P + self.reg_null * N)
         H[np.arange(nv), np.arange(nv)] += 2.0 * self.reg_qdd
-        # g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p - self.reg_null * qdd_ref)
-        g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+        g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+        # g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
 
         nu = model.nu
         A[0, :nv] = clf_a

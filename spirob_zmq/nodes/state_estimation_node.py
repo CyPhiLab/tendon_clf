@@ -52,6 +52,15 @@ class StateEstimationNode(Node):
         # Per-marker chi-square gate on the innovation (3 dof, 99.9 %); 0 disables it
         self.innovation_gate = self.declare_parameter('innovation_gate', 16.27)
 
+        # Limit how far the measurement update can move each corrected EKF state block.
+        # The limits are L2 norms in each block's units: joint-position units for q,
+        # joint-velocity units for dq, and MuJoCo activation units for act. None disables
+        # a block's limit. Scaling the matching gain rows keeps the covariance update
+        # consistent with the bounded state correction.
+        self.max_q_correction = self.declare_parameter('max_q_correction', 0.2)
+        self.max_dq_correction = self.declare_parameter('max_dq_correction', 1.0)
+        self.max_act_correction = self.declare_parameter('max_act_correction', 0.1)
+
         nx = self.nq + self.nv + self.na
 
         # Process noise covariance Q and measurement noise covariance R
@@ -183,13 +192,6 @@ class StateEstimationNode(Node):
         Q_scale = min(n * self.h * self.rate_hz, 10.0)  # Cap at 10x base uncertainty
         self.P = F @ self.P @ F.T + self.Q * Q_scale
         
-        # Clamp covariance diagonal to reasonable bounds (max allowed uncertainty)
-        # Prevents uncontrolled growth and ensures Kalman gain remains effective
-        P_max_diag = 10.0  # meters^2 for position, (m/s)^2 for velocity, actuator state
-        P_diag = np.diag(self.P)
-        P_diag_clamped = np.minimum(P_diag, P_max_diag)
-        np.fill_diagonal(self.P, P_diag_clamped)
-
     def update(self, z, site_ids):
         nq, nv = self.nq, self.nv
         self._set_state(self.data, self.x)
@@ -220,8 +222,23 @@ class StateEstimationNode(Node):
         # Drop markers whose innovation is implausible for this S (wrong Vicon match, reflection).
         # If most markers disagree, the state is off rather than the markers, so keep them all.
         if self.innovation_gate:
-            d2 = np.array([y[3 * j:3 * j + 3] @ np.linalg.solve(S[3 * j:3 * j + 3, 3 * j:3 * j + 3],
-                                                                 y[3 * j:3 * j + 3]) for j in range(n_sites)])
+            d2 = []
+            for j in range(n_sites):
+                marker_y = y[3 * j:3 * j + 3]
+                marker_S = S[3 * j:3 * j + 3, 3 * j:3 * j + 3]
+                # Degenerate covariance can occur when the propagated P loses rank
+                # (for example after very small process noise or long constrained motion).
+                # Symmetrize S and add a tiny scale-aware diagonal floor before taking its
+                # pseudo-inverse. This keeps residuals in nominally zero-variance directions
+                # from being silently ignored, while avoiding a singular 3x3 solve. S is
+                # theoretically symmetric, but floating-point operations can introduce a
+                # tiny asymmetry.
+                marker_S = (marker_S + marker_S.T) / 2.0
+                marker_floor = max(1e-12, 1e-9 * np.max(np.abs(np.diag(marker_S))))
+                marker_S += marker_floor * np.eye(3)
+                marker_S_inv = np.linalg.pinv(marker_S, hermitian=True)
+                d2.append(marker_y @ marker_S_inv @ marker_y)
+            d2 = np.asarray(d2)
             bad = d2 > self.innovation_gate
             if bad.any() and bad.sum() <= n_sites // 2:
                 keep = np.repeat(~bad, 3)
@@ -232,7 +249,14 @@ class StateEstimationNode(Node):
         # Regularization for numerical stability to prevent ill-conditioning
         S_reg = S + 1e-8 * np.eye(S.shape[0])
         K = np.linalg.solve(S_reg, H @ self.P).T
-        self.x = self.x + K @ y
+        # Limit each block by its vector norm rather than clipping coordinates
+        # independently. Scaling the corresponding rows of K means the covariance update
+        # below uses the same effective gain as the bounded state correction.
+        # This is a guard against exceptional corrections, not a replacement for sensible
+        # noise tuning or the marker outlier gate.
+        self._limit_gain(K, y)
+        correction = K @ y
+        self.x = self.x + correction
         I_KH = np.eye(len(self.x)) - K @ H
         self.P = I_KH @ self.P @ I_KH.T + K @ R @ K.T
         
@@ -240,15 +264,32 @@ class StateEstimationNode(Node):
         # Symmetric matrices are mathematically required for positive-definiteness
         self.P = (self.P + self.P.T) / 2.0
         
-        # Clamp covariance diagonal to reasonable bounds (safety ceiling on uncertainty)
-        # Prevents divergence by limiting how much the filter can distrust measurements
-        P_max_diag = 10.0  # meters^2 for position, (m/s)^2 for velocity, actuator state
-        P_diag = np.diag(self.P)
-        P_diag_clamped = np.minimum(P_diag, P_max_diag)
-        np.fill_diagonal(self.P, P_diag_clamped)
-        
         self.n_updates += 1
         self.have_estimate = True
+
+    def _limit_gain(self, K, innovation):
+        """Bound the EKF measurement correction applied to each state block.
+
+        If a block's correction exceeds its configured L2 limit, scale the corresponding
+        gain rows so the corrected state moves by at most that amount. The covariance
+        update then uses the same bounded gain. None leaves a block unbounded.
+        """
+        nq, nv = self.nq, self.nv
+        blocks = (
+            (slice(0, nq), self.max_q_correction),
+            (slice(nq, nq + nv), self.max_dq_correction),
+            (slice(nq + nv, nq + nv + self.na), self.max_act_correction),
+        )
+        for block, limit in blocks:
+            if limit is None:
+                continue
+            limit = float(limit)
+            if limit <= 0.0:
+                raise ValueError('correction limits must be positive, or None to disable')
+            step = K[block, :] @ innovation
+            norm = np.linalg.norm(step)
+            if norm > limit:
+                K[block, :] *= limit / norm
 
     def publish(self, stamp):
         nq, nv = self.nq, self.nv
