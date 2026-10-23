@@ -36,7 +36,8 @@ ROBOTS = {
         # Markers physically on the robot that the estimator does not use. They are labelled and
         # tracked with site_names but not published: left untracked, a neighbouring triangle (seg 10
         # next to 11, 14 and 18 next to 16: 17-24 mm away, nearly the same shape) gets mistaken for
-        # a measured one. Startup fails if a listed marker is missing.
+        # a measured one. Startup fails if a listed marker is missing. The robot has only the 15
+        # site_names markers (no balls on segments 10, 14, 18).
         'unpublished_sites': [],
         'task_dim': 3,
         'K': 200.0,
