@@ -89,7 +89,7 @@ def test_node_starts_from_unlabelled_frames_and_tracks():
     init = [m for topic, m in published if topic == '/spirob/initial_state']
     meas = np.array([np.reshape(m['data'], (-1, 3)) for topic, m in published if topic == '/spirob/site_measurement'])
     assert init and init[0]['rms'] < 2e-3
-    expected = truth[-len(meas):, :9]
+    expected = truth[-len(meas):, :len(synth.NAMES)]
     ok = ~np.isnan(meas[..., 0])
     err = np.linalg.norm(meas - expected, axis=2)
     assert np.sum(err[ok] > 3e-3) == 0, 'mislabelled markers'

@@ -8,7 +8,10 @@ ROBOTS = {
     'spirob_horz': {
         'model_path': str(REPO_ROOT / 'mujoco_models' / 'spirob' / 'spirob_horz_control.xml'),
         'joint_stiffness': None,
-        'joint_damping': None,
+        # Overrides the model's ~1e-6 joint damping (spirob_mujoco 2db1c54): with it the EKF's
+        # linearization is unstable and its covariance overflowed in run 20261022_140828. Replaying
+        # that run, 0.1 tracks Vicon to 1-5 mm; 0.2 s predictions fit best for damping >= 0.1.
+        'joint_damping': 0.1,
         'init_key': 'init',
         'motor_ids': [10, 1, 2],
         # u is the motor current [A]. With the current-source model the slew limit must let the

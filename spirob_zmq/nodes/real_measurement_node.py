@@ -5,7 +5,9 @@ them into the MuJoCo frame (static base markers, or a saved frame from spirob_zm
 find each segment's marker triangle by shape, label the markers by fitting the pose, and publish
 that pose on INITIAL_STATE for the estimator. After that each frame is tracked
 (spirob_zmq.marker_tracking) and published on SITE_MEASUREMENT in the MuJoCo frame, with NaN for
-markers not seen in that frame.
+markers not seen in that frame. The unlabelled points of every frame are also published on
+VICON_RAW (Vicon frame, before filtering), and INITIAL_STATE carries the Vicon -> MuJoCo frame, so a
+recording is enough to rerun startup and tracking offline.
 """
 
 import time
@@ -13,7 +15,7 @@ import time
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import INITIAL_STATE, ROBOT_STATE, SITE_MEASUREMENT, load_model
+from spirob_zmq.common import INITIAL_STATE, ROBOT_STATE, SITE_MEASUREMENT, VICON_RAW, load_model
 from spirob_zmq.core import REPO_ROOT, Node, run_node
 from spirob_zmq.marker_tracking import MarkerTracker
 from spirob_zmq.pose_init import (MarkerModel, load_frame, register_base_markers, stationary_clusters,
@@ -47,6 +49,8 @@ class RealMeasurementNode(Node):
         self.vicon = ViconClient(self.declare_parameter('vicon_ip', '172.20.52.190'), log, self.rate_hz)
         self.meas_pub = self.create_publisher(SITE_MEASUREMENT)
         self.init_pub = self.create_publisher(INITIAL_STATE)
+        self.publish_raw = self.declare_parameter('publish_raw', True)
+        self.raw_pub = self.create_publisher(VICON_RAW)
 
         stamp, points, result = self._startup()
         self.initial = {'q': result.q, 'rms': result.rms}
@@ -119,17 +123,22 @@ class RealMeasurementNode(Node):
             self.predicted = np.asarray(msg['site_pos'], dtype=float)
 
     def _publish_initial(self):
-        self.init_pub.publish({'stamp': time.time(), 'q': self.initial['q'], 'rms': self.initial['rms']})
+        R, t = self.frame
+        self.init_pub.publish({'stamp': time.time(), 'q': self.initial['q'], 'rms': self.initial['rms'],
+                               'frame_R': R, 'frame_t': t})
 
     def _tick(self):
         got = self.vicon.read()
         if got is None:
             return
         frame_time, raw = got
+        stamp = time.time()
+        if self.publish_raw:
+            self.raw_pub.publish({'stamp': stamp, 'frame_time': frame_time, 'points': raw.reshape(-1)})
         points = transform(raw, self.frame)
         points = points[np.linalg.norm(points, axis=1) < self.max_marker_radius]
         measured = self.tracker.update(points, frame_time, self.predicted)
-        self.meas_pub.publish({'stamp': time.time(), 'data': measured.reshape(-1)})
+        self.meas_pub.publish({'stamp': stamp, 'data': measured.reshape(-1)})
 
 
 def main(argv=None):

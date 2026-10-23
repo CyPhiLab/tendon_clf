@@ -10,6 +10,7 @@ ROBOT_STATE = '/spirob/robot_state'
 SITE_MEASUREMENT = '/spirob/site_measurement'
 TRUE_STATE = '/spirob/true_state'
 INITIAL_STATE = '/spirob/initial_state'
+VICON_RAW = '/spirob/vicon_raw'
 
 class ProfileParams:
     """Stands in for a Node outside the node graph: parameters come from a robot profile."""

@@ -60,6 +60,8 @@ class StateEstimationNode(Node):
         self.max_q_correction = self.declare_parameter('max_q_correction', 0.2)
         self.max_dq_correction = self.declare_parameter('max_dq_correction', 1.0)
         self.max_act_correction = self.declare_parameter('max_act_correction', 0.1)
+        # A covariance entry beyond this (or non-finite) means the filter has diverged: reset P
+        self.max_covariance = self.declare_parameter('max_covariance', 1e3)
 
         nx = self.nq + self.nv + self.na
 
@@ -136,10 +138,8 @@ class StateEstimationNode(Node):
     def _on_initial_state(self, msg):
         if self.initialized:
             return
-        nq, nv, na = self.nq, self.nv, self.na
-        self.x = np.concatenate([np.asarray(msg['q'], dtype=float), np.zeros(nv), np.zeros(na)])
-        self.P = np.diag([self.init_q_std ** 2] * nq + [self.init_dq_std ** 2] * nv
-                         + [self.P[i, i] for i in range(nq + nv, nq + nv + na)])
+        self.x = np.concatenate([np.asarray(msg['q'], dtype=float), np.zeros(self.nv), np.zeros(self.na)])
+        self._reset_covariance()
         self.last_stamp = None
         self.F_step = self.discrete_jacobian(self.x, self.app_u)
         self.initialized = True
@@ -172,9 +172,32 @@ class StateEstimationNode(Node):
                 return
             n = max(1, int(round(dt / self.h)))
         self.last_stamp = stamp
+        x_prev = self.x.copy()
         self.predict(n)
-        self.update(z_valid, valid_site_ids)
+        self._check_covariance('prediction')
+        try:
+            self.update(z_valid, valid_site_ids)
+        except np.linalg.LinAlgError as exc:
+            self.get_logger().error(f'update failed ({exc}); skipping this measurement', throttle_duration_sec=1.0)
+        if not np.isfinite(self.x).all():
+            self.get_logger().error('state became non-finite; keeping the previous state', throttle_duration_sec=1.0)
+            self.x = x_prev
+        self._check_covariance('update')
         self.publish(stamp)
+
+    def _reset_covariance(self):
+        nq, nv, na = self.nq, self.nv, self.na
+        self.P = np.diag([self.init_q_std ** 2] * nq + [self.init_dq_std ** 2] * nv
+                         + [self.Q[i, i] for i in range(nq + nv, nq + nv + na)])
+
+    def _check_covariance(self, where):
+        """Reset P if it overflowed or blew up, instead of running on with a meaningless gain."""
+        finite = np.isfinite(self.P).all()
+        biggest = np.abs(self.P).max() if finite else np.inf
+        if biggest > self.max_covariance:
+            self.get_logger().error(f'covariance diverged after {where} (max |P| {biggest:.3g}); resetting it. '
+                                    'Check the model damping and process noise.', throttle_duration_sec=1.0)
+            self._reset_covariance()
 
     def predict(self, n):
         if n == 0:
