@@ -53,5 +53,8 @@ python -m spirob_zmq.launch --mode real_ekf -p hardware_node.dry_run=false
 
 `real_measurement_node` waits until the markers are still, maps them into the MuJoCo frame (from
 `base_marker_sites` if static base markers are set up, else `ekf_results/vicon_frame.json`), labels
-them by fitting the pose, and then tracks them frame to frame. `-p hardware_node.pretension_current=-0.1`
+them by fitting the pose, and then tracks them frame to frame; a segment lost entirely is found again
+by its triangle's shape and the chain geometry. Markers on the robot that the estimator does not use
+must be listed in `unpublished_sites` (robots.py): they are tracked but not published, and left
+untracked a neighbouring triangle is taken for a measured one. `-p hardware_node.pretension_current=-0.1`
 holds a small current until the controller starts, to take up tendon slack.

@@ -52,14 +52,20 @@ def _install_fake_sdk():
 
 
 def test_node_starts_from_unlabelled_frames_and_tracks():
+    """As configured in robots.py, and with the adjacent unmeasured markers on the robot and tracked."""
+    for setup, (tracked, present) in synth.SETUPS.items():
+        _run_node(tracked[len(synth.NAMES):], present)
+
+
+def _run_node(unpublished, present):
     from spirob_zmq.calibrate_frame import calibrate
-    from spirob_zmq.pose_init import save_frame, stationary_clusters, transform
+    from spirob_zmq.pose_init import save_frame, stationary_clusters
 
     _install_fake_sdk()
     rng = np.random.default_rng(7)
     model, data = synth._model()
-    rest = synth._sites(model, data, synth.NAMES + synth.EXTRA)
-    curl = synth._curl(model, data, current=(-0.7, 0.0, 0.0), duration=0.6)
+    rest = synth._sites(model, data, present)
+    curl = synth._curl(model, data, current=(-0.7, 0.0, 0.0), duration=0.6, names=present)
     truth = np.vstack([np.repeat(rest[None], 150, axis=0), curl])           # model frame
 
     R_true = np.array([[np.cos(0.1), -np.sin(0.1), 0], [np.sin(0.1), np.cos(0.1), 0], [0, 0, 1]])
@@ -73,13 +79,14 @@ def test_node_starts_from_unlabelled_frames_and_tracks():
     with tempfile.TemporaryDirectory() as tmp:
         centres, still = stationary_clusters([f / 1e3 for f in FRAMES[:100]])
         assert still
-        _, (R, t, res, _) = calibrate(centres)
+        _, (R, t, res, _) = calibrate(centres, unpublished_sites=unpublished)
         path = f'{tmp}/vicon_frame.json'
         save_frame(path, R, t, res, 'test')
 
         from spirob_zmq.nodes.real_measurement_node import RealMeasurementNode
         published = []
-        node = RealMeasurementNode({'vicon_frame_path': path, 'warmup_frames': 100})
+        node = RealMeasurementNode({'vicon_frame_path': path, 'warmup_frames': 100,
+                                    'unpublished_sites': unpublished})
         node._publish = lambda topic, msg: published.append((topic, msg))
         node._publish_initial()
         while node.vicon.client.i + 1 < len(FRAMES):
@@ -89,11 +96,12 @@ def test_node_starts_from_unlabelled_frames_and_tracks():
     init = [m for topic, m in published if topic == '/spirob/initial_state']
     meas = np.array([np.reshape(m['data'], (-1, 3)) for topic, m in published if topic == '/spirob/site_measurement'])
     assert init and init[0]['rms'] < 2e-3
+    assert meas.shape[1] == len(synth.NAMES), 'only site_names are published'
     expected = truth[-len(meas):, :len(synth.NAMES)]
     ok = ~np.isnan(meas[..., 0])
     err = np.linalg.norm(meas - expected, axis=2)
     assert np.sum(err[ok] > 3e-3) == 0, 'mislabelled markers'
-    assert np.mean(~ok) < 0.15, f'{100 * np.mean(~ok):.1f} % NaN'
+    assert np.mean(~ok) < 0.15, f'{100 * np.mean(~ok):.1f} % NaN ({len(unpublished)} unpublished markers)'
 
 
 if __name__ == '__main__':

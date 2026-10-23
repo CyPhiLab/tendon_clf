@@ -52,6 +52,11 @@ def load_model(node):
     return model
 
 
+def marker_sites(node):
+    """Marker sites to label and track: the estimator's site_names, then those on the robot it does not use."""
+    return list(node.declare_parameter('site_names')) + list(node.declare_parameter('unpublished_sites', []) or [])
+
+
 def rest_state(node, model, data):
     settle_time = node.declare_parameter('settle_time', 0.0)
     key_name = node.declare_parameter('init_key', 'init')
