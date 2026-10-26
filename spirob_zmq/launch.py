@@ -22,6 +22,8 @@ LAUNCHES = {
     'real_teleop': ['teleop_node', 'hardware_node'],
 }
 VIEWER_NODES = {'simulation_node'}
+# Per-mode node defaults, applied before --config and -p so those still override them
+MODE_PARAMS = {'real_teleop': {'hardware_node': ['dry_run=false']}}
 
 # Where each mode's recordings and plots go
 RESULTS_DIR = REPO_ROOT / 'ekf_results'
@@ -103,6 +105,8 @@ def main(argv=None):
             continue
         python = _viewer_python() if name in VIEWER_NODES else sys.executable
         cmd = [python, '-m', f'spirob_zmq.nodes.{name}']
+        for item in MODE_PARAMS.get(args.mode, {}).get(name, []):
+            cmd += ['-p', item]
         node_cfg = {k: v for k, v in config.items() if not isinstance(v, dict)}
         node_cfg.update(config.get(name, {}))
         if name == 'control_node' and not args.headless:

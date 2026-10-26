@@ -60,8 +60,8 @@ class TeleopNode(Node):
     def __init__(self, params=None):
         super().__init__('teleop_node', params)
         self.motor_ids = list(self.declare_parameter('motor_ids', [10, 1, 2]))
-        # Pull is negative current. Kept well under max_current by default; raise with -p current_limit=...
-        self.current_limit = self.declare_parameter('current_limit', 0.5)
+        # Pull is negative current. Kept under max_current by default; change with -p current_limit=...
+        self.current_limit = self.declare_parameter('current_limit', 1.5)
         self.step = self.declare_parameter('step', 0.05)
         self.u = np.full(len(self.motor_ids), float(self.declare_parameter('initial_current', 0.0)))
 

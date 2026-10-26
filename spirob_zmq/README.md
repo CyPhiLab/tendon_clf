@@ -61,8 +61,10 @@ motors 1-3, `+/-` change the step, space releases all, `x` quits (and sends 0 A)
 
 ```bash
 python -m spirob_zmq.launch --mode teleop                                     # simulated plant + viewer
-python -m spirob_zmq.launch --mode real_teleop -p hardware_node.dry_run=false --no-record
-python -m spirob_zmq.launch --mode real_teleop -p hardware_node.dry_run=false -p teleop_node.current_limit=1.0
+python -m spirob_zmq.launch --mode real_teleop --no-record                     # drives the motors
+python -m spirob_zmq.launch --mode real_teleop -p hardware_node.dry_run=true    # no CAN bus
+python -m spirob_zmq.launch --mode real_teleop -p teleop_node.current_limit=1.0
 ```
 
-Currents are clamped to `[-current_limit, 0]` (default 0.5 A; negative pulls).
+`real_teleop` defaults to `hardware_node.dry_run=false`. Currents are clamped to
+`[-current_limit, 0]` (default 1.5 A; negative pulls).
