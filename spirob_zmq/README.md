@@ -55,3 +55,14 @@ python -m spirob_zmq.launch --mode real_ekf -p hardware_node.dry_run=false
 `base_marker_sites` if static base markers are set up, else `ekf_results/vicon_frame.json`), labels
 them by fitting the pose, and then tracks them frame to frame. `-p hardware_node.pretension_current=-0.1`
 holds a small current until the controller starts, to take up tendon slack.
+
+Open-loop keyboard teleop (no estimator or controller): `q/a`, `w/s`, `e/d` pull more/less on
+motors 1-3, `+/-` change the step, space releases all, `x` quits (and sends 0 A).
+
+```bash
+python -m spirob_zmq.launch --mode teleop                                     # simulated plant + viewer
+python -m spirob_zmq.launch --mode real_teleop -p hardware_node.dry_run=false --no-record
+python -m spirob_zmq.launch --mode real_teleop -p hardware_node.dry_run=false -p teleop_node.current_limit=1.0
+```
+
+Currents are clamped to `[-current_limit, 0]` (default 0.5 A; negative pulls).

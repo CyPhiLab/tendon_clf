@@ -18,12 +18,14 @@ LAUNCHES = {
     'real_ekf': ['real_measurement_node', 'state_estimation_node', 'control_node',
                  'simulation_node', 'hardware_node'],
     'no_ekf': ['get_state_node', 'control_node', 'simulation_node'],
+    'teleop': ['get_state_node', 'teleop_node', 'simulation_node'],
+    'real_teleop': ['teleop_node', 'hardware_node'],
 }
 VIEWER_NODES = {'simulation_node'}
 
 # Where each mode's recordings and plots go
 RESULTS_DIR = REPO_ROOT / 'ekf_results'
-RESULTS_SUBDIR = {'ekf': 'sim', 'no_ekf': 'sim', 'real_ekf': 'real'}
+RESULTS_SUBDIR = {'ekf': 'sim', 'no_ekf': 'sim', 'teleop': 'sim', 'real_ekf': 'real', 'real_teleop': 'real'}
 
 
 def _viewer_python():
