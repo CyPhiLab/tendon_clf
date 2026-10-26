@@ -29,7 +29,6 @@ setup(
             'virtual_measurement_node = spirob_ros.virtual_measurement_node:main',
             'simulation_node = spirob_ros.simulation_node:main',
             'get_state_node = spirob_ros.get_state_node:main',
-            'teleop_node = spirob_ros.teleop_node:main',
         ],
     },
 )
