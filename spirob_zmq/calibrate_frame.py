@@ -14,18 +14,18 @@ import sys
 import mujoco
 import numpy as np
 
-from spirob_zmq.common import ProfileParams, load_model, rest_state
+from spirob_zmq.common import ProfileParams, load_model, marker_sites, rest_state
 from spirob_zmq.core import REPO_ROOT
 from spirob_zmq.pose_init import MarkerModel, save_frame, stationary_clusters
 
 
-def calibrate(centres, robot=None):
-    params = ProfileParams(robot)
+def calibrate(centres, robot=None, **overrides):
+    params = ProfileParams(robot, **overrides)
     model = load_model(params)
     data = mujoco.MjData(model)
     rest_state(params, model, data)
     key = model.key(params.declare_parameter('init_key', 'init')).id
-    markers = MarkerModel(model, list(params.declare_parameter('site_names')), model.key_qpos[key])
+    markers = MarkerModel(model, marker_sites(params), model.key_qpos[key])
     return markers, markers.calibrate_frame_at_rest(centres, data.qpos.copy())
 
 

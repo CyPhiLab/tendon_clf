@@ -147,7 +147,7 @@ class MarkerModel:
         mujoco.mj_kinematics(model, d)
         cent = {s: self._centroid(d, s) for s in self.segments}
         self.chord_max = {(a, b): np.linalg.norm(cent[b] - cent[a])
-                          for a, b in zip(self.segments, self.segments[1:])}
+                          for k, a in enumerate(self.segments) for b in self.segments[k + 1:]}
         # The first segment's body hangs off a fixed body: its centroid keeps a fixed distance to the joint
         first_body = model.site_bodyid[self.site_id[self.seg_sites[self.segments[0]][0]]]
         parent = model.body_parentid[first_body]
@@ -289,7 +289,7 @@ class MarkerModel:
                 best = r
         return best
 
-    def calibrate_frame_at_rest(self, points, q_rest, shape_tol=6e-3, chain_tol=5e-3):
+    def calibrate_frame_at_rest(self, points, q_rest, shape_tol=6e-3, chain_tol=5e-3, beam_width=36):
         """Vicon -> MuJoCo frame with the robot at rest, from the segment triangles.
 
         Labels come from the best rigid fit of all segments against the rest pose (the 3D layout of
@@ -307,16 +307,23 @@ class MarkerModel:
         finally:
             self.anchor = anchor
         for g in groupings:
-            for perms in itertools.product(*[itertools.permutations(g[s]) for s in self.segments]):
-                labels = {}
-                for s, perm in zip(self.segments, perms):
-                    labels.update(zip(self.seg_sites[s], perm))
-                src = points[[labels[n] for n in names_all]]
-                dst = np.array([ref[n] for n in names_all])
-                _, _, res = kabsch(src, dst)
-                score = np.sqrt(np.mean(res ** 2))
-                if best is None or score < best[0]:
-                    best = (score, labels)
+            # Segment by segment, keeping the best partial labellings (all orders of the first two
+            # segments, whose fit is the first to fix the handedness): 6^segments fits otherwise
+            beam = [{}]
+            for s in self.segments:
+                trials = []
+                for labels in beam:
+                    for perm in itertools.permutations(g[s]):
+                        trial = dict(labels)
+                        trial.update(zip(self.seg_sites[s], perm))
+                        names = list(trial)
+                        _, _, res = kabsch(points[[trial[n] for n in names]], np.array([ref[n] for n in names]))
+                        trials.append((np.sqrt(np.mean(res ** 2)), trial))
+                trials.sort(key=lambda x: x[0])
+                beam = [labels for _, labels in trials[:beam_width]]
+            score = trials[0][0]
+            if best is None or score < best[0]:
+                best = (score, beam[0])
         if best is None:
             return None
         labels = best[1]
