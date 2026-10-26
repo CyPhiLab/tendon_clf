@@ -36,3 +36,11 @@ ros2 launch spirob_ros spirob.launch.py
 ```bash
 ros2 launch spirob_ros spirob_no_ekf.launch.py
 ```
+
+### Open-loop keyboard teleop
+Drives the tendons directly from the keyboard (no controller, no state feedback) by publishing to `/spirob/motor_command`. Run it in its own terminal instead of `control_node`, alongside `hardware_node` (real robot) or `get_state_node` + `simulation_node` (sim):
+```bash
+ros2 run spirob_ros teleop_node
+# optional: ros2 run spirob_ros teleop_node --ros-args -p step:=0.02 -p u_min:=-0.5
+```
+`w/s` bend toward ±x, `a/d` toward ±y, `r/f` add/remove pretension on all tendons (stiffens without bending), `space` releases everything, `q` releases and quits. Each key press nudges the command by `step`; tendon tensions are kept within `[u_min, u_max]`. If a direction looks wrong on the hardware, change `tendon_angles_deg` (the direction the tip bends when each tendon is pulled).
