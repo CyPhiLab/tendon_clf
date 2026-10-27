@@ -11,6 +11,7 @@ SITE_MEASUREMENT = '/spirob/site_measurement'
 TRUE_STATE = '/spirob/true_state'
 INITIAL_STATE = '/spirob/initial_state'
 VICON_RAW = '/spirob/vicon_raw'
+EKF_DIAGNOSTICS = '/spirob/ekf_diagnostics'
 
 class ProfileParams:
     """Stands in for a Node outside the node graph: parameters come from a robot profile."""
@@ -179,3 +180,4 @@ def command_to_u(msg, motor_ids):
         return np.asarray(msg['u'], dtype=float).copy()
     id_to_u = dict(zip(msg['motor_ids'], msg['u']))
     return np.array([id_to_u.get(motor_id, 0.0) for motor_id in motor_ids], dtype=float)
+ 

@@ -8,12 +8,14 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from vicon_dssdk import ViconDataStream
 
+from spirob_zmq.pose_init import MarkerModel, transform
+
 
 # ============================================================
 # Configuration
 # ============================================================
 
-LAB_PC_IP = "172.20.54.13"
+LAB_PC_IP = "172.20.53.39"
 REPO_ROOT = Path(__file__).resolve().parent
 OUTPUT_PATH = REPO_ROOT / "vicon_dbscan_summary.txt"
 PLOT_PATH = REPO_ROOT / "vicon_mujoco_markers.png"
@@ -29,12 +31,14 @@ REFERENCE_MARKER_NAMES = [
     "marker_1_seg_2",
     "marker_2_seg_2",
     "marker_3_seg_2",
-    "marker_1_seg_5",
-    "marker_2_seg_5",
-    "marker_3_seg_5",
-    "marker_1_seg_8",
-    "marker_2_seg_8",
-    "marker_3_seg_8",
+    "marker_1_seg_4",
+    "marker_2_seg_4",
+    "marker_3_seg_4",
+    "marker_1_seg_6",
+    "marker_2_seg_6",
+    "marker_3_seg_6",
+    'marker_1_seg_8', 'marker_2_seg_8', 'marker_3_seg_8',
+    'marker_1_seg_11', 'marker_2_seg_11', 'marker_3_seg_11',
 ]
 
 
@@ -118,7 +122,7 @@ def compute_marker_error(mujoco_pos, vicon_pos):
     return error_vec, error_norm
 
 
-def plot_marker_positions(reference_positions, clustered_reference_positions, cluster_centers):
+def plot_marker_positions(reference_positions, clustered_reference_positions, cluster_centers, frame):
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection="3d")
 
@@ -136,16 +140,18 @@ def plot_marker_positions(reference_positions, clustered_reference_positions, cl
         vicon_xyz = np.array([clustered_reference_positions[name] for name in matched_names], dtype=float)
         ax.scatter(
             vicon_xyz[:, 0], vicon_xyz[:, 1], vicon_xyz[:, 2],
-            c="tab:blue", marker="o", s=80, label="Vicon DBSCAN centers",
+            c="tab:blue", marker="o", s=80, label="Vicon aligned markers",
         )
         for name, pos in zip(matched_names, vicon_xyz):
             ax.text(pos[0], pos[1], pos[2], name, color="tab:blue", fontsize=8)
 
     if cluster_centers:
-        raw_cluster_xyz = np.array([cluster["center"] for cluster in cluster_centers], dtype=float)
+        raw_cluster_xyz = transform(
+            np.array([cluster["center"] for cluster in cluster_centers], dtype=float), frame
+        )
         ax.scatter(
             raw_cluster_xyz[:, 0], raw_cluster_xyz[:, 1], raw_cluster_xyz[:, 2],
-            c="gray", marker="x", s=60, alpha=0.7, label="All Vicon clusters",
+            c="gray", marker="x", s=60, alpha=0.7, label="All aligned Vicon clusters",
         )
 
     ax.set_title("MuJoCo vs Vicon marker positions")
@@ -205,38 +211,20 @@ def collect_initial_clusters(client):
 # Matching logic
 # ============================================================
 
-def match_vicon_to_reference(reference_positions, vicon_points):
-    """Assign each Vicon marker to the nearest reference marker position.
-
-    This is a greedy nearest-neighbor assignment: each reference marker gets the
-    closest remaining Vicon point. It is a practical match when the real marker
-    identity is unknown but the geometry is approximately known.
-    """
-    if len(vicon_points) == 0:
-        return {}
-
-    ref_names = list(reference_positions.keys())
-    vicon_used = set()
-    assignment = {}
-
-    for ref_name in ref_names:
-        ref_pos = np.asarray(reference_positions[ref_name], dtype=float)
-        best_index = None
-        best_dist = np.inf
-
-        for idx, point in enumerate(vicon_points):
-            if idx in vicon_used:
-                continue
-            dist = np.linalg.norm(np.asarray(point, dtype=float) - ref_pos)
-            if dist < best_dist:
-                best_dist = dist
-                best_index = idx
-
-        if best_index is not None:
-            assignment[ref_name] = np.asarray(vicon_points[best_index], dtype=float)
-            vicon_used.add(best_index)
-
-    return assignment
+def align_vicon_to_reference(model, q_ref, reference_positions, vicon_points):
+    """Use the calibration marker-geometry matcher and Kabsch frame fit."""
+    names = list(reference_positions)
+    marker_model = MarkerModel(model, names, q_ref)
+    fitted = marker_model.calibrate_frame_at_rest(vicon_points, q_ref)
+    if fitted is None:
+        raise RuntimeError(
+            f"Could not match the Vicon marker triangles to the {len(names)} MuJoCo sites. "
+            "Check that the robot is stationary and in the MuJoCo init/rest pose."
+        )
+    R, t, _, labels = fitted
+    aligned_points = transform(vicon_points, (R, t))
+    assignment = {name: aligned_points[labels[name]] for name in names}
+    return assignment, R, t
 
 
 # ============================================================
@@ -246,7 +234,11 @@ def match_vicon_to_reference(reference_positions, vicon_points):
 def main():
     show_mujoco_viewer()
 
-    reference_positions = load_mujoco_marker_positions()
+    model, data = load_mujoco_model_with_init()
+    reference_positions = {
+        name: data.site_xpos[model.site(name).id].copy()
+        for name in REFERENCE_MARKER_NAMES
+    }
     lines = ["Reference marker positions loaded from MuJoCo init keyframe:"]
     for name in REFERENCE_MARKER_NAMES:
         p = reference_positions[name]
@@ -280,10 +272,16 @@ def main():
             f"  Cluster {cluster['cluster_id']}: count={cluster['count']}, "
             f"center=({p[0]:.4f}, {p[1]:.4f}, {p[2]:.4f})")
 
-    clustered_reference_positions = match_vicon_to_reference(
-        reference_positions,
-        np.array([cluster["center"] for cluster in cluster_centers], dtype=float),
+    vicon_points = np.array([cluster["center"] for cluster in cluster_centers], dtype=float)
+    clustered_reference_positions, R, t = align_vicon_to_reference(
+        model, data.qpos.copy(), reference_positions,
+        vicon_points,
     )
+    lines.append("")
+    lines.append("Kabsch Vicon -> MuJoCo frame:")
+    lines.append(f"  rotation (R): {np.array2string(R, precision=6)}")
+    lines.append(f"  translation (t): ({t[0]:.6f}, {t[1]:.6f}, {t[2]:.6f}) m")
+    lines.append("  Per-marker Euclidean distances after alignment:")
     if len(clustered_reference_positions) < len(REFERENCE_MARKER_NAMES):
         lines.append(
             f"Warning: only identified {len(clustered_reference_positions)} / "
@@ -303,7 +301,7 @@ def main():
                 f"    Vicon : ({vicon_pos[0]:.4f}, {vicon_pos[1]:.4f}, {vicon_pos[2]:.4f})\n"
                 f"    MuJoCo: ({mujoco_pos[0]:.4f}, {mujoco_pos[1]:.4f}, {mujoco_pos[2]:.4f})\n"
                 f"    Error : (dx={error_vec[0]:+.4f}, dy={error_vec[1]:+.4f}, dz={error_vec[2]:+.4f}) m, "
-                f"||e||={error_norm:.4f} m"
+                f"distance={1000.0 * error_norm:.2f} mm"
             )
         else:
             lines.append(
@@ -315,10 +313,10 @@ def main():
     if error_norms:
         lines.append("")
         lines.append(
-            f"Mean marker position error: {np.mean(error_norms):.4f} m "
+            f"Mean marker position distance: {np.mean(error_norms):.4f} m "
             f"({1000.0 * np.mean(error_norms):.2f} mm)")
         lines.append(
-            f"Max marker position error : {np.max(error_norms):.4f} m "
+            f"Max marker position distance : {np.max(error_norms):.4f} m "
             f"({1000.0 * np.max(error_norms):.2f} mm)")
 
     if rate_hz is not None:
@@ -329,7 +327,7 @@ def main():
     lines.append(f"Saved summary to: {OUTPUT_PATH}")
     lines.append("Done.")
     emit(lines)
-    plot_marker_positions(reference_positions, clustered_reference_positions, cluster_centers)
+    plot_marker_positions(reference_positions, clustered_reference_positions, cluster_centers, (R, t))
 
 
 if __name__ == "__main__":

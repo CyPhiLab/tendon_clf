@@ -1,0 +1,110 @@
+Reference marker positions loaded from MuJoCo init keyframe:
+  marker_1_seg_2: (-0.0303, 0.0575, 0.1000)
+  marker_2_seg_2: (-0.0000, 0.0775, 0.1485)
+  marker_3_seg_2: (0.0303, 0.0575, 0.1000)
+  marker_1_seg_4: (-0.0270, 0.1168, 0.0661)
+  marker_2_seg_4: (-0.0000, 0.1441, 0.1041)
+  marker_3_seg_4: (0.0270, 0.1168, 0.0661)
+  marker_1_seg_6: (-0.0242, 0.1703, 0.0326)
+  marker_2_seg_6: (-0.0000, 0.1914, 0.0688)
+  marker_3_seg_6: (0.0242, 0.1702, 0.0326)
+  marker_1_seg_8: (-0.0218, 0.2208, 0.0109)
+  marker_2_seg_8: (0.0000, 0.2332, 0.0466)
+  marker_3_seg_8: (0.0218, 0.2207, 0.0109)
+  marker_1_seg_11: (-0.0188, 0.2868, -0.0011)
+  marker_2_seg_11: (0.0001, 0.2899, 0.0314)
+  marker_3_seg_11: (0.0190, 0.2868, -0.0011)
+
+DBSCAN found 15 clusters with eps=1.5 mm and min_samples=10.
+  Cluster 0: count=100, center=(0.0078, 0.2665, 0.0256)
+  Cluster 1: count=100, center=(-0.0001, 0.1712, 0.0532)
+  Cluster 2: count=100, center=(0.0008, 0.2075, 0.0317)
+  Cluster 3: count=100, center=(-0.0012, 0.1321, 0.0882)
+  Cluster 4: count=100, center=(-0.0035, 0.0690, 0.1412)
+  Cluster 5: count=100, center=(0.0289, 0.2633, -0.0056)
+  Cluster 6: count=100, center=(0.0231, 0.1972, -0.0052)
+  Cluster 7: count=100, center=(0.0225, 0.1484, 0.0146)
+  Cluster 8: count=100, center=(-0.0321, 0.0468, 0.0923)
+  Cluster 9: count=100, center=(0.0227, 0.0993, 0.0537)
+  Cluster 10: count=100, center=(0.0261, 0.0486, 0.0910)
+  Cluster 11: count=100, center=(-0.0208, 0.1504, 0.0160)
+  Cluster 12: count=100, center=(-0.0256, 0.0999, 0.0516)
+  Cluster 13: count=100, center=(-0.0054, 0.2674, -0.0053)
+  Cluster 14: count=100, center=(-0.0156, 0.2040, -0.0033)
+
+Kabsch Vicon -> MuJoCo frame:
+  rotation (R): [[ 0.999308  0.034563 -0.013769]
+ [-0.034749  0.999305 -0.013502]
+ [ 0.013293  0.013972  0.999814]]
+  translation (t): (0.002735, 0.010739, 0.007337) m
+  Per-marker Euclidean distances after alignment:
+
+Matched Vicon DBSCAN centers vs MuJoCo init positions:
+  marker_1_seg_2:
+    Vicon : (-0.0290, 0.0574, 0.0998)
+    MuJoCo: (-0.0303, 0.0575, 0.1000)
+    Error : (dx=+0.0013, dy=-0.0001, dz=-0.0002) m, distance=1.33 mm
+  marker_2_seg_2:
+    Vicon : (-0.0003, 0.0779, 0.1494)
+    MuJoCo: (-0.0000, 0.0775, 0.1485)
+    Error : (dx=-0.0003, dy=+0.0004, dz=+0.0009) m, distance=1.04 mm
+  marker_3_seg_2:
+    Vicon : (0.0293, 0.0572, 0.0993)
+    MuJoCo: (0.0303, 0.0575, 0.1000)
+    Error : (dx=-0.0010, dy=-0.0003, dz=-0.0007) m, distance=1.26 mm
+  marker_1_seg_4:
+    Vicon : (-0.0201, 0.1108, 0.0600)
+    MuJoCo: (-0.0270, 0.1168, 0.0661)
+    Error : (dx=+0.0068, dy=-0.0060, dz=-0.0061) m, distance=10.99 mm
+  marker_2_seg_4:
+    Vicon : (0.0049, 0.1416, 0.0973)
+    MuJoCo: (-0.0000, 0.1441, 0.1041)
+    Error : (dx=+0.0049, dy=-0.0025, dz=-0.0068) m, distance=8.71 mm
+  marker_3_seg_4:
+    Vicon : (0.0281, 0.1084, 0.0627)
+    MuJoCo: (0.0270, 0.1168, 0.0661)
+    Error : (dx=+0.0011, dy=-0.0084, dz=-0.0034) m, distance=9.16 mm
+  marker_1_seg_6:
+    Vicon : (-0.0130, 0.1615, 0.0252)
+    MuJoCo: (-0.0242, 0.1703, 0.0326)
+    Error : (dx=+0.0111, dy=-0.0088, dz=-0.0075) m, distance=16.02 mm
+  marker_2_seg_6:
+    Vicon : (0.0078, 0.1811, 0.0629)
+    MuJoCo: (-0.0000, 0.1914, 0.0688)
+    Error : (dx=+0.0078, dy=-0.0103, dz=-0.0059) m, distance=14.25 mm
+  marker_3_seg_6:
+    Vicon : (0.0302, 0.1580, 0.0243)
+    MuJoCo: (0.0242, 0.1702, 0.0326)
+    Error : (dx=+0.0060, dy=-0.0122, dz=-0.0084) m, distance=15.97 mm
+  marker_1_seg_8:
+    Vicon : (-0.0057, 0.2152, 0.0067)
+    MuJoCo: (-0.0218, 0.2208, 0.0109)
+    Error : (dx=+0.0160, dy=-0.0055, dz=-0.0042) m, distance=17.50 mm
+  marker_2_seg_8:
+    Vicon : (0.0103, 0.2176, 0.0419)
+    MuJoCo: (0.0000, 0.2332, 0.0466)
+    Error : (dx=+0.0102, dy=-0.0156, dz=-0.0046) m, distance=19.23 mm
+  marker_3_seg_8:
+    Vicon : (0.0327, 0.2071, 0.0052)
+    MuJoCo: (0.0218, 0.2207, 0.0109)
+    Error : (dx=+0.0109, dy=-0.0136, dz=-0.0058) m, distance=18.38 mm
+  marker_1_seg_11:
+    Vicon : (0.0066, 0.2782, 0.0057)
+    MuJoCo: (-0.0188, 0.2868, -0.0011)
+    Error : (dx=+0.0255, dy=-0.0086, dz=+0.0069) m, distance=27.74 mm
+  marker_2_seg_11:
+    Vicon : (0.0194, 0.2764, 0.0367)
+    MuJoCo: (0.0001, 0.2899, 0.0314)
+    Error : (dx=+0.0194, dy=-0.0136, dz=+0.0053) m, distance=24.21 mm
+  marker_3_seg_11:
+    Vicon : (0.0407, 0.2729, 0.0058)
+    MuJoCo: (0.0190, 0.2868, -0.0011)
+    Error : (dx=+0.0218, dy=-0.0139, dz=+0.0069) m, distance=26.73 mm
+
+Mean marker position distance: 0.0142 m (14.17 mm)
+Max marker position distance : 0.0277 m (27.74 mm)
+
+Estimated Vicon frame rate: 103.81 Hz
+
+Saved summary to: /home/zach/huy/tendon_clf/vicon_dbscan_summary.txt
+Done.

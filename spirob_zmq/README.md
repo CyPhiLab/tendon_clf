@@ -48,7 +48,7 @@ python tests/test_startup.py && python tests/test_real_measurement_node.py      
 
 ```bash
 python -m spirob_zmq.calibrate_frame                     # robot at rest: Vicon -> MuJoCo frame, rerun if the Vicon origin or base moves
-python -m spirob_zmq.launch --mode real_ekf -p hardware_node.dry_run=false
+python -m spirob_zmq.launch --mode real_ekf -p hardware_node.dry_run=false --duration 20
 ```
 
 `real_measurement_node` waits until the markers are still, maps them into the MuJoCo frame (from

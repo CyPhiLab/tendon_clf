@@ -11,28 +11,40 @@ ROBOTS = {
         # Overrides the model's ~1e-6 joint damping (spirob_mujoco 2db1c54): with it the EKF's
         # linearization is unstable and its covariance overflowed in run 20261022_140828. Replaying
         # that run, 0.1 tracks Vicon to 1-5 mm; 0.2 s predictions fit best for damping >= 0.1.
-        'joint_damping': 0.1,
         'init_key': 'init',
         'motor_ids': [10, 1, 2],
         # u is the motor current [A]. With the current-source model the slew limit must let the
         # controller reverse within a few ticks: 0.05-0.5 A/tick settle in about 1 s with e=0.05 in sim
-        'u_step_max': 0.05,
-        'vicon_ip': '172.20.59.34',
+        'u_step_max': 0.1,
+        'vicon_ip': '172.20.53.39',
         'vicon_rate_hz': 100.0,
+        # 'base_height': 0.525,
         'base_height': 0.125,
         'settle_time': 5.0,
-        'target_pos': [0.0,0.2,0.2],
-        'site_name': 'marker_1_seg_16',  # site tracked by control_node (default 'ee')
-        # 'site_name': 'ee',  # site tracked by control_node (default 'ee')
+
+        # 'target_pos': [0.0,0.2,0.1],
+        # 'target_pos': [0.0,0.15,0.15],
+        'target_pos': [0.0,0.2,0.15],
+        # 'target_pos': [0.0,0.2,0.2],
+
+        # 'target_pos': [0.0,0.2,0.3],
+        # 'target_pos': [0.0,0.1,0.3],
+        # 'target_pos': [0.0,0.15,0.25],
+        # 'target_pos': [0.0,0.15,0.35],
+
+        # 'target_pos': [-0.05,0.25,0.125],
+        # 'target_pos': [0.0,0.15,0.15],
+        # 'target_pos': [0.0,0.2,0.15],
+        # 'target_pos': [0.0,0.2,0.2],
+
+        'site_name': 'marker_2_seg_11',  # site tracked by control_node (default 'ee')
 
         'site_names': ['marker_1_seg_2', 'marker_2_seg_2', 'marker_3_seg_2',
-                       'marker_1_seg_5', 'marker_2_seg_5', 'marker_3_seg_5',
+                       'marker_1_seg_4', 'marker_2_seg_4', 'marker_3_seg_4',
+                       'marker_1_seg_6', 'marker_2_seg_6', 'marker_3_seg_6',
                        'marker_1_seg_8', 'marker_2_seg_8', 'marker_3_seg_8',
-                    #    'marker_1_seg_10', 'marker_2_seg_10', 'marker_3_seg_10',
-                       'marker_1_seg_11', 'marker_2_seg_11', 'marker_3_seg_11',
-                    #    'marker_1_seg_14', 'marker_2_seg_14', 'marker_3_seg_14',
-                    #    'marker_1_seg_18', 'marker_2_seg_18', 'marker_3_seg_18',
-                       'marker_1_seg_16', 'marker_2_seg_16', 'marker_3_seg_16'],
+                       'marker_1_seg_11', 'marker_2_seg_11', 'marker_3_seg_11'],
+
         # Markers physically on the robot that the estimator does not use. They are labelled and
         # tracked with site_names but not published: left untracked, a neighbouring triangle (seg 10
         # next to 11, 14 and 18 next to 16: 17-24 mm away, nearly the same shape) gets mistaken for
@@ -40,11 +52,11 @@ ROBOTS = {
         # site_names markers (no balls on segments 10, 14, 18).
         'unpublished_sites': [],
         'task_dim': 3,
-        'K': 200.0,
-        'e': 0.05,  # 0.02 oscillates and diverges with the current-source model unless u_step_max >= 0.5
+        'K': 2000.0,
+        'e': 0.12,  # 0.02 oscillates and diverges with the current-source model unless u_step_max >= 0.5
         'task_weight': 1.0,
-        'reg_qdd': 20.0,
-        'reg_u': 200,  # 5.0 when u was in volts; u in amps is 0.4545x smaller, so scale by 1/0.4545^2
+        'reg_qdd': 2.0,
+        'reg_u': 5.0,  # 5.0 when u was in volts; u in amps is 0.4545x smaller, so scale by 1/0.4545^2
         'reg_null': 0.2,
         'reg_dl': 1000.0,
         'pinv_rcond': 1e-2,

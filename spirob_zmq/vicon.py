@@ -23,6 +23,7 @@ class ViconClient:
         self.client.EnableUnlabeledMarkerData()
         self.client.SetStreamMode(ViconDataStream.Client.StreamMode.EClientPull)
         self._last_frame = None
+        self._frame_count = 0
 
     def read(self):
         """(stamp, points (M, 3) in meters) for a new frame, or None if there is none yet.
@@ -33,7 +34,15 @@ class ViconClient:
         try:
             if not self.client.GetFrame():
                 return None
-            frame = self.client.GetFrameNumber()
+            # GetFrameNumber is not exposed by every Python binding of the SDK.
+            # In pull mode, a successful GetFrame call has already advanced to a
+            # new frame, so a local counter is a usable timestamp fallback.
+            get_frame_number = getattr(self.client, 'GetFrameNumber', None)
+            if get_frame_number is None:
+                self._frame_count += 1
+                frame = self._frame_count
+            else:
+                frame = get_frame_number()
             if frame == self._last_frame:
                 return None
             self._last_frame = frame

@@ -39,3 +39,6 @@ python/dist/
 
 .DS_Store
 spirob_zmq/.venv/
+
+# Generated EKF recordings and plots
+ekf_results/

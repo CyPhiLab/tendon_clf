@@ -100,7 +100,12 @@ class VirtualMeasurementNode(Node):
                 noisy_pos_with_missing[3*missing_id:3*missing_id+3] = np.nan
          
         stamp = self.data.time
-        self.meas_pub.publish({'stamp': stamp, 'data': noisy_pos_with_missing})
+        self.meas_pub.publish({
+            'stamp': stamp,
+            'data': noisy_pos_with_missing,
+            'noise_std_m': self.noise_std,
+            'noise_mean_m': self.noise_mean,
+        })
 
         # Ground truth
         self.truth_pub.publish({

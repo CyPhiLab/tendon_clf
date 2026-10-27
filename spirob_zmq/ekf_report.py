@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from spirob_zmq.common import MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT, TRUE_STATE
+from spirob_zmq.common import EKF_DIAGNOSTICS, MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT, TRUE_STATE
 
 
 def load(path):
@@ -246,12 +246,133 @@ def plot_tracking(path, out):
     print(f'saved {out}')
 
 
+def load_diagnostics(path):
+    with open(path) as f:
+        return [rec for line in f if (rec := json.loads(line)).get('topic') == EKF_DIAGNOSTICS]
+
+
+def summarize_diagnostics(path, records):
+    if not records:
+        print(f'  EKF diagnostics     none recorded')
+        return
+    messages = [r['msg'] for r in records]
+    def peak(key):
+        vals = [(float(m[key]), float(m['stamp'])) for m in messages
+                if m.get(key) is not None and np.isfinite(m[key])]
+        return max(vals) if vals else (float('nan'), float('nan'))
+
+    first_bad = next((m for m in messages
+                      if m.get('state_finite') is False or m.get('covariance_finite') is False
+                      or m.get('predicted_state_finite') is False
+                      or m.get('covariance_finite_after_prediction') is False
+                      or m.get('event') == 'innovation_solve_failed'), None)
+    rms, rms_t = peak('innovation_rms_m')
+    dq, dq_t = peak('correction_dq_norm')
+    pmax, pmax_t = peak('covariance_diag_max_after_prediction')
+    if not np.isfinite(pmax):
+        pmax, pmax_t = peak('covariance_diag_max')
+    print(f'  EKF diagnostics     {len(messages)} updates')
+    print(f'  max innovation RMS {1e3*rms:.3g} mm at {rms_t:.3f} s' if np.isfinite(rms)
+          else '  max innovation RMS unavailable')
+    print(f'  max dq correction  {dq:.3g} rad/s at {dq_t:.3f} s' if np.isfinite(dq)
+          else '  max dq correction unavailable')
+    print(f'  max covariance diag {pmax:.3g} at {pmax_t:.3f} s' if np.isfinite(pmax)
+          else '  max covariance diag unavailable')
+    if first_bad:
+        print(f"  first non-finite   {first_bad.get('stamp', float('nan')):.3f} s; "
+              f"event={first_bad.get('event', 'state/covariance became non-finite')}")
+    else:
+        print('  first non-finite   none')
+
+
+def plot_diagnostics(records, out):
+    """Compact time series of EKF innovations, corrections, covariance, and prediction health."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    if not records:
+        return
+    messages = [r['msg'] for r in records]
+    t0 = float(messages[0]['stamp'])
+    t = np.asarray([float(m['stamp']) - t0 for m in messages])
+
+    def values(key, scale=1.0):
+        return np.asarray([np.nan if m.get(key) is None else float(m[key]) * scale for m in messages])
+
+    def log10_values(key):
+        v = values(key)
+        valid = np.isfinite(v) & (v > 0)
+        out = np.full(v.shape, np.nan)
+        out[valid] = np.log10(v[valid])
+        return out
+
+    fig, axes = plt.subplots(5, 1, figsize=(10, 11), sharex=True)
+    axes[0].plot(t, values('innovation_rms_m', 1e3), label='RMS')
+    axes[0].plot(t, values('innovation_max_m', 1e3), label='max')
+    axes[0].set_ylabel('innovation [mm]')
+    axes[0].legend(fontsize=8)
+
+    axes[1].plot(t, values('correction_q_norm'), label='q norm')
+    axes[1].plot(t, values('correction_q_max_abs'), label='q max abs')
+    axes[1].set_yscale('symlog', linthresh=1e-3)
+    axes[1].set_ylabel('q correction [rad]')
+    axes[1].legend(fontsize=8)
+
+    axes[2].plot(t, values('correction_dq_norm'), label='dq norm')
+    axes[2].plot(t, values('correction_dq_max_abs'), label='dq max abs')
+    axes[2].set_yscale('symlog', linthresh=1e-3)
+    axes[2].set_ylabel('dq correction [rad/s]')
+    axes[2].legend(fontsize=8)
+
+    p_before = log10_values('covariance_diag_max_before_prediction')
+    p_after = log10_values('covariance_diag_max_after_prediction')
+    if not np.isfinite(p_after).any():
+        p_after = log10_values('covariance_diag_max')
+    axes[3].plot(t, p_after, label='max diag P after predict/update')
+    if np.isfinite(p_before).any():
+        axes[3].plot(t, p_before, label='max diag P before predict')
+    axes[3].set_ylabel('log10 max covariance diag')
+    axes[3].legend(fontsize=8)
+
+    f_norm = values('transition_jacobian_fro_norm')
+    pred_dq = values('predicted_dq_max_abs')
+    if np.isfinite(f_norm).any():
+        f_line, = axes[4].plot(t, f_norm, color='tab:blue', label='transition Jacobian Frobenius norm')
+    if np.isfinite(pred_dq).any():
+        ax_right = axes[4].twinx()
+        dq_line, = ax_right.plot(t, pred_dq, color='tab:orange', label='predicted max |dq| [rad/s]')
+        ax_right.set_ylabel('predicted max |dq| [rad/s]')
+    lines = ([f_line] if np.isfinite(f_norm).any() else [])
+    if np.isfinite(pred_dq).any():
+        lines.append(dq_line)
+    if lines:
+        axes[4].legend(lines, [line.get_label() for line in lines], fontsize=8, loc='upper left')
+    axes[4].set_ylabel('Jacobian Frobenius norm')
+    axes[4].set_xlabel('time [s]')
+
+    bad = np.asarray([m.get('state_finite') is False or m.get('covariance_finite') is False
+                      or m.get('predicted_state_finite') is False
+                      or m.get('covariance_finite_after_prediction') is False for m in messages])
+    if bad.any():
+        for ax in axes:
+            ax.axvline(t[bad][0], color='red', ls='--', lw=1, label='first non-finite')
+    for ax in axes:
+        ax.grid(True, which='both', alpha=0.3)
+    fig.suptitle(Path(out).stem.replace('_diagnostics', '') + ' EKF diagnostics')
+    fig.tight_layout()
+    fig.savefig(out, dpi=140)
+    plt.close(fig)
+    print(f'saved {out}')
+
+
 def extra_plots(runs, plot):
     """Marker and tracking figures, saved next to the main plot."""
     for path in runs:
         base = Path(plot) if len(runs) == 1 else Path(plot).with_name(f'{Path(path).stem}.png')
         plot_markers(path, marker_plot_path(base))
         plot_tracking(path, base.with_name(f'{base.stem}_tracking.png'))
+        plot_diagnostics(load_diagnostics(path), base.with_name(f'{base.stem}_diagnostics.png'))
 
 
 def main(argv=None):
@@ -275,6 +396,7 @@ def main(argv=None):
         print(path)
         for k, v in stats.items():
             print(f'  {k:18s} {v:.4g}' if isinstance(v, float) else f'  {k:18s} {v}')
+        summarize_diagnostics(path, load_diagnostics(path))
 
     if args.plot:
         import matplotlib

@@ -171,8 +171,8 @@ class ControlNode(Node):
         H, g, A, b = self._H, self._g, self._A, self._b
         H[:nv, :nv] = 2.0 * (self.task_weight * J.T @ J + self.reg_u * P.T @ P + self.reg_null * N)
         H[np.arange(nv), np.arange(nv)] += 2.0 * self.reg_qdd
-        g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p - self.reg_null * qdd_ref)
-        # g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+        # g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+        g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
 
         nu = model.nu
         A[0, :nv] = clf_a
