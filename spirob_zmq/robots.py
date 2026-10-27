@@ -53,7 +53,7 @@ ROBOTS = {
         'unpublished_sites': [],
         'task_dim': 3,
         'K': 2000.0,
-        'e': 0.12,  # 0.02 oscillates and diverges with the current-source model unless u_step_max >= 0.5
+        'e': 0.15,  # 0.02 oscillates and diverges with the current-source model unless u_step_max >= 0.5
         'task_weight': 1.0,
         'reg_qdd': 2.0,
         'reg_u': 5.0,  # 5.0 when u was in volts; u in amps is 0.4545x smaller, so scale by 1/0.4545^2
