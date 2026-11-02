@@ -15,7 +15,7 @@ from spirob_zmq.pose_init import MarkerModel, transform
 # Configuration
 # ============================================================
 
-LAB_PC_IP = "172.20.53.39"
+LAB_PC_IP = "172.20.51.10"
 REPO_ROOT = Path(__file__).resolve().parent
 OUTPUT_PATH = REPO_ROOT / "vicon_dbscan_summary.txt"
 PLOT_PATH = REPO_ROOT / "vicon_mujoco_markers.png"
@@ -28,17 +28,12 @@ MAX_MARKER_RADIUS = 0.45  # m; drop markers at or beyond this distance from the 
 
 MODEL_PATH = REPO_ROOT / "mujoco_models" / "spirob" / "spirob_horz_control.xml"
 REFERENCE_MARKER_NAMES = [
-    "marker_1_seg_2",
-    "marker_2_seg_2",
-    "marker_3_seg_2",
-    "marker_1_seg_4",
-    "marker_2_seg_4",
-    "marker_3_seg_4",
-    "marker_1_seg_6",
-    "marker_2_seg_6",
-    "marker_3_seg_6",
-    'marker_1_seg_8', 'marker_2_seg_8', 'marker_3_seg_8',
-    'marker_1_seg_11', 'marker_2_seg_11', 'marker_3_seg_11',
+    "marker_1_seg_1", "marker_2_seg_1", "marker_3_seg_1",
+    "marker_1_seg_2", "marker_2_seg_2", "marker_3_seg_2",
+    "marker_1_seg_4", "marker_2_seg_4", "marker_3_seg_4",
+    # "marker_1_seg_6", "marker_2_seg_6", "marker_3_seg_6",
+    # 'marker_1_seg_8', 'marker_2_seg_8', 'marker_3_seg_8',
+    # 'marker_1_seg_11', 'marker_2_seg_11', 'marker_3_seg_11',
 ]
 
 

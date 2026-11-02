@@ -49,10 +49,10 @@ def main(argv=None):
     R, t, res, _ = got
     angle = np.degrees(np.arccos(np.clip((np.trace(R) - 1) / 2, -1, 1)))
     print(f'rotation {angle:.2f} deg, translation {np.round(1e3 * t, 1)} mm, '
-          f'segment {markers.segments[0]} residual {np.round(1e3 * res, 2)} mm')
+          f'segments {", ".join(markers.segments[:2])} residual {np.round(1e3 * res, 2)} mm')
     if np.sqrt(np.mean(res ** 2)) > args.max_rms:
         sys.exit('residual too large: check that the robot is at rest and the markers are intact')
-    save_frame(args.out, R, t, res, 'rest_pose_segment_' + markers.segments[0])
+    save_frame(args.out, R, t, res, 'rest_pose_segments_' + '_'.join(markers.segments[:2]))
     print(f'wrote {args.out}')
 
 

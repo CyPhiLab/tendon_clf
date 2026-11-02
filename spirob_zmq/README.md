@@ -32,6 +32,50 @@ The estimator starts from the pose fitted to the markers (`INITIAL_STATE`), not 
 so runs can start from any pose. In simulation, `-p virtual_measurement_node.init_pose=random`
 starts the plant curled.
 
+### EKF covariance
+
+For the current model, `x = [q, dq]`. Startup (including `init_from=keyframe`),
+measured-pose initialization, and divergence resets all use
+`P = diag([init_q_std**2] * nq + [init_dq_std**2] * nv)`.
+The defaults are `init_q_std=0.1` rad and `init_dq_std=0.001` rad/s.
+
+Process noise comes from independent motor-current errors with
+`process_current_std=0.05` A (one standard deviation, not a hard bound).
+`discrete_jacobian` returns both discrete state and input Jacobians `(A, B)`
+from MuJoCo's `mjd_transitionFD`. No additional timestep factor is needed.
+The same input error is held throughout each prediction interval between
+measurements, and errors are independent between intervals:
+
+```text
+Sigma_u = process_current_std**2 * I
+G_0 = 0
+G_(j+1) = A @ G_j + B
+Q_interval = G_n @ Sigma_u @ G_n.T
+P_pred = A**n @ P @ (A**n).T + Q_interval
+```
+
+Here `A**n` denotes a matrix power. The latest matched `(A, B)` pair is held
+fixed over the interval, retaining the existing Jacobian refresh cadence.
+The nominal state still uses MuJoCo and the existing voltage-limited current
+stepping. The Jacobians describe MuJoCo's transition at nominal `u`, not the
+derivative of the external voltage limiter.
+
+The acceleration-relative model and its floor are removed; `process_accel_relative_std`,
+`process_accel_std_min`, `process_act_noise`, `process_pos_noise`, `process_vel_noise`,
+and `initial_covariance` are no longer used. Models with activation states
+(`x = [q, dq, act]`) use `init_act_std=0.0` for their initial activation uncertainty;
+their process uncertainty also comes through `B`.
+
+Measurement corrections are capped independently for each joint:
+`abs(q_corrected[i] - q_predicted[i]) <= max_joint_q_correction` (default `0.2` rad).
+The existing optional `max_q_correction` L2 block limit still applies first.
+The affected gain rows are scaled before the Joseph covariance update, and
+covariance symmetry is enforced after prediction and correction.
+Every update publishes `correction_q_capped_count` and zero-based
+`correction_q_capped_indices` on `/spirob/ekf_diagnostics`, together with the other
+prediction/update diagnostics. Every correction update logs its update number,
+capped-joint count (including zero), total joint count, and cap in the terminal.
+
 ## Tools
 
 ```bash

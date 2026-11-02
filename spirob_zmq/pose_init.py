@@ -293,8 +293,8 @@ class MarkerModel:
         """Vicon -> MuJoCo frame with the robot at rest, from the segment triangles.
 
         Labels come from the best rigid fit of all segments against the rest pose (the 3D layout of
-        several triangles fixes the handedness); the frame itself uses the first segment only,
-        which is the least affected by sag. Returns (R, t, residual of the first segment, labels).
+        several triangles fixes the handedness); the frame itself uses the first two segments to
+        reduce sensitivity to a symmetric marker triangle. Returns (R, t, residuals, labels).
         """
         points = np.asarray(points, dtype=float).reshape(-1, 3)
         names_all = [n for s in self.segments for n in self.seg_sites[s]]
@@ -327,6 +327,8 @@ class MarkerModel:
         if best is None:
             return None
         labels = best[1]
-        first = self.seg_sites[self.segments[0]]
-        R, t, res = kabsch(points[[labels[n] for n in first]], np.array([ref[n] for n in first]))
+        frame_segments = self.segments[:2]
+        frame_names = [n for s in frame_segments for n in self.seg_sites[s]]
+        R, t, res = kabsch(points[[labels[n] for n in frame_names]],
+                           np.array([ref[n] for n in frame_names]))
         return R, t, res, labels

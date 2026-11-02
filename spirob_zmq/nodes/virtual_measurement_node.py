@@ -48,7 +48,7 @@ class VirtualMeasurementNode(Node):
         self.n_substeps = substeps(self.model, self.dt)
 
         # Measurement noise (meters, per xyz component, iid Gaussian)
-        self.noise_std = self.declare_parameter('noise_std', 1e-4)
+        self.noise_std = self.declare_parameter('noise_std', 1e-3)
         # Noise mean/bias (meters): scalar, or [x, y, z] applied to every site
         self.noise_mean = np.asarray(self.declare_parameter('noise_mean', 0.0), dtype=float)
 

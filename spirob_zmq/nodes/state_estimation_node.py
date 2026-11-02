@@ -56,11 +56,8 @@ class StateEstimationNode(Node):
         self.h = self.model.opt.timestep
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
 
-        # Noise standard deviations in generalized-coordinate units
-        pos_noise = self.declare_parameter('process_pos_noise', 1e-2)
-        vel_noise = self.declare_parameter('process_vel_noise', 1e-1)
-        act_noise = self.declare_parameter('process_act_noise', 1.5e-3)
-        meas_noise = self.declare_parameter('measurement_noise', 2e-2)
+        self.process_current_std = self.declare_parameter('process_current_std', 0.05)
+        meas_noise = self.declare_parameter('measurement_noise', 5e-3)
 
         # Diagnostic option
         self.disable_velocity_correction = self.declare_parameter('disable_velocity_correction', False)
@@ -68,50 +65,46 @@ class StateEstimationNode(Node):
         # Optional per-update correction limits (L2 norms).
         # Set to None to disable individual limits.
         self.max_q_correction = self.declare_parameter('max_q_correction', None)
+        self.max_joint_q_correction = self.declare_parameter('max_joint_q_correction', 0.1)
         self.max_dq_correction = self.declare_parameter('max_dq_correction', None)
         self.max_act_correction = self.declare_parameter('max_act_correction', None)
-        self.max_covariance = self.declare_parameter('max_covariance', 1e3)
-
-        # Q is a per-simulation-step discrete process covariance.
-        self.Q = np.diag(
-            [pos_noise ** 2] * self.nq
-            + [vel_noise ** 2] * self.nv
-            + [act_noise ** 2] * self.na
-        )
+        self.max_covariance = self.declare_parameter('max_covariance', 1e5)
 
         self.R = meas_noise ** 2 * np.eye(self.site_meas)
 
         self.x = self._get_state(self.data)
-        self.P = np.eye(self.nx) * self.declare_parameter('initial_covariance', 1e-6)
+        self.init_q_std = self.declare_parameter('init_q_std', 1e-1)
+        self.init_dq_std = self.declare_parameter('init_dq_std', 1e-4)
+        self.init_act_std = self.declare_parameter('init_act_std', 0.0)
 
-        self.init_q_std = self.declare_parameter('init_q_std', 0.1)
-        self.init_dq_std = self.declare_parameter('init_dq_std', 0.1)
+        for name in (
+            'process_current_std', 'init_q_std', 'init_dq_std',
+            'init_act_std', 'max_joint_q_correction',
+        ):
+            value = getattr(self, name)
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f'{name} must be finite and nonnegative')
 
-        self.jacobian_every = max(1, int(self.declare_parameter('jacobian_every', 10)))
+        self.Q = np.zeros((self.nx, self.nx))
+        self._reset_covariance()
+
+        self.jacobian_every = max(1, int(self.declare_parameter('jacobian_every', 2)))
         self.jacobian_thread = self.declare_parameter('jacobian_thread', True)
         self.fd_eps = self.declare_parameter('fd_eps', 1e-6)
         self.fd_centered = self.declare_parameter('fd_centered', False)
-
         self.lin_model = copy.deepcopy(self.model)
         self.lin_data = mujoco.MjData(self.lin_model)
 
         # Keep the linearization timestep consistent with prediction.
         self.lin_model.opt.timestep = self.h
-
-        self.F_step = self.discrete_jacobian(
-            self.x, np.zeros(self.model.nu)
-        )
-
+        self._step_jacobians = self.discrete_jacobian(self.x, np.zeros(self.model.nu))
         self.n_updates = 0
         self._jac_request = None
         self._jac_wakeup = threading.Condition()
         self._jac_worker = None
 
         if self.jacobian_thread:
-            self._jac_worker = threading.Thread(
-                target=self._jacobian_loop,
-                daemon=True,
-            )
+            self._jac_worker = threading.Thread(target=self._jacobian_loop, daemon=True,)
             self._jac_worker.start()
 
         self.app_u = np.zeros(self.model.nu)
@@ -122,23 +115,15 @@ class StateEstimationNode(Node):
         self.last_diagnostics = {}
         self.prediction_diagnostics = {'n_steps': 0}
 
-        self.init_from = self.declare_parameter(
-            'init_from', 'measurement'
-        )
+        self.init_from = self.declare_parameter('init_from', 'measurement')
         self.initialized = self.init_from == 'keyframe'
 
         self.create_subscription(MOTOR_STATE, self._on_command)
-        self.create_subscription(
-            SITE_MEASUREMENT, self._on_measurement
-        )
-        self.create_subscription(
-            INITIAL_STATE, self._on_initial_state
-        )
+        self.create_subscription(SITE_MEASUREMENT, self._on_measurement)
+        self.create_subscription(INITIAL_STATE, self._on_initial_state)
 
         self.state_pub = self.create_publisher(ROBOT_STATE)
-        self.diagnostics_pub = self.create_publisher(
-            EKF_DIAGNOSTICS
-        )
+        self.diagnostics_pub = self.create_publisher(EKF_DIAGNOSTICS)
 
         self.get_logger().info(
             'EKF initialized: '
@@ -161,9 +146,7 @@ class StateEstimationNode(Node):
         if not np.any(mask):
             return None, None
 
-        valid_ids = [
-            site_ids[i] for i in np.flatnonzero(mask)
-        ]
+        valid_ids = [site_ids[i] for i in np.flatnonzero(mask)]
         return points[mask].reshape(-1), valid_ids
 
     def _on_command(self, msg):
@@ -189,7 +172,7 @@ class StateEstimationNode(Node):
         self._reset_covariance()
         self.last_stamp = None
 
-        self.F_step = self.discrete_jacobian(self.x, self.app_u)
+        self._step_jacobians = self.discrete_jacobian(self.x, self.app_u)
         self.initialized = True
 
         rms = msg.get('rms', float('nan'))
@@ -272,8 +255,12 @@ class StateEstimationNode(Node):
         self.P = np.diag(
             [self.init_q_std ** 2] * self.nq
             + [self.init_dq_std ** 2] * self.nv
-            + list(np.diag(self.Q)[self.nq + self.nv:])
+            + [self.init_act_std ** 2] * self.na
         )
+
+    def _process_covariance(self, input_sensitivity):
+        """Covariance for independent motor errors held over one measurement interval."""
+        return self.process_current_std ** 2 * (input_sensitivity @ input_sensitivity.T)
 
     def _check_covariance(self, where):
         finite = np.isfinite(self.P).all()
@@ -299,32 +286,31 @@ class StateEstimationNode(Node):
         if self.n_updates % self.jacobian_every == 0:
             self.request_jacobian()
 
-        F = self.F_step.copy()
+        # Replace/read the pair together so asynchronous A and B cannot be mixed.
+        F, B = self._step_jacobians
         F_total = np.eye(self.nx)
 
-        # Accumulate discrete process noise correctly:
-        # P_next = F P F.T + Q, repeated n times.
-        Q_total = np.zeros_like(self.P)
-
-        for _ in range(n):
-            Q_total = F @ Q_total @ F.T + self.Q
-            F_total = F @ F_total
-
+        B_total = np.zeros_like(B)
         p_before = np.diag(self.P).copy()
 
         self._set_state(self.data, self.x)
 
-        step_current(
-            self.model,
-            self.data,
-            self.app_u,
-            n,
-            self.vlimit,
-        )
+        for _ in range(n):
+            step_current(
+                self.model,
+                self.data,
+                self.app_u,
+                1,
+                self.vlimit,
+            )
+            # The same delta_u drives every substep: delta_x = B_total @ delta_u.
+            B_total = F @ B_total + B
+            F_total = F @ F_total
 
         self.x = self._get_state(self.data)
 
-        self.P = (F_total @ self.P @ F_total.T + Q_total)
+        self.Q = self._process_covariance(B_total)
+        self.P = (F_total @ self.P @ F_total.T + self.Q)
         self.P = 0.5 * (self.P + self.P.T)
 
         self.prediction_diagnostics = {
@@ -385,17 +371,10 @@ class StateEstimationNode(Node):
         jac = np.zeros((3, nv))
 
         for j, site_id in enumerate(site_ids):
-            mujoco.mj_jacSite(
-                self.model,
-                self.data,
-                jac,
-                None,
-                site_id,
-            )
+            mujoco.mj_jacSite(self.model, self.data, jac, None, site_id,)
             H[3*j:3*j+3, :nq] = jac
 
-        # Correct measurement covariance submatrix,
-        # preserving original marker ordering.
+        # Correct measurement covariance submatrix, preserving original marker ordering.
         indices = []
 
         for site_id in site_ids:
@@ -434,16 +413,26 @@ class StateEstimationNode(Node):
         )
 
         correction = K @ y
+        capped = np.abs(correction[:nq]) > self.max_joint_q_correction
+        capped_indices = np.flatnonzero(capped)
+        if capped_indices.size:
+            scales = self.max_joint_q_correction / np.abs(correction[capped_indices])
+            K[capped_indices, :] *= scales[:, None]
+            correction[capped_indices] = (
+                np.sign(correction[capped_indices]) * self.max_joint_q_correction
+            )
+        self.get_logger().info(
+            f'EKF update {self.n_updates + 1}: '
+            f'joint corrections capped for {capped_indices.size}/{nq} joints '
+            f'(limit {self.max_joint_q_correction:g} rad)'
+        )
 
         self.x = self.x + correction
 
         # Joseph covariance update using the applied gain.
         I_KH = np.eye(self.nx) - K @ H
 
-        self.P = (
-            I_KH @ self.P @ I_KH.T
-            + K @ R @ K.T
-        )
+        self.P = (I_KH @ self.P @ I_KH.T + K @ R @ K.T)
         self.P = 0.5 * (self.P + self.P.T)
 
         q_slice = slice(0, nq)
@@ -454,6 +443,8 @@ class StateEstimationNode(Node):
         diag_s = np.diag(S)
 
         self.last_diagnostics = {
+            'correction_q_capped_count': int(capped_indices.size),
+            'correction_q_capped_indices': capped_indices.tolist(),
             'innovation_rms_m':
                 self._finite_or_none(
                     np.sqrt(np.mean(y ** 2))
@@ -522,13 +513,7 @@ class StateEstimationNode(Node):
         mujoco.mj_comPos(self.model, self.data)
 
         jac = np.zeros((3, nv))
-        mujoco.mj_jacSite(
-            self.model,
-            self.data,
-            jac,
-            None,
-            self.ee_site_id,
-        )
+        mujoco.mj_jacSite(self.model, self.data, jac, None, self.ee_site_id,)
 
         self.state_pub.publish({
             'stamp': stamp,
@@ -549,6 +534,11 @@ class StateEstimationNode(Node):
                     .reshape(-1),
                 ).copy(),
             'is_valid': self.have_estimate,
+        })
+        self.diagnostics_pub.publish({
+            'stamp': stamp,
+            **self.prediction_diagnostics,
+            **self.last_diagnostics,
         })
 
     def _get_state(self, d):
@@ -571,7 +561,7 @@ class StateEstimationNode(Node):
         )
 
         if self._jac_worker is None:
-            self.F_step = self.discrete_jacobian(*snapshot)
+            self._step_jacobians = self.discrete_jacobian(*snapshot)
             return
 
         with self._jac_wakeup:
@@ -582,10 +572,7 @@ class StateEstimationNode(Node):
     def _jacobian_loop(self):
         while True:
             with self._jac_wakeup:
-                while (
-                    self._jac_request is None
-                    and self.ok()
-                ):
+                while (self._jac_request is None and self.ok()):
                     self._jac_wakeup.wait()
 
                 if not self.ok():
@@ -594,10 +581,10 @@ class StateEstimationNode(Node):
                 snapshot = self._jac_request
                 self._jac_request = None
 
-            F_new = self.discrete_jacobian(*snapshot)
+            jacobians = self.discrete_jacobian(*snapshot)
 
             with self._jac_wakeup:
-                self.F_step = F_new
+                self._step_jacobians = jacobians
 
     def discrete_jacobian(self, x, u, warmstart=None):
         m = self.lin_model
@@ -614,19 +601,11 @@ class StateEstimationNode(Node):
         mujoco.mj_forward(m, d)
 
         A = np.zeros((self.nx, self.nx))
+        B = np.zeros((self.nx, m.nu))
 
-        mujoco.mjd_transitionFD(
-            m,
-            d,
-            self.fd_eps,
-            int(self.fd_centered),
-            A,
-            None,
-            None,
-            None,
-        )
+        mujoco.mjd_transitionFD(m, d, self.fd_eps, int(self.fd_centered), A, B, None, None,)
 
-        return A
+        return A, B
 
     def destroy_node(self):
         super().destroy_node()
