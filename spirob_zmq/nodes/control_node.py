@@ -8,7 +8,8 @@ import mujoco
 import numpy as np
 from scipy import linalg
 
-from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, ActuatorLaw, VoltageLimit, actuator_moment,
+from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, SITE_MEASUREMENT, TRACKING_STATE,
+                               ActuatorLaw, VoltageLimit, actuator_moment,
                                load_model)
 from spirob_zmq.core import Node, run_node
 
@@ -62,8 +63,10 @@ class ControlNode(Node):
         self.target_pos = np.array(self.declare_parameter('target_pos'), dtype=float)
 
         # Name of the end-effector site in the MuJoCo model
-        site_name = self.declare_parameter('site_name', 'ee')
-        self.site_id = self.model.site(site_name).id
+        self.site_name = self.declare_parameter('site_name', 'ee')
+        self.site_id = self.model.site(self.site_name).id
+        self.measurement_site_names = list(self.declare_parameter('site_names', []))
+        self.tracking_pub = self.create_publisher(TRACKING_STATE)
 
         nv, nu = self.model.nv, self.model.nu
         self._jac6 = np.zeros((6, nv))
@@ -88,6 +91,7 @@ class ControlNode(Node):
 
         # Subscribe to the fused state from state_estimation_node
         self.create_subscription(ROBOT_STATE, self._on_state, latest_only=True)
+        self.create_subscription(SITE_MEASUREMENT, self._on_measurement)
 
         # Create publisher for MotorCommand
         self.cmd_pub = self.create_publisher(MOTOR_COMMAND)
@@ -101,6 +105,42 @@ class ControlNode(Node):
         self.data.qpos[:] = msg['q']
         self.data.qvel[:] = msg['dq']
         self.have_state = True
+        mujoco.mj_kinematics(self.model, self.data)
+        self._publish_tracking(msg['stamp'], self.data.site_xpos[self.site_id], 'estimated')
+
+    def _on_measurement(self, msg):
+        names = msg.get('site_names', self.measurement_site_names)
+        if self.site_name not in names:
+            self.get_logger().warn(
+                f'Tracked site {self.site_name!r} is absent from marker measurements',
+                throttle_duration_sec=2.0)
+            return
+        positions = np.asarray(msg['data'], dtype=float)
+        if positions.size != 3 * len(names):
+            self.get_logger().warn('Invalid marker measurement size for tracking log')
+            return
+        point = positions.reshape(-1, 3)[names.index(self.site_name)]
+        self._publish_tracking(msg['stamp'], point, msg.get('source', 'measured'))
+
+    def _publish_tracking(self, stamp, point, source):
+        valid = bool(np.isfinite(point).all())
+        position = point.tolist() if valid else [None, None, None]
+        error = (point - self.target_pos).tolist() if valid else [None, None, None]
+        if not valid:
+            self.get_logger().warn(
+                f'Non-finite {source} position for tracked site {self.site_name!r}',
+                throttle_duration_sec=2.0)
+        self.tracking_pub.publish({
+            'stamp': stamp,
+            'site_name': self.site_name,
+            'source': source,
+            'frame': 'mujoco',
+            'position_m': position,
+            'target_m': self.target_pos.tolist(),
+            'error_m': error,
+            'error_norm_m': float(np.linalg.norm(point - self.target_pos)) if valid else None,
+            'is_valid': valid,
+        })
 
     def _tick(self):
         if not self.have_state:
@@ -171,8 +211,7 @@ class ControlNode(Node):
         H, g, A, b = self._H, self._g, self._A, self._b
         H[:nv, :nv] = 2.0 * (self.task_weight * J.T @ J + self.reg_u * P.T @ P + self.reg_null * N)
         H[np.arange(nv), np.arange(nv)] += 2.0 * self.reg_qdd
-        g[:nv] = 2.0 * (self.task_weight * J.T @ task_const + self.reg_u * P.T @ p - self.reg_null * qdd_ref)
-        # g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+        g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
 
         nu = model.nu
         A[0, :nv] = clf_a

@@ -2,12 +2,14 @@
 
 import argparse
 import bisect
+import csv
 import json
 from pathlib import Path
 
 import numpy as np
 
-from spirob_zmq.common import EKF_DIAGNOSTICS, MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT, TRUE_STATE
+from spirob_zmq.common import (EKF_DIAGNOSTICS, MOTOR_STATE, ROBOT_STATE, SITE_MEASUREMENT,
+                               TRACKING_STATE, TRUE_STATE)
 
 
 def load(path):
@@ -187,6 +189,36 @@ def marker_plot_path(plot):
     return p.with_name(f'{p.stem}_markers{p.suffix or ".png"}')
 
 
+def load_tracking(path):
+    with open(path) as f:
+        return [rec for line in f if (rec := json.loads(line)).get('topic') == TRACKING_STATE]
+
+
+def export_tracking_csv(path):
+    records = load_tracking(path)
+    if not records:
+        print(f'{path}: no tracking-state messages; skipping tracking CSV')
+        return
+    out = Path(path).with_name(f'{Path(path).stem}_tracking.csv')
+    t0 = min(r['msg']['stamp'] for r in records)
+    with out.open('w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'recorded_at_s', 'stamp_s', 'elapsed_s', 'site_name', 'source', 'frame', 'is_valid',
+            'x_m', 'y_m', 'z_m', 'target_x_m', 'target_y_m', 'target_z_m',
+            'error_x_m', 'error_y_m', 'error_z_m', 'error_norm_m',
+        ])
+        for r in records:
+            m = r['msg']
+            writer.writerow([
+                r['t'], m['stamp'], m['stamp'] - t0, m['site_name'], m['source'],
+                m['frame'], m['is_valid'], *m['position_m'], *m['target_m'],
+                *m['error_m'], m['error_norm_m'],
+            ])
+    print(f'saved {out}')
+    return out
+
+
 def plot_tracking(path, out):
     """Error of the tracked site (control_node's site_name) to target_pos over time.
 
@@ -205,31 +237,45 @@ def plot_tracking(path, out):
     est, _, meas, _ = load(path)
     series = marker_series(meas, est)
     curves = {}
-    if site in names:
+    tracking = load_tracking(path)
+    if tracking:
+        site = tracking[0]['msg']['site_name']
+        target = np.asarray(tracking[0]['msg']['target_m'], dtype=float)
+        labels = {'vicon': 'Vicon', 'estimated': 'EKF corrected',
+                  'simulated': 'Simulated measurement', 'measured': 'Measured'}
+        for source in dict.fromkeys(r['msg']['source'] for r in tracking):
+            rows = [r['msg'] for r in tracking if r['msg']['source'] == source]
+            curves[labels[source]] = (
+                np.asarray([m['stamp'] for m in rows]),
+                np.asarray([m['position_m'] for m in rows], dtype=float),
+                np.asarray([m['target_m'] for m in rows], dtype=float),
+            )
+    elif site in names:
         i = names.index(site)
         for label in ('Vicon', 'EKF corrected'):
             t, p = series[label]
             if p is not None and p.shape[1] == len(names):
-                curves[label] = (t, p[:, i, :])
+                curves[label] = (t, p[:, i, :], target)
     elif site == 'ee':
         rows = [(r['t'], r['msg']['task_pos']) for r in est if r['msg'].get('is_valid', True)]
         if rows:
             t, p = zip(*rows)
-            curves['EKF corrected'] = (np.asarray(t, float), np.asarray(p, float))
+            curves['EKF corrected'] = (np.asarray(t, float), np.asarray(p, float), target)
     if not curves:
         print(f'{path}: no data for tracked site {site!r}; skipping tracking plot')
         return
 
-    t0 = min(t[0] for t, _ in curves.values())
+    t0 = min(t[0] for t, _, _ in curves.values())
     styles = {'Vicon': dict(color='k', lw=0.8, alpha=0.7),
               'EKF corrected': dict(color='tab:blue', lw=1.2, ls='--')}
     fig, axes = plt.subplots(4, 1, figsize=(9, 9), sharex=True)
-    for label, (t, p) in curves.items():
+    for label, (t, p, targets) in curves.items():
         valid = np.all(np.isfinite(p), axis=1)
-        t, err = t[valid] - t0, 1e3 * (p[valid] - target)
+        err = 1e3 * (p - targets)[valid]
+        t = t[valid] - t0
         for k, axis in enumerate('xyz'):
-            axes[k].plot(t, err[:, k], label=label, **styles[label])
-        axes[3].plot(t, np.linalg.norm(err, axis=1), label=label, **styles[label])
+            axes[k].plot(t, err[:, k], label=label, **styles.get(label, {}))
+        axes[3].plot(t, np.linalg.norm(err, axis=1), label=label, **styles.get(label, {}))
         if len(err):
             print(f'  {label:14s} final |error| {np.linalg.norm(err[-1]):.1f} mm')
     for k, axis in enumerate('xyz'):
@@ -380,6 +426,9 @@ def main(argv=None):
     parser.add_argument('runs', nargs='+')
     parser.add_argument('--plot', help='save an error-vs-time figure to this path')
     args = parser.parse_args(argv)
+
+    for path in args.runs:
+        export_tracking_csv(path)
 
     # Hardware runs have no ground truth: plot motor feedback only
     loaded = {path: load(path) for path in args.runs}

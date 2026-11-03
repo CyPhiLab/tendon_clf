@@ -12,6 +12,7 @@ TRUE_STATE = '/spirob/true_state'
 INITIAL_STATE = '/spirob/initial_state'
 VICON_RAW = '/spirob/vicon_raw'
 EKF_DIAGNOSTICS = '/spirob/ekf_diagnostics'
+TRACKING_STATE = '/spirob/tracking_state'
 
 class ProfileParams:
     """Stands in for a Node outside the node graph: parameters come from a robot profile."""

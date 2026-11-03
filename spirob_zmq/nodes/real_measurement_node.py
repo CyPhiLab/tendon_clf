@@ -145,7 +145,8 @@ class RealMeasurementNode(Node):
         points = transform(raw, self.frame)
         points = points[np.linalg.norm(points, axis=1) < self.max_marker_radius]
         measured = self.tracker.update(points, frame_time, self.predicted)[:len(self.site_names)]
-        self.meas_pub.publish({'stamp': stamp, 'data': measured.reshape(-1)})
+        self.meas_pub.publish({'stamp': stamp, 'data': measured.reshape(-1),
+                               'site_names': self.site_names, 'source': 'vicon'})
 
 
 def main(argv=None):

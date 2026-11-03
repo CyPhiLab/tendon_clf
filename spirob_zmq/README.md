@@ -24,6 +24,19 @@ python -m spirob_zmq.launch -p control_node.target_pos=[-0.3,0.0,0.25] -p timing
 `-p key=value` sets a parameter on every node, `-p node.key=value` on one node.
 Defaults are in `robots.py`.
 
+The Spirob viewer starts side-on to show the curl in the Y-Z plane. Startup
+angles can be overridden with `-p simulation_node.viewer_azimuth=0` and
+`-p simulation_node.viewer_elevation=-20` (degrees). These are applied only
+when the viewer opens; mouse rotation remains available during the run.
+`viewer_pan_right=0.08` shifts the startup framing so the robot appears farther
+right (world-space pan distance in meters). Override with
+`-p simulation_node.viewer_pan_right=0` to disable the offset.
+The configured `site_name` is shown in green in the viewer (the red sphere is
+the target). Only the viewer's copy of the site appearance and visibility is
+changed; the site's position and physics are unchanged. If overriding
+`control_node.site_name` alone, also set `simulation_node.site_name` to match,
+or use the shared `-p site_name=...` override for both.
+
 The control input `u` (and `app_ctrl`) is the **motor current in amps**. The model's actuators are
 ideal current sources (`<motor gear="31.75">`, the AK drives in current mode), with the 24 V bus
 limit applied in code (`common.VoltageLimit`, `common.step_current`).
@@ -77,6 +90,24 @@ prediction/update diagnostics. Every correction update logs its update number,
 capped-joint count (including zero), total joint count, and cap in the terminal.
 
 ## Tools
+
+The controller publishes `/spirob/tracking_state` for its configured `site_name`:
+one sample per processed valid state and one per marker measurement. Records
+contain the original sample timestamp, source (`estimated`, `vicon`, or
+`simulated`), marker name, MuJoCo-frame XYZ position in meters, target position,
+and error (`position - target`) with its norm. Missing marker observations are
+recorded as invalid with null position/error values, not filled from the estimate.
+Estimated samples use forward kinematics of the state received by the controller;
+they are available even during its startup delay.
+
+Normal launch recording includes this topic in `ekf_results/{real,sim}/<run>.jsonl`.
+After shutdown, `ekf_report` also writes `<run>_tracking.csv` next to that JSONL,
+with separate rows per source, sample/recording timestamps, elapsed seconds,
+XYZ/target/error columns, and validity. Sources are not interpolated or paired.
+The tracking plot uses the recorded target and site metadata for these new runs.
+Older runs still use the current profile for plotting and do not produce this CSV.
+Recording must be enabled; interrupted postprocessing can be rerun with
+`python -m spirob_zmq.ekf_report <run>.jsonl --plot <run>.png`.
 
 ```bash
 python -m spirob_zmq.topic echo /spirob/robot_state

@@ -10,16 +10,18 @@ ROBOTS = {
         'joint_stiffness': None,
         'init_key': 'init',
         'motor_ids': [10, 1, 2],
-        'u_step_max': 0.1,
+        'u_step_max': 0.02,
         'vicon_ip': '172.20.51.10',
         'vicon_rate_hz': 100.0,
-        # 'base_height': 0.525,
         'base_height': 0.125,
         'settle_time': 5.0,
+        'viewer_azimuth': 0.0,
+        'viewer_elevation': -20.0,
+        'viewer_pan_right': 0.08,
 
         # 'target_pos': [0.0,0.2,0.1],
         # 'target_pos': [0.0,0.15,0.15],
-        'target_pos': [0.0,0.2,0.15],
+        # 'target_pos': [0.0,0.2,0.15],
         # 'target_pos': [0.0,0.2,0.2],
 
         # 'target_pos': [0.0,0.2,0.3],
@@ -27,23 +29,25 @@ ROBOTS = {
         # 'target_pos': [0.0,0.15,0.25],
         # 'target_pos': [0.0,0.25,0.1],
 
-        # 'target_pos': [-0.05,0.25,0.125],
-        # 'target_pos': [0.0,0.15,0.15],
+        'target_pos': [-0.05,0.2,0.15],
         # 'target_pos': [0.0,0.2,0.15],
         # 'target_pos': [0.0,0.2,0.2],
+        # 'target_pos': [0.0,0.2,0.05],
 
-        'site_name': 'marker_2_seg_11',  # site tracked by control_node (default 'ee')
+        'site_name': 'marker_2_seg_16',  # site tracked by control_node (default 'ee')
 
-        'site_names': ['marker_1_seg_2', 'marker_2_seg_2', 'marker_3_seg_2',
-                       'marker_1_seg_4', 'marker_2_seg_4', 'marker_3_seg_4',
-                       'marker_1_seg_6', 'marker_2_seg_6', 'marker_3_seg_6',
-                       'marker_1_seg_8', 'marker_2_seg_8', 'marker_3_seg_8',
-                       'marker_1_seg_11', 'marker_2_seg_11', 'marker_3_seg_11'],
+        'site_names': [
+            'marker_1_seg_2', 'marker_2_seg_2', 'marker_3_seg_2',
+            'marker_1_seg_4', 'marker_2_seg_4', 'marker_3_seg_4',
+            'marker_1_seg_6', 'marker_2_seg_6', 'marker_3_seg_6',
+            'marker_1_seg_13', 'marker_2_seg_13', 'marker_3_seg_13',
+            'marker_1_seg_16', 'marker_2_seg_16', 'marker_3_seg_16',
+        ],
 
         'unpublished_sites': ['marker_1_seg_1', 'marker_2_seg_1', 'marker_3_seg_1'],
         'task_dim': 3,
         'K': 2000.0,
-        'e': 0.09,  # 0.02 oscillates and diverges with the current-source model unless u_step_max >= 0.5
+        'e': 0.06,  # 0.02 oscillates and diverges with the current-source model unless u_step_max >= 0.5
         'task_weight': 1.0,
         'reg_qdd': 2.0,
         'reg_u': 5.0,  # 5.0 when u was in volts; u in amps is 0.4545x smaller, so scale by 1/0.4545^2

@@ -56,8 +56,8 @@ class StateEstimationNode(Node):
         self.h = self.model.opt.timestep
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
 
-        self.process_current_std = self.declare_parameter('process_current_std', 0.05)
-        meas_noise = self.declare_parameter('measurement_noise', 5e-3)
+        self.process_current_std = self.declare_parameter('process_current_std', 0.1)
+        meas_noise = self.declare_parameter('measurement_noise', 7.5e-3)
 
         # Diagnostic option
         self.disable_velocity_correction = self.declare_parameter('disable_velocity_correction', False)
@@ -65,16 +65,16 @@ class StateEstimationNode(Node):
         # Optional per-update correction limits (L2 norms).
         # Set to None to disable individual limits.
         self.max_q_correction = self.declare_parameter('max_q_correction', None)
-        self.max_joint_q_correction = self.declare_parameter('max_joint_q_correction', 0.1)
+        self.max_joint_q_correction = self.declare_parameter('max_joint_q_correction', 0.2)
         self.max_dq_correction = self.declare_parameter('max_dq_correction', None)
         self.max_act_correction = self.declare_parameter('max_act_correction', None)
-        self.max_covariance = self.declare_parameter('max_covariance', 1e5)
+        self.max_covariance = self.declare_parameter('max_covariance', 6e1)
 
         self.R = meas_noise ** 2 * np.eye(self.site_meas)
 
         self.x = self._get_state(self.data)
         self.init_q_std = self.declare_parameter('init_q_std', 1e-1)
-        self.init_dq_std = self.declare_parameter('init_dq_std', 1e-4)
+        self.init_dq_std = self.declare_parameter('init_dq_std', 1e-3)
         self.init_act_std = self.declare_parameter('init_act_std', 0.0)
 
         for name in (
@@ -88,8 +88,8 @@ class StateEstimationNode(Node):
         self.Q = np.zeros((self.nx, self.nx))
         self._reset_covariance()
 
-        self.jacobian_every = max(1, int(self.declare_parameter('jacobian_every', 2)))
-        self.jacobian_thread = self.declare_parameter('jacobian_thread', True)
+        self.jacobian_every = max(1, int(self.declare_parameter('jacobian_every', 10)))
+        self.jacobian_thread = self.declare_parameter('jacobian_thread', False)
         self.fd_eps = self.declare_parameter('fd_eps', 1e-6)
         self.fd_centered = self.declare_parameter('fd_centered', False)
         self.lin_model = copy.deepcopy(self.model)

@@ -41,6 +41,7 @@ class VirtualMeasurementNode(Node):
         site_names = self.declare_parameter(
             'site_names')
         self.site_ids = [self.model.site(name).id for name in site_names]
+        self.site_names = list(site_names)
 
         # Simulation / publish rate
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
@@ -102,6 +103,8 @@ class VirtualMeasurementNode(Node):
         stamp = self.data.time
         self.meas_pub.publish({
             'stamp': stamp,
+            'site_names': self.site_names,
+            'source': 'simulated',
             'data': noisy_pos_with_missing,
             'noise_std_m': self.noise_std,
             'noise_mean_m': self.noise_mean,

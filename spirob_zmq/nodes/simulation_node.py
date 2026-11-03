@@ -13,6 +13,9 @@ class SimulationNode(Node):
         super().__init__('simulation_node', params)
 
         self.model = load_model(self)
+        tracked_site = self.model.site(self.declare_parameter('site_name', 'ee'))
+        tracked_site.group[:] = 0
+        tracked_site.rgba[:] = [0.0, 1.0, 0.0, 1.0]
         self.data = mujoco.MjData(self.model)
         self.nq = self.model.nq
         target = self.declare_parameter('target_pos')
@@ -26,6 +29,17 @@ class SimulationNode(Node):
 
         # Viewer
         self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
+        with self.viewer.lock():
+            self.viewer.opt.sitegroup[0] = 1
+            self.viewer.cam.azimuth = self.declare_parameter(
+                'viewer_azimuth', self.model.vis.global_.azimuth)
+            self.viewer.cam.elevation = self.declare_parameter(
+                'viewer_elevation', self.model.vis.global_.elevation)
+            pan_right = self.declare_parameter('viewer_pan_right', 0.0)
+            azimuth = np.deg2rad(self.viewer.cam.azimuth)
+            # Move the camera target left to shift the robot right on screen.
+            self.viewer.cam.lookat[:] += pan_right * np.array(
+                [-np.sin(azimuth), np.cos(azimuth), 0.0])
         self.viewer_timer = self.create_timer(1.0 / viewer_rate_hz, self._update_viewer)
         self.get_logger().info(f'simulation_node ready, waiting for {ROBOT_STATE}')
 

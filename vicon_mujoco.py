@@ -31,11 +31,12 @@ REFERENCE_MARKER_NAMES = [
     "marker_1_seg_1", "marker_2_seg_1", "marker_3_seg_1",
     "marker_1_seg_2", "marker_2_seg_2", "marker_3_seg_2",
     "marker_1_seg_4", "marker_2_seg_4", "marker_3_seg_4",
-    # "marker_1_seg_6", "marker_2_seg_6", "marker_3_seg_6",
-    # 'marker_1_seg_8', 'marker_2_seg_8', 'marker_3_seg_8',
-    # 'marker_1_seg_11', 'marker_2_seg_11', 'marker_3_seg_11',
+    "marker_1_seg_6", "marker_2_seg_6", "marker_3_seg_6",
+    # "marker_1_seg_9", "marker_2_seg_9", "marker_3_seg_9",
+    # "marker_1_seg_11", "marker_2_seg_11", "marker_3_seg_11",
+    # "marker_1_seg_13", "marker_2_seg_13", "marker_3_seg_13",
+    "marker_1_seg_16", "marker_2_seg_16", "marker_3_seg_16",
 ]
-
 
 # ============================================================
 # MuJoCo reference geometry
