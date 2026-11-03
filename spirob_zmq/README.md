@@ -134,7 +134,7 @@ python -m spirob_zmq.topic hz /spirob/robot_state
 python -m spirob_zmq.topic record run.jsonl
 python -m spirob_zmq.lockstep --duration 5 --out run.jsonl
 python -m spirob_zmq.ekf_report run.jsonl --plot ekf.png   # includes estimator errors and, if recorded, motor current feedback vs commanded current
-python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png   # model vs recorded motor angles, driven by the recorded currents
+python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png   # model, open loop on the recorded currents, vs recorded motor angles and markers
 python tests/test_startup.py && python tests/test_real_measurement_node.py      # startup and marker tracking, offline
 ```
 
@@ -165,3 +165,33 @@ python -m spirob_zmq.launch --mode real_teleop -p teleop_node.current_limit=1.0
 
 `real_teleop` defaults to `hardware_node.dry_run=false`. Currents are clamped to
 `[-current_limit, 0]` (default 1.5 A; negative pulls).
+
+### Model identification
+
+`real_sysid` drives the motors open loop with a scripted current profile (`current_profile_node`)
+and records the markers. For each motor (ids 10, 1, 2), then motors 1 and 2 together, it steps the current from the
+-0.1 A floor to `level_max` (-0.8 A) in 4 levels and back, holding each for 2 s, then ramps up and
+down once and rests. Loading and unloading separate friction from stiffness, which the closed-loop
+runs cannot. About 105 s; it waits until the markers are labelled and exits by itself.
+
+```bash
+python -m spirob_zmq.launch --mode real_sysid                                   # drives the motors
+python -m spirob_zmq.launch --mode real_sysid -p current_profile_node.level_max=-0.5
+python -m spirob_zmq.launch --mode sysid --headless                             # simulated plant, to check the pipeline
+```
+
+After the run, `replay_hw` replays the recorded currents through the model from the fitted startup
+pose and reports the model's marker error, overall and per phase (the simulated `sysid` run
+replays to about 2 mm, the measurement noise). Compare model parameters with `-p` and `--sweep`:
+
+```bash
+python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png
+python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --sweep tendon_frictionloss=2.5,3.5,4.5 -p joint_frictionloss=0.02
+```
+
+Overridable model parameters: `joint_stiffness`, `joint_damping`, `joint_frictionloss`,
+`tendon_frictionloss`, `base_height`. On the 20261103 closed-loop runs the model with the recorded
+currents ends about 150 mm from the markers: motor 10 winds 2.6 rad where the robot stops at 1.2, and
+motors 1 and 2, held at -0.1 A, pay out about 1.2 rad where the robot's do not move. Tendon friction
+of about 4 N (model: 2.5) brings this to about 55 mm.
+

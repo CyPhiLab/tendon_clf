@@ -50,6 +50,9 @@ def load_model(node):
     frictionloss = node.declare_parameter('joint_frictionloss')
     if frictionloss is not None:
         model.dof_frictionloss[:] = frictionloss
+    tendon_frictionloss = node.declare_parameter('tendon_frictionloss')
+    if tendon_frictionloss is not None:
+        model.tendon_frictionloss[:] = tendon_frictionloss
     model.opt.gravity[:] = node.declare_parameter('gravity', [0.0, 0.0, -9.81])
     base_height = node.declare_parameter('base_height')
     if base_height is not None:
