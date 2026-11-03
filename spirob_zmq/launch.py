@@ -20,14 +20,21 @@ LAUNCHES = {
     'no_ekf': ['get_state_node', 'control_node', 'simulation_node'],
     'teleop': ['get_state_node', 'teleop_node', 'simulation_node'],
     'real_teleop': ['teleop_node', 'hardware_node'],
+    # Scripted open-loop currents with markers recorded, for checking and fitting the model (replay_hw)
+    'sysid': ['virtual_measurement_node', 'current_profile_node', 'hardware_node'],
+    'real_sysid': ['real_measurement_node', 'current_profile_node', 'hardware_node'],
 }
 VIEWER_NODES = {'simulation_node'}
 # Per-mode node defaults, applied before --config and -p so those still override them
-MODE_PARAMS = {'real_teleop': {'hardware_node': ['dry_run=false']}}
+MODE_PARAMS = {'real_teleop': {'hardware_node': ['dry_run=false']},
+               'real_sysid': {'hardware_node': ['dry_run=false']}}
 
 # Where each mode's recordings and plots go
 RESULTS_DIR = REPO_ROOT / 'ekf_results'
-RESULTS_SUBDIR = {'ekf': 'sim', 'no_ekf': 'sim', 'teleop': 'sim', 'real_ekf': 'real', 'real_teleop': 'real'}
+RESULTS_SUBDIR = {'ekf': 'sim', 'no_ekf': 'sim', 'teleop': 'sim', 'sysid': 'sim',
+                  'real_ekf': 'real', 'real_teleop': 'real', 'real_sysid': 'real'}
+# Post-run report: the model replay for the open-loop sysid runs, the estimator report otherwise
+REPORT = {'sysid': 'spirob_zmq.replay_hw', 'real_sysid': 'spirob_zmq.replay_hw'}
 
 
 def _viewer_python():
@@ -150,8 +157,8 @@ def main(argv=None):
         plot_path = record_path.with_suffix('.png')
         print(f'[launch] recorded {record_path}; plotting {plot_path}', flush=True)
         try:
-            subprocess.run([sys.executable, '-m', 'spirob_zmq.ekf_report', str(record_path),
-                            '--plot', str(plot_path)], **popen_kw)
+            subprocess.run([sys.executable, '-m', REPORT.get(args.mode, 'spirob_zmq.ekf_report'),
+                            str(record_path), '--plot', str(plot_path)], **popen_kw)
         except KeyboardInterrupt:
             pass
     return exit_code

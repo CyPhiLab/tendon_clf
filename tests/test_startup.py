@@ -35,7 +35,11 @@ def _unmeasured_markers(min_gap=0.03):
     names = [model.site(i).name for i in range(model.nsite)]
     unmeasured = [n for n in names if re.fullmatch(r'marker_[123]_seg_\d+', n) and n not in NAMES]
     measured = np.array([data.site(n).xpos for n in NAMES])
-    far = [n for n in unmeasured if np.linalg.norm(measured - data.site(n).xpos, axis=1).min() > min_gap]
+    near = lambda n: np.linalg.norm(measured - data.site(n).xpos, axis=1).min() <= min_gap
+    seg = lambda n: n.split('_seg_')[1]
+    # Whole segments: a triangle split between the two lists can be neither tracked nor ignored
+    near_segs = {seg(n) for n in unmeasured if near(n)}
+    far = [n for n in unmeasured if seg(n) not in near_segs]
     return far, [n for n in unmeasured if n not in far]
 
 

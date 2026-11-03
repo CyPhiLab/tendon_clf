@@ -55,6 +55,11 @@ ROBOTS = {
         'reg_dl': 1000.0,
         'pinv_rcond': 1e-2,
         'include_constraint_forces': True,
+        # EKF. 5-6.5 mm covers the marker error no pose of the model removes (about 5 mm); lower and
+        # the filter chases it. The velocity noise lets updates stop the model's drift while the robot
+        # is held still by friction the model lacks (replays of the 20261103 runs).
+        'measurement_noise': 5e-3,
+        'process_dq_std': 1.0,
         'max_current': 1.9,
         'r_spool': 10.0 / 250.0,
         # AK drive bus voltage and winding resistance, for the voltage limit in current mode

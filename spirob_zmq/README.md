@@ -67,6 +67,25 @@ Q_interval = G_n @ Sigma_u @ G_n.T
 P_pred = A**n @ P @ (A**n).T + Q_interval
 ```
 
+On top of that, `process_q_std` (rad/sqrt(s), default 0) and `process_dq_std` (rad/s/sqrt(s);
+1.0 in `robots.py`) add independent noise on every joint angle and velocity,
+`Q_interval += diag(process_q_std**2 * dt, process_dq_std**2 * dt)` with `dt = n * timestep`.
+The motor currents alone give a rank-3 `Q`: the covariance then collapses and the filter follows the
+model instead of the markers. On hardware the model drifts away from a robot that friction holds
+still; the velocity noise lets the updates stop that drift. `measurement_noise` (5 mm in `robots.py`)
+has to cover the marker error that no pose of the model removes (about 5 mm on the 20261103 runs),
+not just the Vicon noise; below that the filter chases it and the estimate jitters.
+
+`joint_frictionloss` (N m, not set by default) overrides the model's joint friction, for example
+`-p state_estimation_node.joint_frictionloss=0.02` for the estimator only. Replays of the 20261103
+runs with 0.02 cut the estimate's marker error at startup and its velocity while the robot is still by more than half.
+
+The estimator subscribes to `SITE_MEASUREMENT` latest-only: if an update takes longer than the
+measurement interval, stale measurements are skipped (the prediction spans the gap) rather than
+queued. Queued, the estimate fell further behind every update; that was why `jacobian_every=1`
+(about 20 ms per update on the lab PC, Vicon frames every 21 ms) ran badly. `jacobian_every`
+now only trades CPU for linearization freshness; the estimate barely depends on it.
+
 Here `A**n` denotes a matrix power. The latest matched `(A, B)` pair is held
 fixed over the interval, retaining the existing Jacobian refresh cadence.
 The nominal state still uses MuJoCo and the existing voltage-limited current
@@ -75,7 +94,7 @@ derivative of the external voltage limiter.
 
 The acceleration-relative model and its floor are removed; `process_accel_relative_std`,
 `process_accel_std_min`, `process_act_noise`, `process_pos_noise`, `process_vel_noise`,
-and `initial_covariance` are no longer used. Models with activation states
+and `initial_covariance` are no longer used (`process_q_std` and `process_dq_std` replace the joint terms). Models with activation states
 (`x = [q, dq, act]`) use `init_act_std=0.0` for their initial activation uncertainty;
 their process uncertainty also comes through `B`.
 
@@ -115,7 +134,7 @@ python -m spirob_zmq.topic hz /spirob/robot_state
 python -m spirob_zmq.topic record run.jsonl
 python -m spirob_zmq.lockstep --duration 5 --out run.jsonl
 python -m spirob_zmq.ekf_report run.jsonl --plot ekf.png   # includes estimator errors and, if recorded, motor current feedback vs commanded current
-python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png   # model vs recorded motor angles, driven by the recorded currents
+python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png   # model, open loop on the recorded currents, vs recorded motor angles and markers
 python tests/test_startup.py && python tests/test_real_measurement_node.py      # startup and marker tracking, offline
 ```
 
@@ -146,3 +165,33 @@ python -m spirob_zmq.launch --mode real_teleop -p teleop_node.current_limit=1.0
 
 `real_teleop` defaults to `hardware_node.dry_run=false`. Currents are clamped to
 `[-current_limit, 0]` (default 1.5 A; negative pulls).
+
+### Model identification
+
+`real_sysid` drives the motors open loop with a scripted current profile (`current_profile_node`)
+and records the markers. For each motor (ids 10, 1, 2), then motors 1 and 2 together, it steps the current from the
+-0.1 A floor to `level_max` (-0.8 A) in 4 levels and back, holding each for 2 s, then ramps up and
+down once and rests. Loading and unloading separate friction from stiffness, which the closed-loop
+runs cannot. About 105 s; it waits until the markers are labelled and exits by itself.
+
+```bash
+python -m spirob_zmq.launch --mode real_sysid                                   # drives the motors
+python -m spirob_zmq.launch --mode real_sysid -p current_profile_node.level_max=-0.5
+python -m spirob_zmq.launch --mode sysid --headless                             # simulated plant, to check the pipeline
+```
+
+After the run, `replay_hw` replays the recorded currents through the model from the fitted startup
+pose and reports the model's marker error, overall and per phase (the simulated `sysid` run
+replays to about 2 mm, the measurement noise). Compare model parameters with `-p` and `--sweep`:
+
+```bash
+python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png
+python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --sweep tendon_frictionloss=2.5,3.5,4.5 -p joint_frictionloss=0.02
+```
+
+Overridable model parameters: `joint_stiffness`, `joint_damping`, `joint_frictionloss`,
+`tendon_frictionloss`, `base_height`. On the 20261103 closed-loop runs the model with the recorded
+currents ends about 150 mm from the markers: motor 10 winds 2.6 rad where the robot stops at 1.2, and
+motors 1 and 2, held at -0.1 A, pay out about 1.2 rad where the robot's do not move. Tendon friction
+of about 4 N (model: 2.5) brings this to about 55 mm.
+
