@@ -57,6 +57,11 @@ class StateEstimationNode(Node):
         self.rate_hz = self.declare_parameter('rate_hz', 100.0)
 
         self.process_current_std = self.declare_parameter('process_current_std', 0.1)
+        # Model error not explained by the motor currents (stiffness, friction, geometry): white noise
+        # on every joint angle (rad/sqrt(s)) and velocity (rad/s/sqrt(s)). Without it the covariance
+        # collapses onto the 3 current directions and the filter stops following the markers.
+        self.process_q_std = self.declare_parameter('process_q_std', 0.0)
+        self.process_dq_std = self.declare_parameter('process_dq_std', 0.0)
         meas_noise = self.declare_parameter('measurement_noise', 7.5e-3)
 
         # Diagnostic option
@@ -78,7 +83,7 @@ class StateEstimationNode(Node):
         self.init_act_std = self.declare_parameter('init_act_std', 0.0)
 
         for name in (
-            'process_current_std', 'init_q_std', 'init_dq_std',
+            'process_current_std', 'process_q_std', 'process_dq_std', 'init_q_std', 'init_dq_std',
             'init_act_std', 'max_joint_q_correction',
         ):
             value = getattr(self, name)
@@ -119,7 +124,9 @@ class StateEstimationNode(Node):
         self.initialized = self.init_from == 'keyframe'
 
         self.create_subscription(MOTOR_STATE, self._on_command)
-        self.create_subscription(SITE_MEASUREMENT, self._on_measurement)
+        # Only the newest measurement: if an update ever takes longer than the measurement interval,
+        # skip the stale ones (the prediction covers any gap) instead of queueing them and lagging
+        self.create_subscription(SITE_MEASUREMENT, self._on_measurement, latest_only=True)
         self.create_subscription(INITIAL_STATE, self._on_initial_state)
 
         self.state_pub = self.create_publisher(ROBOT_STATE)
@@ -310,6 +317,9 @@ class StateEstimationNode(Node):
         self.x = self._get_state(self.data)
 
         self.Q = self._process_covariance(B_total)
+        dt = n * self.h
+        self.Q[:self.nq, :self.nq] += self.process_q_std ** 2 * dt * np.eye(self.nq)
+        self.Q[self.nq:self.nq + self.nv, self.nq:self.nq + self.nv] += self.process_dq_std ** 2 * dt * np.eye(self.nv)
         self.P = (F_total @ self.P @ F_total.T + self.Q)
         self.P = 0.5 * (self.P + self.P.T)
 

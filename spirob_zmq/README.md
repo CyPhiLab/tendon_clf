@@ -67,6 +67,25 @@ Q_interval = G_n @ Sigma_u @ G_n.T
 P_pred = A**n @ P @ (A**n).T + Q_interval
 ```
 
+On top of that, `process_q_std` (rad/sqrt(s), default 0) and `process_dq_std` (rad/s/sqrt(s);
+1.0 in `robots.py`) add independent noise on every joint angle and velocity,
+`Q_interval += diag(process_q_std**2 * dt, process_dq_std**2 * dt)` with `dt = n * timestep`.
+The motor currents alone give a rank-3 `Q`: the covariance then collapses and the filter follows the
+model instead of the markers. On hardware the model drifts away from a robot that friction holds
+still; the velocity noise lets the updates stop that drift. `measurement_noise` (5 mm in `robots.py`)
+has to cover the marker error that no pose of the model removes (about 5 mm on the 20261103 runs),
+not just the Vicon noise; below that the filter chases it and the estimate jitters.
+
+`joint_frictionloss` (N m, not set by default) overrides the model's joint friction, for example
+`-p state_estimation_node.joint_frictionloss=0.02` for the estimator only. Replays of the 20261103
+runs with 0.02 cut the estimate's marker error at startup and its velocity while the robot is still by more than half.
+
+The estimator subscribes to `SITE_MEASUREMENT` latest-only: if an update takes longer than the
+measurement interval, stale measurements are skipped (the prediction spans the gap) rather than
+queued. Queued, the estimate fell further behind every update; that was why `jacobian_every=1`
+(about 20 ms per update on the lab PC, Vicon frames every 21 ms) ran badly. `jacobian_every`
+now only trades CPU for linearization freshness; the estimate barely depends on it.
+
 Here `A**n` denotes a matrix power. The latest matched `(A, B)` pair is held
 fixed over the interval, retaining the existing Jacobian refresh cadence.
 The nominal state still uses MuJoCo and the existing voltage-limited current
@@ -75,7 +94,7 @@ derivative of the external voltage limiter.
 
 The acceleration-relative model and its floor are removed; `process_accel_relative_std`,
 `process_accel_std_min`, `process_act_noise`, `process_pos_noise`, `process_vel_noise`,
-and `initial_covariance` are no longer used. Models with activation states
+and `initial_covariance` are no longer used (`process_q_std` and `process_dq_std` replace the joint terms). Models with activation states
 (`x = [q, dq, act]`) use `init_act_std=0.0` for their initial activation uncertainty;
 their process uncertainty also comes through `B`.
 
