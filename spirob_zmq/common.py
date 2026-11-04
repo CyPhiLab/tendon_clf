@@ -53,6 +53,15 @@ def load_model(node):
     tendon_frictionloss = node.declare_parameter('tendon_frictionloss')
     if tendon_frictionloss is not None:
         model.tendon_frictionloss[:] = tendon_frictionloss
+    # Friction constraint impedance [d0, dwidth]; MuJoCo's default lets a tendon creep under any load,
+    # (0.999, 0.9999) makes it stick (about 100x less creep)
+    tendon_friction_solimp = node.declare_parameter('tendon_friction_solimp')
+    if tendon_friction_solimp is not None:
+        model.tendon_solimp_fri[:, :2] = tendon_friction_solimp
+    ctrlrange = node.declare_parameter('actuator_ctrlrange')
+    if ctrlrange is not None:
+        model.actuator_ctrlrange[:] = ctrlrange
+        model.actuator_ctrllimited[:] = 1
     model.opt.gravity[:] = node.declare_parameter('gravity', [0.0, 0.0, -9.81])
     base_height = node.declare_parameter('base_height')
     if base_height is not None:

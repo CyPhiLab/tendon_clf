@@ -168,30 +168,48 @@ python -m spirob_zmq.launch --mode real_teleop -p teleop_node.current_limit=1.0
 
 ### Model identification
 
-`real_sysid` drives the motors open loop with a scripted current profile (`current_profile_node`)
-and records the markers. For each motor (ids 10, 1, 2), then motors 1 and 2 together, it steps the current from the
--0.1 A floor to `level_max` (-0.8 A) in 4 levels and back, holding each for 2 s, then ramps up and
-down once and rests. Loading and unloading separate friction from stiffness, which the closed-loop
-runs cannot. About 105 s; it waits until the markers are labelled and exits by itself.
+`real_sysid` runs low-current drive tests (`current_profile_node`) with the markers recorded. It waits
+until the markers are labelled, then for each motor (ids 10, 1, 2):
+
+- `out`: ramps from the -0.1 A floor towards +0.5 A (pays tendon out) at 0.02 A/s until the motor
+  turns, drops to 0 A and winds back. The tendon goes slack, so this is the drive's own friction.
+- `in`: ramps towards -0.5 A until the motor turns, then drops to the floor at once to limit the slip.
+  Drive friction plus what the robot and the other two tendons resist.
+- `cycles`: 3 loads to 0.04 A past that breakaway and back: does it ratchet, does anything spring back.
+- `reset`: pays the motor out until it is back where it was before `in`.
+
+and finally `together`: all three to -0.45 A, hold, release. Equal pulls barely bend the robot, so
+tendon wound in that the markers do not show as bending is tendon stretch or body compression.
+
+"Turns" means 0.03 rad from where the ramp started (a held motor does not move at all). Any motor
+moving more than 0.5 rad within a test, or 1.5 rad overall, aborts the run at the floor current. Peak
+currents stay near breakaway (about 0.35-0.4 A on the 20261103 robot); the run takes 3-4 minutes and
+exits by itself. Positive current needs the model control range opened: the sysid modes set
+`actuator_ctrlrange=[-1.9,0.55]` for hardware_node. `-p current_profile_node.tests='["in 0","reset 0"]'`
+runs a subset; `in_max`, `out_max`, `together_max`, `ramp_rate`, `max_travel` set the limits.
 
 ```bash
 python -m spirob_zmq.launch --mode real_sysid                                   # drives the motors
-python -m spirob_zmq.launch --mode real_sysid -p current_profile_node.level_max=-0.5
-python -m spirob_zmq.launch --mode sysid --headless                             # simulated plant, to check the pipeline
+python -m spirob_zmq.launch --mode sysid --headless                             # simulated plant, to check the run
 ```
 
-After the run, `replay_hw` replays the recorded currents through the model from the fitted startup
-pose and reports the model's marker error, overall and per phase (the simulated `sysid` run
-replays to about 2 mm, the measurement noise). Compare model parameters with `-p` and `--sweep`:
+The breakaway currents, slips and cycle results are logged at the end of the run and recorded with
+the commands; `replay_hw` lists them and estimates each drive's friction. It also replays the recorded
+currents through the model from the fitted startup pose and reports the model's marker error, overall
+and per test. Compare model parameters with `-p` and `--sweep`:
 
 ```bash
 python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png
-python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --sweep tendon_frictionloss=2.5,3.5,4.5 -p joint_frictionloss=0.02
+python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --sweep tendon_frictionloss=5,8,11 -p 'tendon_friction_solimp=[0.999,0.9999]'
 ```
 
 Overridable model parameters: `joint_stiffness`, `joint_damping`, `joint_frictionloss`,
-`tendon_frictionloss`, `base_height`. On the 20261103 closed-loop runs the model with the recorded
-currents ends about 150 mm from the markers: motor 10 winds 2.6 rad where the robot stops at 1.2, and
-motors 1 and 2, held at -0.1 A, pay out about 1.2 rad where the robot's do not move. Tendon friction
-of about 4 N (model: 2.5) brings this to about 55 mm.
+`tendon_frictionloss`, `tendon_friction_solimp`, `actuator_ctrlrange`, `base_height`.
 
+What the 20261103 runs showed: the drives stick until about 0.35-0.4 A (11-13 N of tendon tension),
+then slip in 0.1-0.2 s and stay; unloading to -0.1 A returns nothing. When one tendon winds in, the
+other two lengthen through the robot (by the model geometry, from the markers) about 9-10 mm without
+their motors turning, and the pulled tendon winds in about twice what its path shortens: tendon
+stretch or body compression, which the model (hinge joints, inextensible tendons) does not have.
+Limits of the simulated check: MuJoCo tendons can push, so `out` is not physical in simulation, and
+MuJoCo's default friction creeps (use `tendon_friction_solimp=[0.999,0.9999]`).

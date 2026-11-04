@@ -8,7 +8,7 @@ import sys
 import time
 
 from spirob_zmq.core import _to_jsonable
-from spirob_zmq.launch import LAUNCHES, VIEWER_NODES, _split_params
+from spirob_zmq.launch import LAUNCHES, MODE_PARAMS, VIEWER_NODES, _split_params
 from spirob_zmq.core import parse_params
 
 
@@ -58,6 +58,9 @@ def build(mode, params, per_node, skip=()):
         cls = next(v for k, v in vars(module).items()
                    if isinstance(v, type) and k.endswith('Node') and v.__module__ == module.__name__)
         node_params = {'jacobian_thread': False}
+        # The launch mode's node defaults, but never a real hardware connection
+        mode_items = [s for s in MODE_PARAMS.get(mode, {}).get(name, []) if not s.startswith('dry_run')]
+        node_params.update(parse_params(sum((['-p', s] for s in mode_items), [])))
         node_params.update(params)
         node_params.update(per_node.get(name, {}))
         sim.add(cls(node_params))

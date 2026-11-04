@@ -7,7 +7,7 @@ import threading
 
 import numpy as np
 
-from spirob_zmq.common import MOTOR_COMMAND, MOTOR_STATE, ActuatorLaw, command_to_u, load_model
+from spirob_zmq.common import MOTOR_COMMAND, MOTOR_STATE, TRUE_STATE, ActuatorLaw, command_to_u, load_model
 from spirob_zmq.core import Node, run_node
 
 
@@ -55,6 +55,10 @@ class HardwareNode(Node):
 
         # Subscriber for ctrl commands
         self.create_subscription(MOTOR_COMMAND, self._on_command)
+        # Dry run: report the simulated plant's motor angles (virtual_measurement_node), else 0
+        self.sim_position = np.zeros(len(self.motor_ids))
+        if self.dry_run:
+            self.create_subscription(TRUE_STATE, self._on_true_state, latest_only=True)
 
         # Open the motor controller (servo/current mode)
         self.controller = None
@@ -86,6 +90,11 @@ class HardwareNode(Node):
         self.cmd_u = command_to_u(msg, self.motor_ids)
         self._send(self.ctrl_to_current(self.cmd_u))
 
+    def _on_true_state(self, msg):
+        if 'motor_position' in msg:
+            self.sim_position = command_to_u({'motor_ids': msg['motor_ids'], 'u': msg['motor_position']},
+                                             self.motor_ids)
+
     def _hold_pretension(self):
         if self.cmd_u is None:
             self._send(self.ctrl_to_current(np.full(len(self.motor_ids), self.pretension_current)))
@@ -94,7 +103,7 @@ class HardwareNode(Node):
         self.commanded_current = currents.copy()
         if self.dry_run:
             self._publish_states([{
-                'position': 0.0,
+                'position': float(self.sim_position[i]),
                 'velocity': 0.0,
                 'current': float(currents[i]),
                 'commanded_current': float(currents[i]),

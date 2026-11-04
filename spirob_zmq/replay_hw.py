@@ -28,7 +28,7 @@ from spirob_zmq.robots import DEFAULT_ROBOT, ROBOTS
 
 def load(path, motor_ids, measured):
     states = {i: [] for i in motor_ids}
-    first_cmd, initial, meas, phases, site_names = None, None, [], [], None
+    first_cmd, initial, meas, phases, site_names, events = None, None, [], [], None, []
     # Marker stamps from a real-time simulation are in simulated time, the motor stamps in wall time;
     # then fall back to the recorder's receive time for the marker topics
     clock_offset = None
@@ -48,6 +48,8 @@ def load(path, motor_ids, measured):
                 first_cmd = m['stamp']
             if 'phase' in m and (not phases or phases[-1][1] != m['phase']):
                 phases.append((m['stamp'], m['phase']))
+            if 'event' in m:
+                events.append(m['event'])
         elif topic == INITIAL_STATE and initial is None:
             initial = m
         elif topic == SITE_MEASUREMENT:
@@ -55,14 +57,14 @@ def load(path, motor_ids, measured):
             meas.append((m['stamp'], np.array([np.nan if v is None else v for v in m['data']], float).reshape(-1, 3)))
     if first_cmd is None:
         raise SystemExit(f'{path}: no {MOTOR_COMMAND} messages')
-    return {k: np.array(v) for k, v in states.items()}, first_cmd, initial, meas, phases, site_names
+    return {k: np.array(v) for k, v in states.items()}, first_cmd, initial, meas, phases, site_names, events
 
 
 def replay(path, robot=DEFAULT_ROBOT, measured=False, lead=0.2, overrides=None, from_rest=False):
     params = ProfileParams(robot, **(overrides or {}))
     motor_ids = list(params.declare_parameter('motor_ids'))
     r_spool = params.declare_parameter('r_spool')
-    states, first_cmd, initial, meas, phases, site_names = load(path, motor_ids, measured)
+    states, first_cmd, initial, meas, phases, site_names, events = load(path, motor_ids, measured)
     t1 = min(a[-1, 0] for a in states.values())
     start = initial['stamp'] if initial is not None and not from_rest else first_cmd - lead
     if not 0.0 < t1 - start < 3600.0:
@@ -99,7 +101,7 @@ def replay(path, robot=DEFAULT_ROBOT, measured=False, lead=0.2, overrides=None, 
             j += 1
     return {'t': ts - t0, 'sim': sim, 'rec': rec, 'motor_ids': motor_ids, 'site_names': site_names or [],
             'marker_t': np.array([s for s, _ in meas]) - t0, 'marker_err': marker_err,
-            'phases': [(s - t0, name) for s, name in phases], 'start': 'fitted pose' if initial is not None
+            'phases': [(s - t0, name) for s, name in phases], 'events': events, 'start': 'fitted pose' if initial is not None
             and not from_rest else 'rest pose'}
 
 
@@ -125,10 +127,12 @@ def phase_table(r):
         if not sel.any():
             continue
         e = r['marker_err'][sel]
+        if np.isnan(e).all():
+            continue
         with np.errstate(invalid='ignore'):
             per = np.nanmean(e ** 2, axis=0)
-        per = np.sqrt(np.where(np.isnan(per), -np.inf, per))
-        out.append((name, np.sqrt(np.nanmean(e ** 2)), r['site_names'][int(np.nanargmax(per))]))
+        worst = int(np.argmax(np.where(np.isnan(per), -1.0, per)))
+        out.append((name, np.sqrt(np.nanmean(e ** 2)), r['site_names'][worst]))
     return out
 
 
@@ -174,6 +178,20 @@ def main(argv=None):
         return
 
     r = replay(args.log, args.robot, args.measured, overrides=overrides, from_rest=args.from_rest)
+    if r['events']:
+        print('drive tests (current_profile_node):')
+        for e in r['events']:
+            print(f'  {e["text"]}')
+        cur = {}
+        for e in r['events']:
+            if e.get('kind') in ('in', 'out'):
+                cur.setdefault(e['motor_id'], {})[e['kind']] = e['current']
+        for m, c in cur.items():
+            if len(c) == 2:
+                # Paying out at rest is resisted by the drive only; winding in also has to pull the robot
+                # and the other tendons (on hardware a tendon cannot push, so pay-out is unloaded)
+                print(f'  motor {m}: drive friction ~{c["out"]:.3f} A (pay-out at rest), wind-in needs '
+                      f'{-c["in"]:.3f} A: the robot and the other tendons add ~{-c["in"] - c["out"]:+.3f} A')
     t, sim, rec, motor_ids = r['t'], r['sim'], r['rec'], r['motor_ids']
     w = motor_window(r)
     print(f'replayed {t[-1]:.2f} s from the {r["start"]}; motor angle change [rad], recorded / simulated')
@@ -216,7 +234,7 @@ def main(argv=None):
             ax.grid(alpha=0.3)
         for ax in axes:
             for start, name in r['phases']:
-                if name.endswith(' up') or name.startswith('ramp'):
+                if name not in ('wait', 'done'):
                     ax.axvline(start, color='0.7', lw=0.6)
         axes[-1].set_xlabel('time [s]')
         fig.tight_layout()
