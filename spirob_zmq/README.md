@@ -41,6 +41,38 @@ The control input `u` (and `app_ctrl`) is the **motor current in amps**. The mod
 ideal current sources (`<motor gear="31.75">`, the AK drives in current mode), with the 24 V bus
 limit applied in code (`common.VoltageLimit`, `common.step_current`).
 
+### Drive model
+
+`drive_model` (in `robots.py`, default `current`) selects how motor current reaches the tendons in the
+simulated plants (`virtual_measurement_node`, `get_state_node`), the EKF and `replay_hw`:
+
+- `current`: the robot XML as it is, ideal current sources on the tendons (above).
+- `motor`: the drives as on the hardware (`spirob_zmq/drive.py`, report in `docs/drive_model.md`). Each
+  drive is a slide DOF with the rotor inertia, driven by a MuJoCo `dcmotor` in current mode (the 24 V
+  limit is inside the actuator) with LuGre stick-slip friction; the motors sit on a spring-loaded
+  carriage that stands for the robot's axial give; the tendons are pull-only (positive current pays out
+  a slack tendon); the hinges get friction that holds a pose. Replayed open loop on the 20261103 runs it
+  is 28 mm from the markers on the fit runs and 53 mm on the closed-loop runs, against 158 and 131 mm
+  for `current`.
+
+```bash
+python -m spirob_zmq.launch -p drive_model=motor                      # plant and EKF with the motor drives
+python -m spirob_zmq.launch -p state_estimation_node.drive_model=motor   # EKF only
+python -m spirob_zmq.replay_hw <run>.jsonl -p drive_model='"motor"' --plot replay.png
+python -m spirob_zmq.drive --export spirob_motor.xml                  # the motor model as one MJCF file
+```
+
+The motor model adds the carriage and three motors after the robot's 48 coordinates (nq = 52) and three
+activations (LuGre bristles). `ROBOT_STATE` and `TRUE_STATE` keep the robot's 48 coordinates (the EKF adds
+`drive_q`). The controller, `hardware_node`, the pose fit and the viewer always use the current-source
+model. In the EKF the drive states are predicted open loop and kept out of the covariance, and the
+linearization uses MuJoCo's default hinge friction impedance (finite differences across stick-slip are
+meaningless). Fitted parameters (`spirob_zmq.drive.MOTOR_DRIVE`) can be overridden as profile parameters:
+`drive_static_friction` (per motor, N), `drive_coulomb_friction`, `drive_stribeck_velocity`,
+`drive_bristle_stiffness`, `drive_damping`, `tendon_stiffness`, `compression_stiffness`,
+`drive_rest_tension` (per tendon, N, at the start pose), `drive_joint_frictionloss`,
+`drive_joint_friction_power`, `drive_joint_stiffness_scale`.
+
 The estimator starts from the pose fitted to the markers (`INITIAL_STATE`), not from the keyframe,
 so runs can start from any pose. In simulation, `-p virtual_measurement_node.init_pose=random`
 starts the plant curled.
@@ -136,6 +168,7 @@ python -m spirob_zmq.lockstep --duration 5 --out run.jsonl
 python -m spirob_zmq.ekf_report run.jsonl --plot ekf.png   # includes estimator errors and, if recorded, motor current feedback vs commanded current
 python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png   # model, open loop on the recorded currents, vs recorded motor angles and markers
 python tests/test_startup.py && python tests/test_real_measurement_node.py      # startup and marker tracking, offline
+python tests/test_drive_model.py                                                  # drive_model=motor: MJCF export, current mode, stick-slip, ratchet
 ```
 
 ## Hardware
@@ -204,12 +237,15 @@ python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --sweep tendon_frict
 ```
 
 Overridable model parameters: `joint_stiffness`, `joint_damping`, `joint_frictionloss`,
-`tendon_frictionloss`, `tendon_friction_solimp`, `actuator_ctrlrange`, `base_height`.
+`tendon_frictionloss`, `tendon_friction_solimp`, `actuator_ctrlrange`, `base_height`, `drive_model`
+and the `drive_*` parameters above.
 
 What the 20261103 runs showed: the drives stick until about 0.35-0.4 A (11-13 N of tendon tension),
 then slip in 0.1-0.2 s and stay; unloading to -0.1 A returns nothing. When one tendon winds in, the
 other two lengthen through the robot (by the model geometry, from the markers) about 9-10 mm without
 their motors turning, and the pulled tendon winds in about twice what its path shortens: tendon
 stretch or body compression, which the model (hinge joints, inextensible tendons) does not have.
-Limits of the simulated check: MuJoCo tendons can push, so `out` is not physical in simulation, and
-MuJoCo's default friction creeps (use `tendon_friction_solimp=[0.999,0.9999]`).
+Limits of the simulated check with `drive_model=current`: MuJoCo tendons can push, so `out` is not
+physical in simulation, and MuJoCo's default friction creeps (use `tendon_friction_solimp=[0.999,0.9999]`).
+`drive_model=motor` models the stick-slip, the ratchet, the give and slack tendons; see
+`docs/drive_model.md` for what it reproduces and what not.

@@ -12,6 +12,10 @@ tendon_frictionloss, joint_damping, joint_stiffness, ...); --sweep KEY=V1,V2,...
 
     python -m spirob_zmq.replay_hw ekf_results/real/<run>.jsonl --plot replay.png
     python -m spirob_zmq.replay_hw <run>.jsonl --sweep tendon_frictionloss=2.5,3.5,4.5 -p joint_frictionloss=0.02
+    python -m spirob_zmq.replay_hw <run>.jsonl -p drive_model='"motor"' --plot replay.png   # drives with stick-slip
+
+With drive_model='motor' (spirob_zmq.drive) the motor angle is the drive's own DOF, positive current pays
+tendon out (the tendon goes slack) and the drives start at their rest tensions at the fitted pose.
 """
 
 import argparse
@@ -24,6 +28,7 @@ import numpy as np
 from spirob_zmq.common import (INITIAL_STATE, MOTOR_COMMAND, MOTOR_STATE, SITE_MEASUREMENT, ProfileParams,
                                VoltageLimit, load_model, rest_state, step_current)
 from spirob_zmq.robots import DEFAULT_ROBOT, ROBOTS
+from spirob_zmq import drive
 
 
 def load(path, motor_ids, measured):
@@ -74,14 +79,13 @@ def replay(path, robot=DEFAULT_ROBOT, measured=False, lead=0.2, overrides=None, 
     data = mujoco.MjData(model)
     if initial is not None and not from_rest:
         t0 = initial['stamp']
-        data.qpos[:] = initial['q']
+        data.qpos[:] = drive.full_qpos(model, initial['q'])
         mujoco.mj_forward(model, data)
     else:
         t0 = first_cmd - lead
         rest_state(params, model, data)
     vlimit = VoltageLimit(params)
-    tendons = [model.actuator_trnid[i, 0] for i in range(model.nu)]
-    length0 = data.ten_length[tendons].copy()
+    angle0 = drive.motor_position(model, data, r_spool)
     site_ids = [model.site(n).id for n in site_names] if site_names else []
     meas = [(s, z) for s, z in meas if t0 <= s <= t1]
 
@@ -90,12 +94,12 @@ def replay(path, robot=DEFAULT_ROBOT, measured=False, lead=0.2, overrides=None, 
     rec = np.zeros_like(sim)
     pos0 = [np.interp(t0, states[k][:, 0], states[k][:, 1]) for k in motor_ids]
     marker_err = np.full((len(meas), len(site_ids)), np.nan)
+    currents = np.stack([np.interp(ts, states[k][:, 0], states[k][:, 2]) for k in motor_ids], axis=1)
+    rec[:] = np.stack([np.interp(ts, states[k][:, 0], states[k][:, 1]) - p0 for k, p0 in zip(motor_ids, pos0)], axis=1)
     j = 0
     for n, t in enumerate(ts):
-        current = np.array([np.interp(t, states[k][:, 0], states[k][:, 2]) for k in motor_ids])
-        step_current(model, data, current, 1, vlimit)
-        sim[n] = (data.ten_length[tendons] - length0) / r_spool
-        rec[n] = [np.interp(t, states[k][:, 0], states[k][:, 1]) - p0 for k, p0 in zip(motor_ids, pos0)]
+        step_current(model, data, currents[n], 1, vlimit)
+        sim[n] = drive.motor_position(model, data, r_spool) - angle0
         while j < len(meas) and meas[j][0] <= t + model.opt.timestep:
             marker_err[j] = np.linalg.norm(data.site_xpos[site_ids] - meas[j][1], axis=1)
             j += 1

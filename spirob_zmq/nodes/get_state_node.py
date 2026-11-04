@@ -6,6 +6,7 @@ import numpy as np
 from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, VoltageLimit, command_to_u, load_model,
                                rest_state, step_current, substeps)
 from spirob_zmq.core import Node, run_node
+from spirob_zmq import drive
 
 
 class GetStateNode(Node):
@@ -19,6 +20,7 @@ class GetStateNode(Node):
 
         # Get the number of generalized coordinates, velocities, and controls
         self.nq = self.model.nq
+        self.n_robot = drive.robot_nq(self.model)
         self.nv = self.model.nv
         self.nu = self.model.nu
         rate_hz = self.declare_parameter('rate_hz', 500.0)
@@ -45,8 +47,8 @@ class GetStateNode(Node):
         mujoco.mj_comPos(self.model, self.data)
 
         # Get the current generalized coordinates and velocities
-        q = self.data.qpos.copy()
-        dq = self.data.qvel.copy()
+        q = self.data.qpos[:self.n_robot].copy()
+        dq = self.data.qvel[:self.n_robot].copy()
 
         # Get the current task position
         task_pos = self.data.site(self.ee_site_id).xpos.copy()
@@ -54,7 +56,7 @@ class GetStateNode(Node):
         # Get the current task velocity
         jac = np.zeros((3, self.nv))
         mujoco.mj_jacSite(self.model, self.data, jac, None, self.ee_site_id)
-        task_vel = jac @ dq
+        task_vel = jac @ self.data.qvel
 
         # Publish true robot state
         self.state_pub.publish({
