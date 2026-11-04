@@ -9,8 +9,9 @@ robot when driven open loop by the recorded motor currents. Data: the 2026-11-03
 - **Winner: option E**, the drives as their own degrees of freedom with MuJoCo's `dcmotor` (current mode
   through its on-board controller, 24 V bus limit) and LuGre stick-slip, on a common *compression
   carriage* that stands for the robot's axial give, with pull-only tendons and hinge friction that holds a
-  pose. It is plain MJCF. It is in `tendon_clf` as `drive_model='motor'` (`spirob_zmq/drive.py`), used by
-  the simulated plants, the EKF and `replay_hw`. **Off by default**, see [Default](#default).
+  pose. It is plain MJCF and lives in the robot XML (`spirob_mujoco` `models/spirob.xml`); `tendon_clf`
+  uses it as `drive_model='motor'` in the simulated plants, the EKF and `replay_hw`. **Off by default**
+  in `tendon_clf`, see [Default](#default).
 - Open-loop marker error, mean of the two fit runs: **157.6 mm today (A) -> 27.5 mm (E)**; validation
   (five closed-loop runs, not refitted): **131.1 mm -> 52.9 mm**. E is better than today's model in every
   phase of every run.
@@ -208,8 +209,10 @@ Recorded vs simulated motor angles (A0 today, C, E) and marker error over time:
 
 ## Fitted parameters (E)
 
-Tendon units (N, m, s); per-drive values in actuator order, motors 10, 1, 2. Defaults of
-`spirob_zmq.drive.MOTOR_DRIVE`, each overridable as a profile parameter.
+Tendon units (N, m, s); per-drive values in actuator order, motors 10, 1, 2. They are in the robot XML
+(`spirob_mujoco` `models/spirob.xml`, see below); the drive friction can be overridden as profile
+parameters (`drive_static_friction`, `drive_coulomb_friction`, `drive_stribeck_velocity`,
+`drive_bristle_stiffness`, `drive_damping`).
 
 | parameter | value | from |
 |---|---|---|
@@ -231,19 +234,34 @@ The rest tensions are an initial condition (left by whatever the robot did befor
 the robot: for RL, randomize them (1-5 N), along with the static frictions (±0.5 N) and the joint
 friction (±50 %).
 
-## Implementation in tendon_clf
+## Implementation
 
-- `spirob_zmq/drive.py`: builds E from the robot XML with `MjSpec` (`build_motor_model`), helpers
-  `full_qpos` (motors placed for the rest tensions at any robot pose), `motor_position`,
-  `tendon_tension`, `robot_nq`, and `python -m spirob_zmq.drive --export model.xml`, which writes the
-  whole model as one MJCF (`tests/test_drive_model.py` checks the export steps identically).
+The model lives in the robot XML, `spirob_mujoco` `models/spirob.xml` (branch `drive-model`, the
+`external/spirob_mujoco` submodule here), so the RL pipeline and every scene get it as is:
+
+- Robot qpos 0-47 (the hinges), then `drive_carriage` and `motor0..2` (nq = nv = 52); 3 activations
+  (the LuGre bristles). The rest tensions and the hinge stiffness scale are custom numerics
+  (`drive_rest_tension`, `drive_joint_stiffness_scale`).
+- Every scene keyframe there has the four drive coordinates, with the motors placed for the rest
+  tensions at the keyframe's pose; `bin_env` acts in amps (-1.9 .. -0.1 A), observes the drive positions,
+  velocities and currents, and its robot-state pool keeps the drive state.
+
+In `tendon_clf`:
+
+- `spirob_zmq/drive.py`: `load(model_path, node, drive_model)`. `'motor'` is the XML as it is (plus any
+  drive friction overrides); `'current'` (`current_source_model`) strips the drives back out with MjSpec:
+  tendons from the plate with the rotor inertia, damping and 2.5 N Coulomb friction on them, `<motor>`
+  current sources, MuJoCo's default hinge friction and the CAD hinge stiffness. It is identical to the
+  model before this change (every model field and 2 s of dynamics checked against the old XML).
+  Helpers: `full_qpos` (motors placed for the rest tensions at any robot pose), `motor_position`,
+  `tendon_tension`, `robot_nq`.
 - Profile key `drive_model` (`robots.py`, default `'current'`); `common.load_model(node, drive_model=None)`
   builds either. `step_current` hands the current straight to `dcmotor` actuators (the bus limit is in them).
 - Used by `virtual_measurement_node` and `get_state_node` (simulated plants), `state_estimation_node`
   and `replay_hw`. The controller, `hardware_node` (ActuatorLaw), `real_measurement_node`,
   `calibrate_frame` and the viewer keep the current-source robot model (`drive_model='current'`).
   `ROBOT_STATE` and `TRUE_STATE` carry the robot's 48 coordinates either way (the EKF adds `drive_q`).
-- Layout: robot qpos 0-47, then `drive_carriage`, `motor0..2` (nq = nv = 52); 3 activations (bristles).
+  The `init` keyframe of `spirob_horz_control.xml` has the four drive coordinates too.
 - **EKF**: the state grows from 96 to 107 (`[q, dq, act]`). The drive states (carriage, motors,
   bristles) are predicted open loop and kept out of the covariance: the markers do not observe them,
   and across stick-slip their finite-difference Jacobian is meaningless (it blew P up within one slip).
@@ -264,47 +282,30 @@ simulated plant (lockstep) but not yet on recorded hardware (`real_ekf` replay);
 controller is designed on the current-source model. Switch with `-p drive_model=motor` (all nodes) or
 per node, e.g. `-p state_estimation_node.drive_model=motor`.
 
-## Proposed change to spirob_mujoco
+## The change in spirob_mujoco
 
-The model is plain MJCF, so `spirob_mujoco` could carry it directly (not pushed). In `models/spirob.xml`:
+`models/spirob.xml` (branch `drive-model`):
 
-1. Inside `segment_1__configuration_default` (the base), the carriage and the three motors, one on each
-   tendon's line 1 m behind its first site (sites 1, 6, 3), sliding along the tendon:
+1. In the base segment, after the robot's joints: `drive_carriage` (slide, 485 N/m, springref
+   -(sum of rest tensions) / 485, damping 20, armature 0.05) carrying `motor0..2` (slides with armature
+   0.9833 and damping 20, 1 m behind the plate holes on the tendons' line, a `motor<i>_site` each).
+2. Each spatial tendon starts at its motor's site: `stiffness="500" springlength="0 L_i"`, no friction,
+   armature or damping. `L_i` = tendon length with qpos = 0 minus rest tension / 500.
+3. `<dcmotor joint="motor<i>" gear="31.75" motorconst="1 1" resistance="2.2" input="ff"
+   controller="0 0 0 0 0 24" lugre="..." ctrlrange="-1.9 0.55"/>`, LuGre in actuator units.
+4. Hinges: `frictionloss = 0.165 (k_i / k_1)^0.55` each, class `solreffriction="0.002 1"
+   solimpfriction="0.9999 0.99999 ..."`, stiffness 0.61 x the CAD profile
+   (`tools/set_segment_stiffness.py 0.61`, which now also records the factor).
+5. `<numeric name="drive_rest_tension" data="1.9 4.5 3.8"/>`,
+   `<numeric name="drive_joint_stiffness_scale" data="0.61"/>`.
 
-   ```xml
-   <body name="drive_carriage">
-     <joint name="drive_carriage" type="slide" axis="-1 0 0" limited="false" frictionloss="0"
-            stiffness="485" springref="-0.0210309" damping="20" armature="0.05"/>
-     <geom size="0.004" contype="0" conaffinity="0" group="5" mass="0.0001"/>
-     <body name="motor0" pos="0.989946 0 0.0250952">
-       <joint name="motor0" type="slide" axis="-1 0 0" limited="false" frictionloss="0" armature="0.9833" damping="20"/>
-       <geom size="0.004" contype="0" conaffinity="0" group="5" mass="0.0001"/>
-       <site name="motor0_site"/>
-     </body>
-     <!-- motor1 at 0.989945 -0.0217331 -0.0125476, motor2 at 0.989945 0.0217331 -0.0125476 -->
-   </body>
-   ```
-
-   (`springref` = -(sum of rest tensions) / 485, so the carriage is at 0 with the rest tensions.)
-2. Each spatial tendon starts at its motor's site, is a pull-only spring and loses its friction:
-   `<spatial name="tendon1" stiffness="500" springlength="0 L1">` with `<site site="motor0_site"/>` first
-   and no `frictionloss`/`armature`/`damping`. `L1..L3` = tendon length at the `init` keyframe minus
-   rest tension / 500 (1.47475 m, ... : `python -m spirob_zmq.drive --export` writes them).
-3. The actuators become current-mode DC motors on the motor joints:
-
-   ```xml
-   <dcmotor name="tendon1_act" joint="motor0" gear="31.75" motorconst="1 1" resistance="2.2"
-            input="ff" controller="0 0 0 0 0 24" ctrlrange="-1.9 0.55"
-            lugre="39.68 0.3935 0.06299 0.29606 1.5875"/>   <!-- static 0.28976 / 0.30236 for motors 1, 2 -->
-   ```
-4. The `my-SpiRob` joint class: `solreffriction="0.002" solimpfriction="0.9999 0.99999"`, and per hinge
-   `frictionloss = 0.165 (k_i / k_1)^0.55` and `stiffness = 0.61 k_i` (or keep stiffness and refit).
-5. `<custom><numeric name="drive_rest_tension" data="1.9 4.5 3.8"/></custom>`, and four zeros (carriage,
-   three motors) appended to the `init` keyframe's 48 values.
-
-The helpers in `spirob_zmq.drive` recognise the model by its `drive_carriage` joint, so a robot XML that
-carries it would load as is through `MjModel.from_xml_path`; `build_motor_model` is only needed to derive
-it from today's XML.
+Scenes: four drive coordinates in every keyframe (motors placed for the rest tensions at the keyframe's
+pose); `bin.xml`'s qpos layout comment; `tools/configure_bin_scene.py` writes 52 robot zeros.
+`spirob/bin_env.py`: actions in amps (-1.9 .. -0.1 A; it clipped to -12 .. 0, a range sized for an earlier
+voltage-driven motor, so most of the action range had no effect), observations of the drive positions,
+velocities and currents (the tendon length now includes the 1 m segment from the motor), and the
+robot-state pool keeps the drive state. `spirob/viewer.py` still describes an earlier motor (12 V,
+272.5:1) and is unchanged.
 
 ## Follow-up: compression along the backbone instead of the carriage
 

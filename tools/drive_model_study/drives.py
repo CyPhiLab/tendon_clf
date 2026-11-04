@@ -10,6 +10,7 @@ import numpy as np
 import mujoco
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 from spirob_zmq.common import ProfileParams
+from spirob_zmq.drive import current_source_spec
 
 G = 31.75
 R_SPOOL = 0.04
@@ -67,8 +68,9 @@ def build(cfg, base_height=0.125):
         arr[int(i)] = c.pop(key)
         c[name] = arr
     drive = c['drive']
-    spec = mujoco.MjSpec.from_file(MODEL_PATH)
-    base = mujoco.MjModel.from_xml_path(MODEL_PATH)
+    # the current-source robot (the robot XML now carries drive E itself; the variants are built on this)
+    spec = current_source_spec(MODEL_PATH)
+    base = current_source_spec(MODEL_PATH).compile()
     sites = _robot_tendon_sites(base)
     tnames = [base.tendon(t).name for t in range(base.ntendon)]
     acts = list(spec.actuators)

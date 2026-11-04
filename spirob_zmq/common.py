@@ -49,12 +49,7 @@ def load_model(node, drive_model=None):
 
     if drive_model is None:
         drive_model = node.declare_parameter('drive_model', 'current') or 'current'
-    if drive_model not in drive.DRIVE_MODELS:
-        raise ValueError(f'drive_model must be one of {drive.DRIVE_MODELS}, got {drive_model!r}')
-    if drive_model == 'motor':
-        model = drive.build_motor_model(model_path, node)
-    else:
-        model = mujoco.MjModel.from_xml_path(model_path)
+    model = drive.load(model_path, node, drive_model)
     # Joint overrides apply to the robot's joints only (the motor model's drive joints come after them)
     n_robot = drive.robot_nq(model)
 
