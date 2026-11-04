@@ -33,23 +33,35 @@ class ProfileParams:
     warn = error = info
 
 
-def load_model(node):
+def load_model(node, drive_model=None):
+    """The robot model with the profile's overrides.
+
+    drive_model ('current' or 'motor', see spirob_zmq.drive) defaults to the node's `drive_model`
+    parameter. Nodes that only need the robot's kinematics or the current-source actuator law (pose fit,
+    controller, viewer) pass drive_model='current'.
+    """
+    from spirob_zmq import drive
+
     model_path = node.declare_parameter('model_path')
     if not Path(model_path).exists():
         node.get_logger().error(f"Model file not found: {model_path}")
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
-    model = mujoco.MjModel.from_xml_path(model_path)
+    if drive_model is None:
+        drive_model = node.declare_parameter('drive_model', 'current') or 'current'
+    model = drive.load(model_path, node, drive_model)
+    # Joint overrides apply to the robot's joints only (the motor model's drive joints come after them)
+    n_robot = drive.robot_nq(model)
 
     stiffness = node.declare_parameter('joint_stiffness')
     if stiffness is not None:
-        model.jnt_stiffness[:] = stiffness
+        model.jnt_stiffness[:n_robot] = stiffness
     damping = node.declare_parameter('joint_damping')
     if damping is not None:
-        model.dof_damping[:] = damping
+        model.dof_damping[:n_robot] = damping
     frictionloss = node.declare_parameter('joint_frictionloss')
     if frictionloss is not None:
-        model.dof_frictionloss[:] = frictionloss
+        model.dof_frictionloss[:n_robot] = frictionloss
     tendon_frictionloss = node.declare_parameter('tendon_frictionloss')
     if tendon_frictionloss is not None:
         model.tendon_frictionloss[:] = tendon_frictionloss
@@ -178,7 +190,14 @@ class VoltageLimit:
 
 
 def step_current(model, data, current, n, vlimit):
-    """Advance n physics steps holding the commanded current, re-applying the voltage limit each step."""
+    """Advance n physics steps holding the commanded current, re-applying the voltage limit each step.
+
+    dcmotor actuators (drive_model='motor') apply the bus limit themselves; they get the current as is.
+    """
+    if model.nu and model.actuator_dyntype[0] == mujoco.mjtDyn.mjDYN_DCMOTOR:
+        data.ctrl[:] = current
+        mujoco.mj_step(model, data, n)
+        return
     for _ in range(n):
         data.ctrl[:] = vlimit.clip(current, data.actuator_velocity)
         mujoco.mj_step(model, data)

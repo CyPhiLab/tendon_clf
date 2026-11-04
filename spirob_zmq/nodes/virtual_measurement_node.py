@@ -13,14 +13,16 @@ from spirob_zmq.common import (INITIAL_STATE, MOTOR_STATE, SITE_MEASUREMENT, TRU
                                load_model, rest_state, step_current, substeps)
 from spirob_zmq.pose_init import MarkerModel
 from spirob_zmq.core import Node, run_node
+from spirob_zmq import drive
 
 
 class VirtualMeasurementNode(Node):
     def __init__(self, params=None):
         super().__init__('virtual_measurement_node', params)
 
-        # Model used as the simulated "real" plant
+        # Model used as the simulated "real" plant (drive_model from the profile)
         self.model = load_model(self)
+        self.n_robot = drive.robot_nq(self.model)
         self.data = mujoco.MjData(self.model)
         rest_state(self, self.model, self.data)
         self.vlimit = VoltageLimit(self)
@@ -36,11 +38,11 @@ class VirtualMeasurementNode(Node):
             self.get_logger().info(f'random start: pulled with {np.round(pull, 2)} A, then released')
 
         self.motor_ids = list(self.declare_parameter('motor_ids', [10, 1, 2]))
-        # Motor angles for the dry-run hardware_node: tendon length change / spool radius (pulling is negative)
-        self.tendons = [self.model.actuator_trnid[i, 0] for i in range(self.model.nu)]
+        # Motor angles for the dry-run hardware_node: tendon length change / spool radius, or the motor
+        # DOFs (drive_model='motor'); pulling is negative
         self.r_spool = self.declare_parameter('r_spool', 0.04)
         mujoco.mj_fwdPosition(self.model, self.data)
-        self.length0 = self.data.ten_length[self.tendons].copy()
+        self.motor0 = drive.motor_position(self.model, self.data, self.r_spool)
 
         # Sites to measure, match state_estimation_node's site_names
         site_names = self.declare_parameter(
@@ -69,12 +71,14 @@ class VirtualMeasurementNode(Node):
         mujoco.mj_kinematics(self.model, self.data)
         snapshot = self.data.site_xpos[self.site_ids] + self.rng.normal(0.0, self.noise_std, (len(self.site_ids), 3))
         perm = self.rng.permutation(len(self.site_ids))
-        key = self.model.key(self.declare_parameter('init_key', 'init')).id
-        result = MarkerModel(self.model, site_names, self.model.key_qpos[key]).initialize(snapshot[perm])
+        # The pose fit works on the robot alone, as real_measurement_node's
+        robot = self.model if self.n_robot == self.model.nq else load_model(self, drive_model='current')
+        key = robot.key(self.declare_parameter('init_key', 'init')).id
+        result = MarkerModel(robot, site_names, robot.key_qpos[key]).initialize(snapshot[perm])
         if result is None or any(perm[result.labels[n]] != i for i, n in enumerate(site_names)):
             raise RuntimeError('initial pose fit failed to label the simulated markers')
         self.get_logger().info(f'initial pose fit rms {1e3 * result.rms:.2f} mm, '
-                               f'max |q error| {np.abs(result.q - self.data.qpos).max():.3f} rad')
+                               f'max |q error| {np.abs(result.q - self.data.qpos[:self.n_robot]).max():.3f} rad')
         self.initial = {'q': result.q, 'rms': result.rms}
         self.init_pub = self.create_publisher(INITIAL_STATE)
         self.init_timer = self.create_timer(0.5, self._publish_initial)
@@ -118,13 +122,13 @@ class VirtualMeasurementNode(Node):
         # Ground truth
         self.truth_pub.publish({
             'stamp': stamp,
-            'q': self.data.qpos,
-            'dq': self.data.qvel,
+            'q': self.data.qpos[:self.n_robot],
+            'dq': self.data.qvel[:self.n_robot],
             'act': self.data.act,
             'site_pos': true_pos,
             'ee_pos': self.data.site_xpos[self.ee_site_id],
             'motor_ids': self.motor_ids,
-            'motor_position': (self.data.ten_length[self.tendons] - self.length0) / self.r_spool,
+            'motor_position': drive.motor_position(self.model, self.data, self.r_spool) - self.motor0,
         })
 
 

@@ -17,7 +17,7 @@ from spirob_zmq.core import Node, run_node
 class ControlNode(Node):
     def __init__(self, params=None):
         super().__init__('control_node', params)
-        self.model = load_model(self)
+        self.model = load_model(self, drive_model='current')
         self.data = mujoco.MjData(self.model)
         self.law = ActuatorLaw(self.model)
         self.vlimit = VoltageLimit(self)

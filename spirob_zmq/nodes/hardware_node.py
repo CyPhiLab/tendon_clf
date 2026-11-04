@@ -30,7 +30,7 @@ class HardwareNode(Node):
         self.current_rated = self.declare_parameter('current_rated', 1.9)
         self.max_current = self.declare_parameter('max_current', self.current_rated)
 
-        model = load_model(self)
+        model = load_model(self, drive_model='current')
         self.law = ActuatorLaw(model)
         # The model's actuators are current sources: gear = gearbox / r_spool * k_t, ctrl in amps
         gear_model = model.actuator_gear[:, 0]
