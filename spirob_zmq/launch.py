@@ -26,8 +26,11 @@ LAUNCHES = {
 }
 VIEWER_NODES = {'simulation_node'}
 # Per-mode node defaults, applied before --config and -p so those still override them
+# The sysid tests pay tendon out with positive current: open the model's control range for them
+SYSID_RANGE = 'actuator_ctrlrange=[-1.9,0.55]'
 MODE_PARAMS = {'real_teleop': {'hardware_node': ['dry_run=false']},
-               'real_sysid': {'hardware_node': ['dry_run=false']}}
+               'sysid': {'hardware_node': [SYSID_RANGE], 'virtual_measurement_node': [SYSID_RANGE]},
+               'real_sysid': {'hardware_node': ['dry_run=false', SYSID_RANGE]}}
 
 # Where each mode's recordings and plots go
 RESULTS_DIR = REPO_ROOT / 'ekf_results'

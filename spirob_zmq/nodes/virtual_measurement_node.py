@@ -36,6 +36,11 @@ class VirtualMeasurementNode(Node):
             self.get_logger().info(f'random start: pulled with {np.round(pull, 2)} A, then released')
 
         self.motor_ids = list(self.declare_parameter('motor_ids', [10, 1, 2]))
+        # Motor angles for the dry-run hardware_node: tendon length change / spool radius (pulling is negative)
+        self.tendons = [self.model.actuator_trnid[i, 0] for i in range(self.model.nu)]
+        self.r_spool = self.declare_parameter('r_spool', 0.04)
+        mujoco.mj_fwdPosition(self.model, self.data)
+        self.length0 = self.data.ten_length[self.tendons].copy()
 
         # Sites to measure, match state_estimation_node's site_names
         site_names = self.declare_parameter(
@@ -118,6 +123,8 @@ class VirtualMeasurementNode(Node):
             'act': self.data.act,
             'site_pos': true_pos,
             'ee_pos': self.data.site_xpos[self.ee_site_id],
+            'motor_ids': self.motor_ids,
+            'motor_position': (self.data.ten_length[self.tendons] - self.length0) / self.r_spool,
         })
 
 
