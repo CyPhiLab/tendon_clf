@@ -306,6 +306,42 @@ The helpers in `spirob_zmq.drive` recognise the model by its `drive_carriage` jo
 carries it would load as is through `MjModel.from_xml_path`; `build_motor_model` is only needed to derive
 it from today's XML.
 
+## Follow-up: compression along the backbone instead of the carriage
+
+The carriage lumps the robot's axial give into one DOF behind the plate, so the markers never see the
+compression. Variant `give='backbone'` (tools/drive_model_study, not in `spirob_zmq` yet) puts it where it
+is: a stiff slide joint along the backbone axis in every hinged segment (24 slides, after each segment's two
+hinges), total compliance 1 / `comp_k` spread uniformly or as segment length^-0.6, spring rest lengths
+so the start pose holds the start tensions, 20 g of axial armature per slide (the distal segments weigh
+0.1-2 g; without it a 7-20 kN/m slide is unstable at 1 ms) and critical damping. Everything else is E as
+fitted (motors on the base, LuGre, pull-only tendons, hinge friction). Only the compression stiffness was
+scanned (125, 250, 485, 1000 N/m); 250 N/m was best.
+
+| option | 174014 [mm] | 191933 [mm] | fit mean [mm] | validation mean [mm] | slips within 0.03 A (of 13) | mean size error [rad] | spurious slips | max spring-back [rad] | cost [ms / sim s] | nq |
+|---|---|---|---|---|---|---|---|---|---|---|
+| E (carriage, 485 N/m) | 43.2 | 11.8 | 27.5 | 52.9 | 3 | 0.94 | 1 | 0.006 | 194 | 52 |
+| E backbone, uniform, 250 N/m | 44.0 | 11.4 | 27.7 | **38.6** | 3 | 0.88 | 1 | 0.007 | 402 | 75 |
+| E backbone, ∝ length^-0.6, 250 N/m | 45.2 | 11.4 | 28.3 | **38.6** | 3 | 0.76 | 1 | 0.006 | 426 | 75 |
+| E backbone, ∝ length^-0.6, 125 N/m | 43.6 | 11.2 | 27.4 | 38.2 | 3 | 1.04 | 1 | 0.007 | 469 | 75 |
+
+Validation runs [mm] (carriage -> backbone uniform 250): 56.2 -> 46.9, 50.1 -> 40.8, 43.7 -> 31.0,
+56.0 -> 41.2, 58.7 -> 33.1: better on all five. On the fit runs and the slips it is the same as the carriage.
+
+- **Compression it produces**: 10.8-14.1 mm in total at the peak loads of 174014 and the validation runs
+  (measured: ~11 mm). Its distribution is the wrong way round, though: 0.55-1.35 mm per joint at
+  segments 2-6 and 0.17-0.36 mm at 13-16, where the marker triangles showed 0.3 proximal and 0.6 mm at
+  13-16. The size-scaled spread is closer than the uniform one; a stronger distal bias is untried.
+- **Cost**: twice the carriage per simulated second (24 more DOFs). In the EKF the state would grow from
+  107 to 153 and the finite-difference Jacobian roughly in proportion (not measured); the slides are
+  robot coordinates seen by the markers, so they would stay in the covariance.
+- **MJCF**: a `<joint type="slide" axis="1 0 0" stiffness=... springref=... armature="0.02" damping=...>`
+  after the hinges in each segment body of `spirob.xml`; no carriage.
+
+So backbone compression reproduces the closed-loop runs clearly better (53 -> 39 mm) for twice the
+simulation cost. It is not wired into `spirob_zmq.drive` in this PR.
+
+![backbone vs carriage, target trial 1](drive_model/backbone_target_0.0_0.2_0.15_trial1.png)
+
 ## Limitations and next steps
 
 - Slip onsets: 10 of 13 recorded fast slips are missed in open loop. Each is a few tenths of a newton

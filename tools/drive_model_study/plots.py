@@ -5,7 +5,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-COLORS = {'A': '#c0392b', 'B': '#8e44ad', 'C': '#e67e22', 'D': '#16a085', 'E': '#2c6fbb'}
+COLORS = {'A': '#c0392b', 'B': '#8e44ad', 'C': '#e67e22', 'D': '#16a085', 'E': '#2c6fbb', 'EBu250': '#2e9d4f', 'EBs250': '#2e9d4f'}
 IDS = [10, 1, 2]
 
 
@@ -21,7 +21,7 @@ def plot_run(res, run, names, path):
         ax.plot(t, rec[:, j], color='k', lw=1.6, label='recorded')
         for n in names:
             d = res[n][run]
-            ax.plot(d['t'], np.array(d['sim'])[:, j], color=COLORS.get(n[0], None), lw=1.0, ls='--', label=n)
+            ax.plot(d['t'], np.array(d['sim'])[:, j], color=COLORS.get(n, COLORS.get(n[0])), lw=1.0, ls='--', label=n)
         ax.set_ylabel(f'motor {IDS[j]}\nangle [rad]')
         ax.grid(alpha=0.3)
         lo, hi = rec[:, j].min(), rec[:, j].max()
@@ -31,7 +31,7 @@ def plot_run(res, run, names, path):
     ax = axes[3]
     for n in names:
         d = res[n][run]
-        ax.plot(d['mt'], 1e3 * np.array(d['err']), color=COLORS.get(n[0], None), lw=1.0,
+        ax.plot(d['mt'], 1e3 * np.array(d['err']), color=COLORS.get(n, COLORS.get(n[0])), lw=1.0,
                 label=f"{n} ({1e3 * d['marker_rms']:.0f} mm rms)")
     ax.set_ylabel('marker error\nrms over markers [mm]')
     ax.set_xlabel('time [s]')

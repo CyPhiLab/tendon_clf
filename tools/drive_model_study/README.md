@@ -14,7 +14,8 @@ python plots.py out/results.json out/plots A0,C,E
 
 - `drives.py`: the five variants (A current source + Coulomb tendon friction, B tendon stick-slip,
   C motor DOF + Karnopp, D dcmotor + LuGre on the robot tendon, E motor DOF + dcmotor LuGre) and the
-  give (`give='rope'` per-tendon spring, `give='common'` compression carriage).
+  give (`give='rope'` per-tendon spring, `give='common'` compression carriage, `give='backbone'` a slide
+  joint along the backbone in every segment).
 - `harness.py`: open-loop replay from the fitted start pose, marker rms per phase, slips from motor_state,
   spring-back on unloading, the fit objective.
 - `options.json`: the evaluated configurations (fitted values).

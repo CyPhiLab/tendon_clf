@@ -37,6 +37,12 @@ DEFAULTS = dict(
     comp_k=800.0,          # compression stiffness against the sum of tensions [N/m]
     comp_b=20.0,           # compression damping [N s/m]
     comp_m=0.05,           # compression inertia [kg]
+                           # 'backbone': a stiff slide joint along the backbone at every hinged segment,
+                           # total compliance 1/comp_k, spread as segment length^-bb_p (0: uniform)
+    bb_p=0.6,              # per-joint compression 0.3 mm proximal -> 0.6 mm at segments 13-16
+    bb_m=0.02,             # axial armature per slide [kg] (keeps the light distal slides stable at 1 ms)
+    bb_zeta=1.0,           # damping ratio of each slide
+    bb_fric=0.0,           # Coulomb friction per slide [N]
     T0=3.175,              # rope tension at the fitted start pose [N]
     # LuGre (D, E) in tendon units
     sigma0=2e4, sigma1=None, Fc=2.0, Fs=9.5, vs=0.002,
@@ -83,6 +89,20 @@ def build(cfg, base_height=0.125):
             body.add_joint(name=f'motor{i}', type=mujoco.mjtJoint.mjJNT_SLIDE, axis=[-1, 0, 0],
                            armature=ARMATURE, damping=c['m_damp'], range=[-1, 1], limited=mujoco.mjtLimited.mjLIMITED_FALSE)
             body.add_site(name=f'motor{i}_site', pos=[0, 0, 0])
+        if c['give'] == 'backbone':
+            hinged = [b for b in range(1, base.nbody) if base.body_jntnum[b]]
+            size = np.array([np.linalg.norm(base.body_pos[b]) for b in hinged])
+            compliance = size ** -c['bb_p']
+            compliance *= (1.0 / c['comp_k']) / compliance.sum()
+            info['bb_k'] = 1.0 / compliance
+            for b, kj in zip(hinged, info['bb_k']):
+                R = np.zeros(9); mujoco.mju_quat2Mat(R, base.body_quat[b]); R = R.reshape(3, 3)
+                axis = R.T @ base.body_pos[b]; axis /= np.linalg.norm(axis)
+                mass = base.body_subtreemass[b] + c['bb_m']
+                spec.body(base.body(b).name).add_joint(
+                    name=f'comp_{b}', type=mujoco.mjtJoint.mjJNT_SLIDE, axis=axis, armature=c['bb_m'],
+                    stiffness=[float(kj), 0, 0], damping=float(2 * c['bb_zeta'] * np.sqrt(kj * mass)),
+                    frictionloss=c['bb_fric'], limited=mujoco.mjtLimited.mjLIMITED_FALSE)
         old = {t.name: t for t in spec.tendons}
         for i, (tn, slist) in enumerate(zip(tnames, sites)):
             t_old = old[tn]
@@ -120,16 +140,25 @@ def build(cfg, base_height=0.125):
     model = spec.compile()
     model.body_pos[model.body('segment_1__configuration_default').id][2] = base_height
     model.opt.timestep = c['dt']
-    nr = base.njnt
-    model.jnt_stiffness[:nr] *= c['k_scale']
+    # robot hinges by name (backbone slides interleave with them)
+    hinge = np.array([model.joint(base.joint(j).name).id for j in range(base.njnt)])
+    info['r_qpos'] = model.jnt_qposadr[hinge]
+    rdof = model.jnt_dofadr[hinge]
+    model.jnt_stiffness[hinge] *= c['k_scale']
     info['nq_robot'] = base.nq
     if c['jf'] is not None:
-        k = base.jnt_stiffness[base.dof_jntid[:base.nv]]
-        model.dof_frictionloss[:base.nv] = c['jf'] * (k / k[0]) ** c['jf_p']
+        k = base.jnt_stiffness
+        model.dof_frictionloss[rdof] = c['jf'] * (k / k[0]) ** c['jf_p']
     if c['jf_solimp'] is not None:
-        model.dof_solimp[:base.nv, :2] = c['jf_solimp']
+        model.dof_solimp[rdof, :2] = c['jf_solimp']
     if c.get('jf_solref') is not None:
-        model.dof_solref[:base.nv] = c['jf_solref']
+        model.dof_solref[rdof] = c['jf_solref']
+    if drive in ('C', 'E') and c['give'] == 'backbone':
+        # slides at 0 hold the sum of the start tensions (all three tendons run to the tip)
+        T0 = np.sum(np.broadcast_to(np.asarray(c['T0'], float), (3,)))
+        sj = np.array([model.joint(f'comp_{b}').id for b in range(1, base.nbody) if base.body_jntnum[b]])
+        info['bb_qpos'] = model.jnt_qposadr[sj]
+        model.qpos_spring[info['bb_qpos']] = T0 / info['bb_k']
     tid = np.array([model.tendon(n).id for n in tnames])
     info['tendons'] = tid
     if drive in ('A', 'B', 'D'):
@@ -158,7 +187,7 @@ def init_state(model, info, data, q_robot, floor_current=None):
     """Robot at q_robot; motors placed so each rope carries T0 (C, E)."""
     c = info['cfg']
     mujoco.mj_resetData(model, data)
-    data.qpos[:info['nq_robot']] = q_robot
+    data.qpos[info['r_qpos']] = q_robot
     if c['drive'] in ('C', 'E'):
         tid = info['tendons']
         data.qpos[info['m_qpos']] = 0.0
