@@ -53,7 +53,7 @@ def make_node(monkeypatch):
               <keyframe><key name="init" qpos="0.2 -0.1"/></keyframe>
             </mujoco>
         """)
-        monkeypatch.setattr(estimation, 'load_model', lambda node: model)
+        monkeypatch.setattr(estimation, 'load_model', lambda node, **kw: model)
         return estimation.StateEstimationNode({
             'site_names': ['ee'], 'motor_ids': [1], 'jacobian_thread': False,
             **params,
