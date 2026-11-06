@@ -10,8 +10,9 @@ robot when driven open loop by the recorded motor currents. Data: the 2026-11-03
   through its on-board controller, 24 V bus limit) and LuGre stick-slip, on a common *compression
   carriage* that stands for the robot's axial give, with pull-only tendons and hinge friction that holds a
   pose. It is plain MJCF and lives in the robot XML (`spirob_mujoco` `models/spirob.xml`); `tendon_clf`
-  uses it as `drive_model='motor'` in the simulated plants, the EKF and `replay_hw`. **Off by default**
-  in `tendon_clf`, see [Default](#default).
+  uses it as `drive_model='motor'` for the simulated plants and `replay_hw`; the estimator and the
+  controller keep the current-source model ([Estimation and control](#estimation-and-control)).
+  **Off by default** in `tendon_clf`, see [Default](#default).
 - Open-loop marker error, mean of the two fit runs: **157.6 mm today (A) -> 27.5 mm (E)**; validation
   (five closed-loop runs, not refitted): **131.1 mm -> 52.9 mm**. E is better than today's model in every
   phase of every run.
@@ -193,7 +194,7 @@ Recorded vs simulated motor angles (A0 today, C, E) and marker error over time:
 - **C vs E**: the same structure (motor DOF, compression carriage, pull-only tendons), different friction
   law. Karnopp (C) drops to sliding friction at once, LuGre (E) over the Stribeck velocity; C is a bit
   better on 174014 and the same on validation. E is plain MJCF, needs no per-step code (so it works
-  unchanged in the EKF's finite differences, the lockstep sims and an RL pipeline), and is cheaper.
+  unchanged in finite differences, the lockstep sims and an RL pipeline), and is cheaper.
 - **Per-tendon give** (E with `give='rope'`, first search): 46-60 mm, the antagonists load up and block
   the next wind-in (point 3 above). The common-mode carriage is what made slips reproducible.
 - **LuGre settings**: a step load below breakaway must not break the bristle loose: that needs
@@ -257,30 +258,40 @@ In `tendon_clf`:
   `tendon_tension`, `robot_nq`.
 - Profile key `drive_model` (`robots.py`, default `'current'`); `common.load_model(node, drive_model=None)`
   builds either. `step_current` hands the current straight to `dcmotor` actuators (the bus limit is in them).
-- Used by `virtual_measurement_node` and `get_state_node` (simulated plants), `state_estimation_node`
-  and `replay_hw`. The controller, `hardware_node` (ActuatorLaw), `real_measurement_node`,
-  `calibrate_frame` and the viewer keep the current-source robot model (`drive_model='current'`).
-  `ROBOT_STATE` and `TRUE_STATE` carry the robot's 48 coordinates either way (the EKF adds `drive_q`).
-  The `init` keyframe of `spirob_horz_control.xml` has the four drive coordinates too.
-- **EKF**: the state grows from 96 to 107 (`[q, dq, act]`). The drive states (carriage, motors,
-  bristles) are predicted open loop and kept out of the covariance: the markers do not observe them,
-  and across stick-slip their finite-difference Jacobian is meaningless (it blew P up within one slip).
-  The linearization model uses MuJoCo's default friction impedance on the hinges for the same reason
-  (with the stiff one P diverged 150 times in a 12 s lockstep run; now 0). The prediction uses the full
-  model. Finite-difference Jacobian 51 ms vs 33 ms (`jacobian_every` = 10 amortizes it).
-- **Lockstep** (`--duration 12`): `ekf`, `no_ekf`, `teleop`, `sysid` all run with both models. In the
-  12 s `ekf` run the estimate's mean site error is 0.23 mm with the motor model (0.29 mm, 8 covariance
-  resets with the current model).
+- Used by `virtual_measurement_node` and `get_state_node` (simulated plants) and `replay_hw`. The
+  controller, the EKF, `hardware_node` (ActuatorLaw), `real_measurement_node`, `calibrate_frame` and the
+  viewer always use the current-source robot model (`drive_model='current'`). `ROBOT_STATE` and
+  `TRUE_STATE` carry the robot's 48 coordinates either way. The `init` keyframe of
+  `spirob_horz_control.xml` has the four drive coordinates too.
+- **Lockstep** (`--duration 12`): `ekf`, `no_ekf`, `teleop`, `sysid` all run with either plant
+  (`-p drive_model=motor` puts the drive model in the simulated plant; the controller and the EKF run on
+  the current-source model against it).
 - **Simulation cost**: the same as today's model (bare `step_current`: 272 vs 296 ms per simulated second
   on one core at the 1 ms timestep).
 
+### Estimation and control
+
+The estimator and the controller share the current-source model; only the simulated plants (and
+`replay_hw`, and RL through `spirob_mujoco`) use the drive model.
+
+- The controller: the ID-CLF-QP needs the current to act on the robot directly and smoothly
+  (`qdd = M^-1 (B u - h)`). In the drive model it reaches the robot through the motor, its stick-slip and
+  the tendon spring, so using it in control is a controller redesign (e.g. a drive-level friction
+  compensation or a tension inner loop), not a parameter swap.
+- The estimator: the EKF predicts only 10-20 ms between Vicon frames before the markers correct it, so
+  the drive model's strength (long open-loop prediction) buys little there, while it costs a larger state
+  (107 instead of 96), a non-smooth transition whose finite-difference Jacobian breaks across stick-slip,
+  and a separate validation. A prototype (drive states predicted open loop and kept out of the
+  covariance, linearized with a softer hinge friction) ran in lockstep at 0.23 mm mean site error against
+  0.29 mm for the current model; it was taken out to keep estimation and control on one model.
+- The simulated plant is where the split pays: the controller and EKF are tested against a plant that
+  sticks, slips and ratchets like the robot.
+
 ### Default
 
-`drive_model` stays `'current'`. E is better than today's model in every phase of every run, but:
-the slip onsets are reproduced only for the large wind-in slips; the EKF with E has been run on the
-simulated plant (lockstep) but not yet on recorded hardware (`real_ekf` replay); and the CLF-QP
-controller is designed on the current-source model. Switch with `-p drive_model=motor` (all nodes) or
-per node, e.g. `-p state_estimation_node.drive_model=motor`.
+`drive_model` stays `'current'`. E is better than today's model in every phase of every run, but it
+reproduces the slip onsets only for the large wind-in slips. Use `-p drive_model=motor` to run the
+simulated plants on it and `replay_hw -p drive_model='"motor"'` to check new hardware runs.
 
 ## The change in spirob_mujoco
 
@@ -332,9 +343,7 @@ Validation runs [mm] (carriage -> backbone uniform 250): 56.2 -> 46.9, 50.1 -> 4
   (measured: ~11 mm). Its distribution is the wrong way round, though: 0.55-1.35 mm per joint at
   segments 2-6 and 0.17-0.36 mm at 13-16, where the marker triangles showed 0.3 proximal and 0.6 mm at
   13-16. The size-scaled spread is closer than the uniform one; a stronger distal bias is untried.
-- **Cost**: twice the carriage per simulated second (24 more DOFs). In the EKF the state would grow from
-  107 to 153 and the finite-difference Jacobian roughly in proportion (not measured); the slides are
-  robot coordinates seen by the markers, so they would stay in the covariance.
+- **Cost**: twice the carriage per simulated second (24 more DOFs).
 - **MJCF**: a `<joint type="slide" axis="1 0 0" stiffness=... springref=... armature="0.02" damping=...>`
   after the hinges in each segment body of `spirob.xml`; no carriage.
 
@@ -352,4 +361,5 @@ simulation cost. It is not wired into `spirob_zmq.drive` in this PR.
   (stiffer compression) made the markers worse: the robot's shape response to a winding is part of the
   error and needs the robot model (hinge stiffness distribution, the unobserved segments 17-25).
 - Plate-hole friction ∝ tension was not needed in the fit (the harness supports `hole`); it is not in MJCF.
-- Try the EKF with `drive_model=motor` on a recorded `real_ekf` run before switching the default.
+- Hardware: the model is validated for simulation by the open-loop replays, including the five held-out
+  closed-loop runs. New hardware runs can be checked the same way with `replay_hw`.

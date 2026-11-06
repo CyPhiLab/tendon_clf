@@ -24,8 +24,8 @@ friction (`drive_static_friction`, `drive_coulomb_friction`, `drive_stribeck_vel
 `drive_model='current'` (default) derives the previous model from it: no drive DOFs, each actuator an
 ideal current source on the robot's tendon (`<motor gear="31.75">`, the 24 V bus limit applied in code by
 common.VoltageLimit), Coulomb tendon friction 2.5 N, rotor inertia and damping on the tendon, MuJoCo's
-default hinge friction and the CAD hinge stiffness. The controller, the pose fit and the viewer use it;
-the simulated plants, the EKF and replay_hw use the profile's choice.
+default hinge friction and the CAD hinge stiffness. The controller, the EKF, the pose fit and the viewer
+always use it; the simulated plants and replay_hw use the profile's choice.
 """
 
 import mujoco
