@@ -4,7 +4,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from spirob_zmq.common import ROBOT_STATE, load_model
+from spirob_zmq.common import ROBOT_STATE, TARGET_STATE, load_model
 from spirob_zmq.core import Node, run_node
 
 
@@ -26,6 +26,7 @@ class SimulationNode(Node):
 
         # Subscribe to the ekf corrected state from state_estimation_node
         self.create_subscription(ROBOT_STATE, self._on_state, latest_only=True)
+        self.create_subscription(TARGET_STATE, self._on_target, latest_only=True)
 
         # Viewer
         self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
@@ -42,6 +43,19 @@ class SimulationNode(Node):
                 [-np.sin(azimuth), np.cos(azimuth), 0.0])
         self.viewer_timer = self.create_timer(1.0 / viewer_rate_hz, self._update_viewer)
         self.get_logger().info(f'simulation_node ready, waiting for {ROBOT_STATE}')
+
+    def _on_target(self, msg):
+        target = np.asarray(msg['position_m'], dtype=float)
+        if target.shape != (3,) or not np.isfinite(target).all():
+            return
+        target_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, 'target')
+        if target_id < 0:
+            return
+        mocap_id = self.model.body_mocapid[target_id]
+        if mocap_id >= 0:
+            with self.viewer.lock():
+                self.data.mocap_pos[mocap_id] = target
+                mujoco.mj_fwdPosition(self.model, self.data)
 
     def _on_state(self, msg):
         if not msg['is_valid']:

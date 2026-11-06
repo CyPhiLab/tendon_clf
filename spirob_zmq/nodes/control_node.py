@@ -8,7 +8,7 @@ import mujoco
 import numpy as np
 from scipy import linalg
 
-from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, SITE_MEASUREMENT, TRACKING_STATE,
+from spirob_zmq.common import (MOTOR_COMMAND, ROBOT_STATE, SITE_MEASUREMENT, TRACKING_STATE, TARGET_STATE,
                                ActuatorLaw, VoltageLimit, actuator_moment,
                                load_model)
 from spirob_zmq.core import Node, run_node
@@ -61,12 +61,26 @@ class ControlNode(Node):
 
         # Fixed task-space target
         self.target_pos = np.array(self.declare_parameter('target_pos'), dtype=float)
+        self.tracking = self.declare_parameter('tracking', 'setpoint')
+        self.omega = float(self.declare_parameter('omega', 1.0))
+        if self.tracking not in ('setpoint', 'trajectory'):
+            raise ValueError('tracking must be setpoint or trajectory')
+        if not np.isfinite(self.omega):
+            raise ValueError('omega must be finite')
+        if self.tracking == 'trajectory' and self.task_dim != 3:
+            raise ValueError('trajectory tracking requires task_dim=3')
+        if self.tracking == 'setpoint' and (
+            self.target_pos.shape != (3,) or not np.isfinite(self.target_pos).all()
+        ):
+            raise ValueError('target_pos must contain three finite coordinates')
+        self.trajectory_start_stamp = None
 
         # Name of the end-effector site in the MuJoCo model
         self.site_name = self.declare_parameter('site_name', 'ee')
         self.site_id = self.model.site(self.site_name).id
         self.measurement_site_names = list(self.declare_parameter('site_names', []))
         self.tracking_pub = self.create_publisher(TRACKING_STATE)
+        self.target_pub = self.create_publisher(TARGET_STATE)
 
         nv, nu = self.model.nv, self.model.nu
         self._jac6 = np.zeros((6, nv))
@@ -99,9 +113,27 @@ class ControlNode(Node):
         # Create a timer that runs the controller and publishes commands
         self.timer = self.create_timer(1.0 / self.rate_hz, self._tick)
 
+    def _reference(self, stamp):
+        if self.tracking == 'setpoint':
+            return self.target_pos.copy(), np.zeros(3), np.zeros(3)
+        elapsed = (0.0 if self.trajectory_start_stamp is None
+                   else max(0.0, stamp - self.trajectory_start_stamp))
+        phase = self.omega * elapsed
+        position = np.array([-0.025 * np.cos(phase), 0.25, 0.15 - 0.025 * np.sin(phase)])
+        if self.trajectory_start_stamp is None or stamp < self.trajectory_start_stamp:
+            return position, np.zeros(3), np.zeros(3)
+        velocity = self.omega * np.array([0.025 * np.sin(phase), 0.0, -0.025 * np.cos(phase)])
+        acceleration = self.omega ** 2 * np.array([0.025 * np.cos(phase), 0.0, 0.025 * np.sin(phase)])
+        return position, velocity, acceleration
+
     def _on_state(self, msg):
         if not msg['is_valid']:
             return
+        self.state_stamp = float(msg['stamp'])
+        self.state_received_time = self.now()
+        if self.start_time is None:
+            self.start_time = self.state_received_time
+            self.trajectory_start_stamp = self.state_stamp + self.start_delay_s
         self.data.qpos[:] = msg['q']
         self.data.qvel[:] = msg['dq']
         self.have_state = True
@@ -123,9 +155,10 @@ class ControlNode(Node):
         self._publish_tracking(msg['stamp'], point, msg.get('source', 'measured'))
 
     def _publish_tracking(self, stamp, point, source):
+        target, _, _ = self._reference(stamp)
         valid = bool(np.isfinite(point).all())
         position = point.tolist() if valid else [None, None, None]
-        error = (point - self.target_pos).tolist() if valid else [None, None, None]
+        error = (point - target).tolist() if valid else [None, None, None]
         if not valid:
             self.get_logger().warn(
                 f'Non-finite {source} position for tracked site {self.site_name!r}',
@@ -136,18 +169,27 @@ class ControlNode(Node):
             'source': source,
             'frame': 'mujoco',
             'position_m': position,
-            'target_m': self.target_pos.tolist(),
+            'target_m': target.tolist(),
             'error_m': error,
-            'error_norm_m': float(np.linalg.norm(point - self.target_pos)) if valid else None,
+            'error_norm_m': float(np.linalg.norm(point - target)) if valid else None,
             'is_valid': valid,
         })
 
     def _tick(self):
         if not self.have_state:
             return
-        if self.start_time is None:
-            self.start_time = self.now()
-        if self.now() - self.start_time < self.start_delay_s:
+        now = self.now()
+        stamp = self.state_stamp + now - self.state_received_time
+        target, target_velocity, target_acceleration = self._reference(stamp)
+        self.target_pub.publish({
+            'stamp': stamp,
+            'site_name': self.site_name,
+            'frame': 'mujoco',
+            'position_m': target.tolist(),
+            'velocity_m_s': target_velocity.tolist(),
+            'acceleration_m_s2': target_acceleration.tolist(),
+        })
+        if now - self.start_time < self.start_delay_s:
             return
 
         model, data = self.model, self.data
@@ -182,17 +224,23 @@ class ControlNode(Node):
         # Task-space error (twist)
         dq = data.qvel
         twist = np.zeros(m)
-        twist[:3] = self.target_pos - point
+        twist[:3] = target - point
         Jdq = J @ dq
-        mu_des = self.K * twist - self.Kd * Jdq
+        reference_velocity = np.zeros(m)
+        reference_acceleration = np.zeros(m)
+        reference_velocity[:3] = target_velocity
+        reference_acceleration[:3] = target_acceleration
+        velocity_error = Jdq - reference_velocity
+        mu_des = reference_acceleration + self.K * twist - self.Kd * velocity_error
         task_const = dJ_dt @ dq - mu_des
 
         # Lyapunov function and its derivative
-        eta = np.concatenate((-twist, Jdq))
+        eta = np.concatenate((-twist, velocity_error))
         V = float(eta @ self.Pe @ eta)
         eta_T_PeG = eta @ self.PeG
         clf_a = 2.0 * eta_T_PeG @ J
-        clf_const = float(eta @ self.FTPe_PeF @ eta + 2.0 * eta_T_PeG @ (dJ_dt @ dq))
+        clf_const = float(eta @ self.FTPe_PeF @ eta
+                  + 2.0 * eta_T_PeG @ (dJ_dt @ dq - reference_acceleration))
 
         N = np.eye(nv) - J.T @ np.linalg.solve(J @ J.T, J)
         qdd_ref = -self.null_gain * (N @ dq)
@@ -211,7 +259,8 @@ class ControlNode(Node):
         H, g, A, b = self._H, self._g, self._A, self._b
         H[:nv, :nv] = 2.0 * (self.task_weight * J.T @ J + self.reg_u * P.T @ P + self.reg_null * N)
         H[np.arange(nv), np.arange(nv)] += 2.0 * self.reg_qdd
-        g[:nv] = 2.0 * (self.reg_u * P.T @ p - self.reg_null * qdd_ref)
+        g[:nv] = 2.0 * (self.task_weight * J.T @ task_const
+                   + self.reg_u * P.T @ p - self.reg_null * qdd_ref)
 
         nu = model.nu
         A[0, :nv] = clf_a

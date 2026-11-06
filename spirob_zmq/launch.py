@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import shutil
 import signal
@@ -70,6 +71,10 @@ def _split_params(items):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--mode', choices=sorted(LAUNCHES), default='ekf')
+    parser.add_argument('--tracking', choices=['setpoint', 'trajectory'], default=None,
+                        help='controller reference type (default: setpoint)')
+    parser.add_argument('--omega', type=float, default=None,
+                        help='trajectory phase speed in rad/s (default: 1.0)')
     parser.add_argument('--headless', action='store_true', help='do not start the MuJoCo viewer')
     parser.add_argument('--duration', type=float, default=None, help='stop after this many seconds')
     parser.add_argument('--no-broker', action='store_true', help='a broker is already running')
@@ -78,6 +83,10 @@ def main(argv=None):
     parser.add_argument('--no-record', action='store_true', help='do not record topics or plot')
     parser.add_argument('--name', help='run name (default: timestamp)')
     args = parser.parse_args(argv)
+    if (args.tracking is not None or args.omega is not None) and 'control_node' not in LAUNCHES[args.mode]:
+        parser.error('--tracking and --omega require a mode with control_node')
+    if args.omega is not None and not math.isfinite(args.omega):
+        parser.error('--omega must be finite')
 
     shared, per_node = _split_params(args.param)
     config = {}
@@ -125,6 +134,11 @@ def main(argv=None):
             cmd += ['-p', f'{key}={json.dumps(value)}']
         for item in shared + per_node.get(name, []):
             cmd += ['-p', item]
+        if name == 'control_node':
+            if args.tracking is not None:
+                cmd += ['-p', f'tracking={args.tracking}']
+            if args.omega is not None:
+                cmd += ['-p', f'omega={args.omega}']
         spawn(name, cmd)
 
     deadline = None if args.duration is None else time.monotonic() + args.duration
