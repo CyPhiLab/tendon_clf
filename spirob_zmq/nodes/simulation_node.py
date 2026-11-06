@@ -12,7 +12,7 @@ class SimulationNode(Node):
     def __init__(self, params=None):
         super().__init__('simulation_node', params)
 
-        self.model = load_model(self)
+        self.model = load_model(self, drive_model='current')
         tracked_site = self.model.site(self.declare_parameter('site_name', 'ee'))
         tracked_site.group[:] = 0
         tracked_site.rgba[:] = [0.0, 1.0, 0.0, 1.0]

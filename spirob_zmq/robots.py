@@ -7,6 +7,9 @@ DEFAULT_ROBOT = 'spirob_horz'
 ROBOTS = {
     'spirob_horz': {
         'model_path': str(REPO_ROOT / 'mujoco_models' / 'spirob' / 'spirob_horz_control.xml'),
+        # 'current': ideal current sources on the tendons; 'motor': drives with stick-slip and the robot's
+        # give (spirob_zmq.drive, docs/drive_model.md), for the simulated plant, the EKF and replay_hw
+        'drive_model': 'current',
         'joint_stiffness': None,
         'init_key': 'init',
         'motor_ids': [10, 1, 2],

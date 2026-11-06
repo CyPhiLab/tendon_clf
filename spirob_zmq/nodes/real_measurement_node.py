@@ -32,7 +32,7 @@ class RealMeasurementNode(Node):
         # Marker order used by the estimator; the tracked markers start with these
         self.site_names = list(self.declare_parameter('site_names'))
         self.tracked = marker_sites(self)
-        self.model = load_model(self)
+        self.model = load_model(self, drive_model='current')
         key = self.model.key(self.declare_parameter('init_key', 'init')).id
         self.markers = MarkerModel(self.model, self.tracked, self.model.key_qpos[key])
 

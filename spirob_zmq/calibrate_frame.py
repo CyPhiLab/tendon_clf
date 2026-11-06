@@ -21,7 +21,7 @@ from spirob_zmq.pose_init import MarkerModel, save_frame, stationary_clusters
 
 def calibrate(centres, robot=None, **overrides):
     params = ProfileParams(robot, **overrides)
-    model = load_model(params)
+    model = load_model(params, drive_model='current')
     data = mujoco.MjData(model)
     rest_state(params, model, data)
     key = model.key(params.declare_parameter('init_key', 'init')).id
