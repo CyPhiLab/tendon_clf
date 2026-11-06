@@ -50,27 +50,27 @@ friction; the motors sit on a spring-loaded carriage that stands for the robot's
 are pull-only (positive current pays out a slack tendon); the hinges have friction that holds a pose.
 
 `drive_model` (in `robots.py`) selects what the simulated plants (`virtual_measurement_node`,
-`get_state_node`), the EKF and `replay_hw` use:
+`get_state_node`) and `replay_hw` use:
 
 - `current` (default): the previous model, derived from the XML by `spirob_zmq.drive.current_source_model`:
   ideal current sources on the tendons (`<motor gear="31.75">`, bus limit in code), Coulomb tendon
-  friction, the CAD hinge stiffness. The controller, `hardware_node`, the pose fit and the viewer always
-  use it.
+  friction, the CAD hinge stiffness. The controller, the EKF, `hardware_node`, the pose fit and the viewer
+  always use it.
 - `motor`: the XML as it is. Replayed open loop on the 20261103 runs it is 28 mm from the markers on the
   fit runs and 53 mm on the closed-loop runs, against 158 and 131 mm for `current`.
 
 ```bash
-python -m spirob_zmq.launch -p drive_model=motor                         # plant and EKF with the motor drives
-python -m spirob_zmq.launch -p state_estimation_node.drive_model=motor   # EKF only
+python -m spirob_zmq.launch -p drive_model=motor                         # simulated plant with the motor drives
+python -m spirob_zmq.lockstep --mode ekf -p drive_model=motor            # controller + EKF against that plant
 python -m spirob_zmq.replay_hw <run>.jsonl -p drive_model='"motor"' --plot replay.png
 ```
 
 The motor model has the carriage and three motors after the robot's 48 coordinates (nq = 52) and three
-activations (LuGre bristles). `ROBOT_STATE` and `TRUE_STATE` keep the robot's 48 coordinates (the EKF adds
-`drive_q`); a start pose from the markers gets its motors placed for the rest tensions
-(`drive.full_qpos`). In the EKF the drive states are predicted open loop and kept out of the covariance,
-and the linearization uses MuJoCo's default hinge friction impedance (finite differences across
-stick-slip are meaningless). The drive friction can be overridden as profile parameters, in tendon units:
+activations (LuGre bristles). `ROBOT_STATE` and `TRUE_STATE` keep the robot's 48 coordinates; a start pose
+from the markers gets its motors placed for the rest tensions (`drive.full_qpos`). The estimator and the
+controller share the current-source model: the EKF predicts only 10-20 ms between marker updates, where
+the drive model buys little, while it costs a larger, non-smooth state (docs/drive_model.md). The drive
+friction can be overridden as profile parameters, in tendon units:
 `drive_static_friction` (per motor, N), `drive_coulomb_friction` (N), `drive_stribeck_velocity` (m/s),
 `drive_bristle_stiffness` (N/m), `drive_damping` (N s/m). Anything else is in the XML.
 

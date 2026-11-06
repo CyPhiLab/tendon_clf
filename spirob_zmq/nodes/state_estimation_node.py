@@ -19,7 +19,6 @@ from spirob_zmq.common import (
     step_current,
 )
 from spirob_zmq.core import Node, run_node
-from spirob_zmq import drive
 
 
 class StateEstimationNode(Node):
@@ -27,23 +26,13 @@ class StateEstimationNode(Node):
         super().__init__('state_estimation_node', params)
 
         # MuJoCo prediction model
-        self.model = load_model(self)
+        self.model = load_model(self, drive_model='current')
         self.data = mujoco.MjData(self.model)
 
         self.nq = self.model.nq
         self.nv = self.model.nv
         self.na = self.model.na
         self.nx = self.nq + self.nv + self.na
-        # Robot coordinates (drive_model='motor' adds the drives' DOFs after them)
-        self.n_robot = drive.robot_nq(self.model)
-        # drive_model='motor': the drive states (carriage, motors, LuGre bristles) are predicted open loop
-        # and kept out of the covariance. The markers do not see them, and across stick-slip their
-        # finite-difference linearization is meaningless (it blows the covariance up within a slip).
-        self._robot_mask = np.ones(self.nx)
-        if self.n_robot < self.nq:
-            self._robot_mask[self.n_robot:self.nq] = 0.0
-            self._robot_mask[self.nq + self.n_robot:] = 0.0
-        self._robot_mask2 = np.outer(self._robot_mask, self._robot_mask)
 
         if self.nq != self.nv:
             raise ValueError(
@@ -109,12 +98,6 @@ class StateEstimationNode(Node):
         self.fd_eps = self.declare_parameter('fd_eps', 1e-6)
         self.fd_centered = self.declare_parameter('fd_centered', False)
         self.lin_model = copy.deepcopy(self.model)
-        if self.n_robot < self.nq:
-            # drive_model='motor' holds the hinges with a very stiff friction constraint; finite
-            # differences across its stick/slip switch give a transition Jacobian that blows the
-            # covariance up after every slip. Linearize with MuJoCo's default friction impedance.
-            self.lin_model.dof_solref[:self.n_robot] = [0.02, 1.0]
-            self.lin_model.dof_solimp[:self.n_robot, :3] = [0.9, 0.95, 0.001]
         self.lin_data = mujoco.MjData(self.lin_model)
 
         # Keep the linearization timestep consistent with prediction.
@@ -188,11 +171,9 @@ class StateEstimationNode(Node):
 
         q = np.asarray(msg['q'], dtype=float)
 
-        if q.shape not in ((self.nq,), (self.n_robot,)) or not np.isfinite(q).all():
+        if q.shape != (self.nq,) or not np.isfinite(q).all():
             self.get_logger().error('Invalid initial joint configuration')
             return
-        # Robot pose only (the markers' fit): drives at rest tension
-        q = drive.full_qpos(self.model, q)
 
         self.x = np.concatenate([q, np.zeros(self.nv), np.zeros(self.na),])
         self._reset_covariance()
@@ -282,7 +263,7 @@ class StateEstimationNode(Node):
             [self.init_q_std ** 2] * self.nq
             + [self.init_dq_std ** 2] * self.nv
             + [self.init_act_std ** 2] * self.na
-        ) * self._robot_mask2
+        )
 
     def _process_covariance(self, input_sensitivity):
         """Covariance for independent motor errors held over one measurement interval."""
@@ -339,7 +320,7 @@ class StateEstimationNode(Node):
         dt = n * self.h
         self.Q[:self.nq, :self.nq] += self.process_q_std ** 2 * dt * np.eye(self.nq)
         self.Q[self.nq:self.nq + self.nv, self.nq:self.nq + self.nv] += self.process_dq_std ** 2 * dt * np.eye(self.nv)
-        self.P = (F_total @ self.P @ F_total.T + self.Q) * self._robot_mask2
+        self.P = (F_total @ self.P @ F_total.T + self.Q)
         self.P = 0.5 * (self.P + self.P.T)
 
         self.prediction_diagnostics = {
@@ -544,11 +525,10 @@ class StateEstimationNode(Node):
         jac = np.zeros((3, nv))
         mujoco.mj_jacSite(self.model, self.data, jac, None, self.ee_site_id,)
 
-        nr = self.n_robot
         self.state_pub.publish({
             'stamp': stamp,
-            'q': self.x[:nr].copy(),
-            'dq': self.x[nq:nq+nr].copy(),
+            'q': self.x[:nq].copy(),
+            'dq': self.x[nq:nq+nv].copy(),
             'task_pos':
                 self.data.site_xpos[self.ee_site_id].copy(),
             'task_vel':
@@ -564,7 +544,6 @@ class StateEstimationNode(Node):
                     .reshape(-1),
                 ).copy(),
             'is_valid': self.have_estimate,
-            **({'drive_q': self.x[nr:nq].copy()} if nq > nr else {}),
         })
         self.diagnostics_pub.publish({
             'stamp': stamp,
@@ -636,7 +615,7 @@ class StateEstimationNode(Node):
 
         mujoco.mjd_transitionFD(m, d, self.fd_eps, int(self.fd_centered), A, B, None, None,)
 
-        return A * self._robot_mask2, B * self._robot_mask[:, None]
+        return A, B
 
     def destroy_node(self):
         super().destroy_node()
