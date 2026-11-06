@@ -153,6 +153,9 @@ def current_source_spec(model_path):
             t.wrap_site(s)
     for act, name in zip(spec.actuators, tendons):
         act.set_to_motor()
+        # set_to_motor leaves dcmotor input/activation metadata on MuJoCo 3.14.
+        act.ctrlspec = 0
+        act.actdim = 0
         act.trntype = mujoco.mjtTrn.mjTRN_TENDON
         act.target = name
         act.gear[0] = GEAR
