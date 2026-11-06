@@ -285,7 +285,12 @@ The estimator and the controller share the current-source model; only the simula
   covariance, linearized with a softer hinge friction) ran in lockstep at 0.23 mm mean site error against
   0.29 mm for the current model; it was taken out to keep estimation and control on one model.
 - The simulated plant is where the split pays: the controller and EKF are tested against a plant that
-  sticks, slips and ratchets like the robot.
+  sticks, slips and ratchets like the robot. It also shows the cost of the mismatch: in a 12 s `ekf`
+  lockstep run against the drive-model plant, the current-model EKF is 4.7 mm from the plant's markers on
+  average (max 13 mm) with 50 covariance resets, against 0.27 mm and 3 resets when plant and EKF match;
+  the drive-model EKF prototype had 0.23 mm against the drive-model plant. The hardware EKF already
+  assumes 5 mm of marker noise to cover model error. If estimation turns out to limit the controller on
+  hardware, the prototype is in the history of this branch (commit e5c42f4).
 
 ### Default
 
