@@ -196,6 +196,24 @@ python -m spirob_zmq.launch --mode real_teleop -p teleop_node.current_limit=1.0
 `real_teleop` defaults to `hardware_node.dry_run=false`. Currents are clamped to
 `[-current_limit, 0]` (default 1.5 A; negative pulls).
 
+Gamepad teleop (`teleop_node` with `input=gamepad`; any game controller, e.g. an Xbox controller over
+USB): the left stick bends the robot in the direction it points, as seen from behind the base (up is the side of tendon 1, motor 10), and letting go releases. The stick
+direction is split between the two tendons on either side of it, so the pulls add up to that direction.
+Full stick is `gain * current_limit` (gain 0.5 at start; LB/RB step it by 0.1), B held releases all,
+Menu (or `x` in the terminal) quits. The current changes by at most `slew_rate` (5 A/s) so a flicked
+stick cannot jerk the drives. The simulated mode turns the viewer to look down the robot from behind
+the base. Standing elsewhere, rotate the stick with `-p teleop_node.stick_rotation_deg=...`;
+`tendon_angles_deg` (default `[90,210,330]`) are the bend directions of the three tendons pulled alone.
+The controller is read with pygame (SDL) on Linux and Windows, and on macOS through Apple's Game
+Controller framework (`pip install pyobjc-framework-GameController`): there SDL only gets input while
+its own process is the focused app, so from a terminal the stick reads 0.
+
+```bash
+python -m spirob_zmq.launch --mode gamepad                                    # simulated plant + viewer
+python -m spirob_zmq.launch --mode real_gamepad                                # drives the motors
+python -m spirob_zmq.launch --mode real_gamepad -p teleop_node.gain=0.3        # gentler start
+```
+
 ### Model identification
 
 `real_sysid` runs low-current drive tests (`current_profile_node`) with the markers recorded. It waits

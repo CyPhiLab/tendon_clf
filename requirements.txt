@@ -19,6 +19,9 @@ pyzmq>=25.0
 daqp>=0.5
 # Marker clustering at startup (spirob_zmq.pose_init)
 scikit-learn>=1.0
+# Gamepad teleop (spirob_zmq teleop_node input=gamepad)
+pygame>=2.1; sys_platform != 'darwin'
+pyobjc-framework-GameController>=10; sys_platform == 'darwin'
 
 # Optional: Commercial QP solver for better performance
 # gurobipy>=10.0.0

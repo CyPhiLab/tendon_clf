@@ -21,6 +21,9 @@ LAUNCHES = {
     'no_ekf': ['get_state_node', 'control_node', 'simulation_node'],
     'teleop': ['get_state_node', 'teleop_node', 'simulation_node'],
     'real_teleop': ['teleop_node', 'hardware_node'],
+    # Teleop with the left stick of a game controller (teleop_node input=gamepad)
+    'gamepad': ['get_state_node', 'teleop_node', 'simulation_node'],
+    'real_gamepad': ['teleop_node', 'hardware_node'],
     # Scripted open-loop currents with markers recorded, for checking and fitting the model (replay_hw)
     'sysid': ['virtual_measurement_node', 'current_profile_node', 'hardware_node'],
     'real_sysid': ['real_measurement_node', 'current_profile_node', 'hardware_node'],
@@ -29,14 +32,19 @@ VIEWER_NODES = {'simulation_node'}
 # Per-mode node defaults, applied before --config and -p so those still override them
 # The sysid tests pay tendon out with positive current: open the model's control range for them
 SYSID_RANGE = 'actuator_ctrlrange=[-1.9,0.55]'
+GAMEPAD = 'input="gamepad"'
 MODE_PARAMS = {'real_teleop': {'hardware_node': ['dry_run=false']},
+               # The viewer looks down the robot from behind the base, as the stick directions are defined
+               'gamepad': {'teleop_node': [GAMEPAD], 'simulation_node': [
+                   'viewer_azimuth=90', 'viewer_elevation=-15', 'viewer_pan_right=0']},
+               'real_gamepad': {'teleop_node': [GAMEPAD], 'hardware_node': ['dry_run=false']},
                'sysid': {'hardware_node': [SYSID_RANGE], 'virtual_measurement_node': [SYSID_RANGE]},
                'real_sysid': {'hardware_node': ['dry_run=false', SYSID_RANGE]}}
 
 # Where each mode's recordings and plots go
 RESULTS_DIR = REPO_ROOT / 'ekf_results'
-RESULTS_SUBDIR = {'ekf': 'sim', 'no_ekf': 'sim', 'teleop': 'sim', 'sysid': 'sim',
-                  'real_ekf': 'real', 'real_teleop': 'real', 'real_sysid': 'real'}
+RESULTS_SUBDIR = {'ekf': 'sim', 'no_ekf': 'sim', 'teleop': 'sim', 'gamepad': 'sim', 'sysid': 'sim',
+                  'real_ekf': 'real', 'real_teleop': 'real', 'real_gamepad': 'real', 'real_sysid': 'real'}
 # Post-run report: the model replay for the open-loop sysid runs, the estimator report otherwise
 REPORT = {'sysid': 'spirob_zmq.replay_hw', 'real_sysid': 'spirob_zmq.replay_hw'}
 
