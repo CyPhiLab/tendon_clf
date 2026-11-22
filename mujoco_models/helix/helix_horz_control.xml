@@ -1,0 +1,44 @@
+<mujoco model="helix_horz_control">
+    <compiler angle="radian" meshdir="meshes/" autolimits="true" />
+    <option integrator="implicitfast" timestep="0.0075" gravity="0 0 0" cone="elliptic">
+    </option>
+    <include file="helix_body_copy.xml" />
+    <!-- <include file="helix_actuators.xml" /> -->
+    <include file="helix_sensors.xml" />
+    <worldbody>
+        <light pos="0 0 3.5" dir="0 0 -1" directional="true"/>
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane"/>
+        <!-- <camera name="ortho_side"
+        mode="fixed"
+        pos="0.19 10.0 0.49"
+        xyaxes="-1 0 0   0 0 1"
+        fovy="3.25"/> -->
+        <body name="target" pos="0.0 0 0.05" quat="0 1 0 0" mocap="true">
+            <!-- A geom makes the mocap body selectable for viewer dragging. -->
+            <geom name="target_vis" type="sphere" size="0.015"
+                  contype="0" conaffinity="0" rgba="1 0.2 0.2 0.9"/>
+        </body>
+        <!-- <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/> -->
+    </worldbody>
+
+    <visual>
+        <rgba haze="1 1 1 1"/>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+        <global azimuth="140" elevation="-20" offwidth="1920" offheight="1080"/>
+    </visual>
+
+
+    <asset>
+        <texture type="skybox" builtin="flat" rgb1="1 1 1" rgb2="1 1 1"
+                 width="512" height="512"/>
+        <texture type="2d" name="groundplane" builtin="flat"
+                 rgb1="0.9 0.9 0.9" rgb2="0.9 0.9 0.9"
+                 width="300" height="300"/>
+        <material name="groundplane" texture="groundplane" texuniform="true"
+                  texrepeat="5 5" reflectance="0.1"/>
+    </asset>
+
+<worldbody>
+
+</worldbody>
+</mujoco>

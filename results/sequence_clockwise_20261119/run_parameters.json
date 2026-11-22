@@ -1,0 +1,100 @@
+{
+  "hold_seconds": 20.0,
+  "beta": 1000.0,
+  "epsilon_by_robot": {
+    "tendon": 0.02,
+    "spirob_horz": 0.06,
+    "helix": 0.1
+  },
+  "clockwise_order": {
+    "helix": [
+      [
+        0.25,
+        0.05,
+        0.5
+      ],
+      [
+        0.3,
+        0.0,
+        0.55
+      ],
+      [
+        0.25,
+        -0.05,
+        0.5
+      ],
+      [
+        0.2,
+        0.0,
+        0.45
+      ]
+    ],
+    "spirob_horz": [
+      [
+        0.0,
+        0.25,
+        0.125
+      ],
+      [
+        0.05,
+        0.225,
+        0.15
+      ],
+      [
+        0.0,
+        0.2,
+        0.175
+      ],
+      [
+        -0.05,
+        0.225,
+        0.15
+      ]
+    ],
+    "tendon": [
+      [
+        0.15,
+        0.0,
+        0.25
+      ],
+      [
+        0.2,
+        0.0,
+        0.15
+      ],
+      [
+        0.15,
+        0.0,
+        0.05
+      ],
+      [
+        0.1,
+        0.0,
+        0.15
+      ]
+    ]
+  },
+  "runs": {
+    "helix": {
+      "trace_csv": "results/sequence_clockwise_20261119/helix.csv",
+      "n_samples": 10667,
+      "sim_duration_s": 79.99499999998768,
+      "epsilon": 0.1,
+      "beta": 1000.0
+    },
+    "spirob_horz": {
+      "trace_csv": "results/sequence_clockwise_20261119/spirob_horz.csv",
+      "n_samples": 16000,
+      "sim_duration_s": 79.99500000001791,
+      "epsilon": 0.06,
+      "beta": 1000.0
+    },
+    "tendon": {
+      "trace_csv": "results/sequence_clockwise_20261119/tendon.csv",
+      "n_samples": 16001,
+      "sim_duration_s": 79.99999999999973,
+      "epsilon": 0.02,
+      "beta": 1000.0
+    }
+  }
+}

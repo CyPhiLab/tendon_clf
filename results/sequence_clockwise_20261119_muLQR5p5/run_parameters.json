@@ -1,0 +1,44 @@
+{
+  "hold_seconds": 20.0,
+  "beta": 1000.0,
+  "epsilon_by_robot": {
+    "helix": 0.1
+  },
+  "qp_regularization": {
+    "QP_REG_MU_LQR": 5.5
+  },
+  "clockwise_order": {
+    "helix": [
+      [
+        0.25,
+        0.05,
+        0.5
+      ],
+      [
+        0.3,
+        0.0,
+        0.55
+      ],
+      [
+        0.25,
+        -0.05,
+        0.5
+      ],
+      [
+        0.2,
+        0.0,
+        0.45
+      ]
+    ]
+  },
+  "runs": {
+    "helix": {
+      "trace_csv": "results/sequence_clockwise_20261119_muLQR5p5/helix.csv",
+      "n_samples": 10667,
+      "sim_duration_s": 79.99499999998768,
+      "epsilon": 0.1,
+      "beta": 1000.0,
+      "QP_REG_MU_LQR": 5.5
+    }
+  }
+}
